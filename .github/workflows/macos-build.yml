@@ -1,0 +1,44 @@
+name: macOS build check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-macos:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Verify source integrations
+        run: |
+          python3 scripts/apply-build-fixes.py
+          python3 scripts/verify-desktop.py
+
+      - name: Install frontend dependencies
+        run: npm install
+
+      - name: Build ModelDock
+        run: npm run desktop:build
+
+      - name: Upload macOS bundles
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ModelDock-macOS-${{ github.sha }}
+          path: src-tauri/target/release/bundle/
+          if-no-files-found: error
+          retention-days: 7
