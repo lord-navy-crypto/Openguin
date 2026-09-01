@@ -1,7 +1,7 @@
 import {useEffect,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
-import {task} from './taskCenter';
+import {task} from './taskBus';
 import './runtime-installer.css';
 
 type Runtime={bundledAvailable?:boolean;bundledRunning?:boolean;externalRunning?:boolean;reason?:string}|null;
