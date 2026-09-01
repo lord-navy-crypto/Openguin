@@ -11,6 +11,9 @@ files = [
     root / "src" / "Diagnostics.tsx",
     root / "src" / "SmartLab.tsx",
     root / "src" / "FullLogs.tsx",
+    root / "src" / "Observatory.tsx",
+    root / "src" / "RuntimeControl09.tsx",
+    root / "src" / "CompareBench09.tsx",
     root / "README.md",
     root / "QUICKSTART.md",
     root / "CHANGELOG.md",
@@ -26,12 +29,11 @@ for path in files:
     if not path.exists():
         continue
     text = path.read_text()
-    # Product name. Keep Ollama references intact because Ollama is the third-party
-    # runtime/API compatibility layer, not part of the Openguin brand.
     text = text.replace("ModelDock", "Openguin")
     text = text.replace("MODELDock", "OPENGUIN")
-    # Main sidebar old single-letter badge.
+    text = text.replace("Desktop Alpha 0.7", "Desktop Alpha 0.9")
+    text = text.replace("Desktop Alpha 0.8", "Desktop Alpha 0.9")
     text = text.replace('<div className="v07-brand"><span>M</span><div>Openguin', '<div className="v07-brand"><span>P</span><div>Openguin')
     path.write_text(text)
 
-print("Applied Openguin user-facing branding while preserving legacy internal keys/events.")
+print("Applied Openguin 0.9 user-facing branding while preserving legacy internal keys/events.")
