@@ -1,0 +1,24 @@
+import {useEffect,useMemo,useState} from 'react';
+import {invoke} from '@tauri-apps/api/core';
+import {listen} from '@tauri-apps/api/event';
+import type {TaskState,TaskUpdate} from './taskCenter';
+import './task-center.css';
+
+type Row=TaskUpdate&{state:TaskState;createdAt:number;updatedAt:number;percent?:number};
+type PullEvent={model:string;status:string;percent?:number;done:boolean;cancelled:boolean;error?:string};
+type ImportEvent={importId:string;repoId:string;filename:string;model:string;stage:string;status:string;percent?:number;done:boolean;cancelled:boolean;error?:string};
+const STALL_MS=15000;
+const now=()=>Date.now();
+const clamp=(n:number)=>Math.max(0,Math.min(100,n));
+const elapsed=(ms:number)=>ms<1000?'0s':ms<60000?`${Math.floor(ms/1000)}s`:`${Math.floor(ms/60000)}m ${Math.floor(ms/1000)%60}s`;
+
+export default function TaskCenter(){
+ const [rows,setRows]=useState<Row[]>([]),[open,setOpen]=useState(true),[tick,setTick]=useState(0);
+ function upsert(u:TaskUpdate){setRows(prev=>{const i=prev.findIndex(x=>x.id===u.id),t=now();if(i<0)return[{...u,state:u.state??'running',percent:u.percent===undefined?undefined:clamp(u.percent),createdAt:t,updatedAt:t},...prev].slice(0,40);const next=[...prev],old=next[i];next[i]={...old,...u,state:u.state??old.state,percent:u.percent===undefined?old.percent:clamp(u.percent),updatedAt:t};return next})}
+ useEffect(()=>{const h=(e:Event)=>upsert((e as CustomEvent<TaskUpdate>).detail);document.addEventListener('openguin:task',h);const uns:Promise<()=>void>[]=[];uns.push(listen<PullEvent>('modeldock://pull-progress',e=>{const p=e.payload;upsert({id:`pull:${p.model}`,title:`Install ${p.model}`,source:'Library',detail:p.error||p.status,state:p.cancelled?'cancelled':p.error?'failed':p.done?'done':'running',percent:p.done?100:p.percent,progressKind:'real',cancellable:!p.done&&!p.error&&!p.cancelled,cancelKind:'pull',cancelTarget:p.model})}));uns.push(listen<ImportEvent>('modeldock://import-progress',e=>{const p=e.payload;upsert({id:`import:${p.importId}`,title:`Import ${p.model}`,source:'Hugging Face GGUF',detail:p.error||`${p.stage} · ${p.status}`,state:p.cancelled?'cancelled':p.error?'failed':p.done?'done':'running',percent:p.done?100:p.percent,progressKind:'real',cancellable:!p.done&&!p.error&&!p.cancelled,cancelKind:'import',cancelTarget:p.importId})}));const interval=setInterval(()=>setTick(x=>x+1),1000);return()=>{document.removeEventListener('openguin:task',h);uns.forEach(x=>x.then(f=>f()));clearInterval(interval)}},[]);
+ const shown=useMemo(()=>rows.map(r=>{if(r.state==='running'&&now()-r.updatedAt>STALL_MS)return{...r,state:'stalled' as TaskState};return r}),[rows,tick]);
+ const active=shown.filter(r=>['queued','running','stalled'].includes(r.state)),done=shown.filter(r=>!['queued','running','stalled'].includes(r.state));
+ async function cancel(r:Row){if(!r.cancellable||!r.cancelKind||!r.cancelTarget)return;try{if(r.cancelKind==='pull')await invoke('cancel_pull',{model:r.cancelTarget});else await invoke('cancel_hf_import',{importId:r.cancelTarget});upsert({...r,state:'cancelled',detail:'Cancellation requested',percent:r.percent})}catch(e){upsert({...r,state:'failed',detail:`Cancel failed: ${e}`})}}
+ function clearFinished(){setRows(v=>v.filter(r=>['queued','running','stalled'].includes(r.state)))}
+ return <div className={`task-center ${open?'open':'closed'}`}><button className="task-toggle" onClick={()=>setOpen(v=>!v)} aria-expanded={open}><span className={active.length?'pulse':''}/><b>Tasks</b><em>{active.length}</em></button>{open&&<section className="task-panel"><header><div><b>Activity</b><small>{active.length?`${active.length} active task${active.length===1?'':'s'}`:'All tasks complete'}</small></div><button onClick={clearFinished} disabled={!done.length}>Clear finished</button></header><div className="task-list">{shown.length?shown.map(r=><article key={r.id} className={`task-row ${r.state}`}><div className="task-top"><div><b>{r.title}</b><small>{r.source||'Openguin'} · {elapsed(now()-r.createdAt)}</small></div><span>{r.state}</span></div><div className="task-detail">{r.detail||'Working…'}</div><div className={`task-progress ${r.progressKind==='indeterminate'?'indeterminate':''}`}><i style={r.percent===undefined?undefined:{width:`${r.percent}%`}}/></div><div className="task-bottom"><small>{r.progressKind==='real'?'Measured progress':r.progressKind==='stage'?'Stage progress':'Waiting for progress data'}{r.state==='stalled'?' · no update for 15s':''}</small><div>{r.percent!==undefined&&<b>{Math.round(r.percent)}%</b>}{r.cancellable&&['running','stalled'].includes(r.state)&&<button onClick={()=>cancel(r)}>Cancel</button>}</div></div></article>):<div className="task-empty">No tasks yet. Long-running actions will appear here as soon as you click them.</div>}</div></section>}</div>
+}
