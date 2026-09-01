@@ -1,11 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import App from './App';
-import Diagnostics from './Diagnostics';
-import SmartLab from './SmartLab';
-import './styles.css';
-import './smartlab.css';
+import App07 from './App07';
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode><App /><Diagnostics /><SmartLab /></React.StrictMode>
-);
+const sessions=Number(localStorage.getItem('modeldock-sessions')||'0')+1;
+localStorage.setItem('modeldock-sessions',String(sessions));
+ReactDOM.createRoot(document.getElementById('root')!).render(<React.StrictMode><App07/></React.StrictMode>);
