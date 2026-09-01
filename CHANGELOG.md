@@ -1,5 +1,40 @@
 # Changelog
 
+## 0.9.0
+
+### Closed-loop runtime control
+- Extended Observatory from read-only telemetry into a runtime control surface.
+- Added model preload with configurable keep-alive.
+- Added immediate unload using Ollama `keep_alive: 0`.
+- Refreshes resident-model state after lifecycle operations.
+
+### Context Optimizer
+- Added conservative recommended-context and estimated-ceiling calculations.
+- Combines model weight size, parameter metadata, total system/unified memory and runtime headroom.
+- Keeps estimates visually distinct from `/api/ps` runtime measurements.
+
+### Model Comparator
+- Added side-by-side comparison for up to three installed models.
+- Compares disk size, parameter count, quantization and model family/architecture.
+
+### Controlled cold / warm benchmark
+- Added a small deterministic benchmark that unloads a model, measures the first cold run, then repeats the same run warm.
+- Stores cold/warm load time and decode throughput separately.
+- Uses a fixed tiny benchmark prompt rather than private user conversation content.
+
+### Runtime history visualization
+- Added a rolling 60-sample runtime allocation history using `/api/ps`.
+- Keeps the visualization local and framework-free using native SVG.
+
+### Architecture direction
+- Runtime UI now follows a provider-layer design so Observatory concepts can later map to llama.cpp metrics/slots and Apple Silicon MLX without rewriting the main product model.
+- Ollama bundled and external modes remain the active 0.9 providers.
+
+### Build and verification
+- Version synchronized to 0.9.0 across npm, Cargo and Tauri.
+- Added `apply-performance09.py` to the deterministic desktop preparation pipeline.
+- CI and verifier now require Runtime Control, Context Optimizer, Model Comparator, cold/warm benchmark and memory-history integrations.
+
 ## 0.8.0
 
 ### Openguin Runtime Observatory
@@ -20,52 +55,29 @@
 - Added local SVG performance trends with no chart framework or network dependency.
 - Added live/paused telemetry state and engine endpoint identification.
 
-### Product direction
-- Openguin now treats hardware fit, runtime state and measured performance as first-class model-selection information.
-- The design follows local-AI patterns seen in Ollama's runtime metrics and in tools such as Jan: hardware fit in the model hub, visible inference settings, hardware monitoring and model lifecycle visibility.
-- Existing thinking controls, live Ollama Library, Hugging Face GGUF import, provenance, full logs and complete bundled Ollama runtime remain available.
-
-### Build and verification
-- Version synchronized to 0.8.0 across npm, Cargo and Tauri.
-- Added `apply-observatory.py` to the deterministic desktop preparation pipeline.
-- macOS CI now verifies the Observatory integration before performing the Tauri build.
-
 ## 0.7.0
 
 ### Unified desktop experience
-- Replaced temporary floating Lab+/Diagnostics additions with the unified `App07` desktop interface.
+- Replaced temporary floating Lab+/Diagnostics additions with the unified desktop interface.
 - Added normal navigation for Overview, My Models, Model Lab, Library, Diagnostics, and Developer Studio.
 
 ### Runtime reliability
 - Bundled Ollama must pass a real `127.0.0.1:11435` readiness check before being reported online.
 - Automatic fallback to an already-running external Ollama remains available.
-- Build preparation now applies runtime integration fixes every time.
 
 ### Model Lab
 - Added Rust/Tauri streaming chat bridge.
-- Thinking controls now follow installed model `/api/show` capabilities.
-- GPT-OSS thinking levels supported.
+- Thinking controls follow installed model `/api/show` capabilities.
 - Thinking trace and final answer are separated during streaming.
-- Added estimated streaming progress with final real token count and tok/s.
-- Context maximum is read from model metadata when available.
+- Added final real token count and tok/s.
 
-### Library
-- Added live public Ollama Library synchronization for Popular / Newest / Featured.
-- Extracts model names, advertised capabilities, and size variants with a local cached fallback.
-- One-click install uses the local Ollama pull pipeline.
-- Retained verified Hugging Face GGUF discovery/import and upstream license/provenance handling.
-
-### Hardware Fit 3
-- Adds context/KV allowance and model parameter metadata to the memory estimate.
-- Displays estimate confidence rather than presenting the score as a benchmark.
-
-### Diagnostics & Usage
-- Integrated local background logs and benchmark history into the main app.
-- Tracks runtime/model task/inference events and session/throughput summaries.
-- Does not store complete prompts or model answers in diagnostics.
+### Library and diagnostics
+- Added live public Ollama Library synchronization.
+- Retained verified Hugging Face GGUF import and provenance handling.
+- Integrated local application logs and raw bundled Ollama logs.
 
 ## 0.6.0
 - Bundled Ollama runtime setup and external Ollama detection.
-- Hardware Fit 2 and local benchmark history.
+- Hardware Fit and local benchmark history.
 - Verified Hugging Face GGUF import with provenance/license records.
 - Legal, copyright, security, third-party, and model-license documentation pack.
