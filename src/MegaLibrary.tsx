@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
-import {task} from './taskCenter';
+import {task} from './taskBus';
 import './mega-library.css';
 
 type Mode='bundled'|'external';
