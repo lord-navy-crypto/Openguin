@@ -12,6 +12,10 @@ files = [
     root / "src" / "Observatory.tsx",
     root / "src" / "RuntimeControl09.tsx",
     root / "src" / "CompareBench09.tsx",
+    root / "src" / "MegaLibrary.tsx",
+    root / "src" / "DeveloperStudio010.tsx",
+    root / "src" / "RuntimeInstallerCard.tsx",
+    root / "src" / "AdvancedSettings010.tsx",
     root / "README.md",
     root / "QUICKSTART.md",
     root / "CHANGELOG.md",
@@ -29,9 +33,8 @@ for path in files:
     text = path.read_text()
     text = text.replace("ModelDock", "Openguin")
     text = text.replace("MODELDock", "OPENGUIN")
-    text = text.replace("Desktop Alpha 0.7", "Desktop Alpha 0.9.1")
-    text = text.replace("Desktop Alpha 0.8", "Desktop Alpha 0.9.1")
-    text = text.replace("Desktop Alpha 0.9", "Desktop Alpha 0.9.1")
+    for old in ["Desktop Alpha 0.7","Desktop Alpha 0.8","Desktop Alpha 0.9","Desktop Alpha 0.9.1"]:
+        text = text.replace(old, "Desktop Alpha 0.10")
     path.write_text(text)
 
 app = root / "src" / "App07.tsx"
@@ -46,9 +49,8 @@ if app.exists():
 css = root / "src" / "app07.css"
 if css.exists():
     text = css.read_text()
-    marker = ".openguin-brand-mark{"
-    if marker not in text:
+    if ".openguin-brand-mark{" not in text:
         text += "\n.openguin-brand-mark{display:grid!important;place-items:center!important;width:38px!important;height:38px!important;border-radius:11px!important;background:#fff!important;color:#0c0c0e!important;padding:3px!important;overflow:hidden}.openguin-brand-mark svg{display:block;width:32px;height:32px}\n"
     css.write_text(text)
 
-print("Applied Openguin 0.9.1 branding and wired the black/white penguin mark into the main UI.")
+print("Applied Openguin 0.10 branding and wired the black/white penguin mark into the main UI.")
