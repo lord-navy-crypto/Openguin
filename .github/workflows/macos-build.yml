@@ -29,6 +29,7 @@ jobs:
           python3 scripts/apply-full-logs.py
           python3 scripts/apply-observatory.py
           python3 scripts/apply-performance09.py
+          python3 scripts/apply-task-center.py
           python3 scripts/apply-openguin-brand.py
           python3 scripts/ensure-app-icon.py
           python3 scripts/verify-desktop.py
@@ -43,7 +44,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.9-macOS-${{ github.sha }}
+          name: Openguin-0.9.1-macOS-${{ github.sha }}
           path: src-tauri/target/release/bundle/
           if-no-files-found: error
           retention-days: 7
