@@ -11,6 +11,7 @@ for cmd in node npm rustc cargo curl ditto python3; do
   if ! command -v "$cmd" >/dev/null 2>&1; then echo "Missing build dependency: $cmd"; exit 1; fi
 done
 python3 scripts/apply-build-fixes.py
+python3 scripts/apply-full-logs.py
 python3 scripts/verify-desktop.py
 npm install
 npm run desktop:build
