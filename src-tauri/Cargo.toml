@@ -1,11 +1,11 @@
 [package]
-name = "modeldock"
+name = "openguin"
 version = "0.7.0"
-description = "ModelDock local model control center"
+description = "Openguin local model control center"
 edition = "2021"
 
 [lib]
-name = "modeldock_lib"
+name = "openguin_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
