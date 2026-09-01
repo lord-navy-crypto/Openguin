@@ -8,7 +8,7 @@ conf=json.loads((root/'src-tauri/tauri.conf.json').read_text())
 require(conf['bundle']['externalBin']==['binaries/ollama-modeldock'],'Tauri externalBin not configured')
 require(conf['version']=='0.6.0','Tauri version mismatch')
 lib=(root/'src-tauri/src/lib.rs').read_text()
-for token in ['runtime_discovery','start_bundled_ollama','stop_bundled_ollama','ollama_json','pull_model','cancel_pull','search_huggingface','list_hf_gguf_variants','import_hf_gguf','cancel_hf_import','system_profile','OLLAMA_MODELS','127.0.0.1:11435','127.0.0.1:11434','external_ollama_path']:
+for token in ['runtime_discovery','start_bundled_ollama','stop_bundled_ollama','ollama_json','pull_model','cancel_pull','search_huggingface','list_hf_gguf_variants','import_hf_gguf','cancel_hf_import','system_profile','OLLAMA_MODELS','127.0.0.1:11435','127.0.0.1:11434','external_path']:
     require(token in lib, f'Missing desktop engine token: {token}')
 app=(root/'src/App.tsx').read_text()
 for token in ['runtime_discovery','Bundled Ollama ready','Use Existing Ollama','Alpha 0.6','modeldock://pull-progress','modeldock://import-progress','Benchmark history']:
