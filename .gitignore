@@ -3,6 +3,7 @@ dist/
 target/
 src-tauri/target/
 src-tauri/binaries/ollama-modeldock-*
+src-tauri/resources/ollama-runtime/
 .DS_Store
 *.log
 __pycache__/
