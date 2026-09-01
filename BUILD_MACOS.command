@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")"
-printf '\nOpenguin Desktop Build 0.7\n==========================\n'
+printf '\nOpenguin Desktop Build 0.8\n==========================\n'
 if ! command -v rustc >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
   echo "Rust toolchain not found. Installing the official rustup toolchain for this build machine..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -12,6 +12,7 @@ for cmd in node npm rustc cargo curl ditto python3; do
 done
 python3 scripts/apply-build-fixes.py
 python3 scripts/apply-full-logs.py
+python3 scripts/apply-observatory.py
 python3 scripts/apply-openguin-brand.py
 python3 scripts/ensure-app-icon.py
 python3 scripts/verify-desktop.py
