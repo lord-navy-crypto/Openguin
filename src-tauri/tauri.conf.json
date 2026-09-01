@@ -18,6 +18,8 @@
   "bundle": {
     "active": true,
     "targets": ["dmg", "app"],
-    "externalBin": ["binaries/ollama-modeldock"]
+    "resources": {
+      "resources/ollama-runtime/": "ollama-runtime/"
+    }
   }
 }
