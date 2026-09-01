@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "desktop:prepare": "bash scripts/prepare-ollama-sidecar.sh",
+    "desktop:prepare": "python3 scripts/ensure-app-icon.py && bash scripts/prepare-ollama-sidecar.sh",
     "desktop:dev": "npm run desktop:prepare && tauri dev",
     "desktop:build": "npm run desktop:prepare && tauri build"
   },
