@@ -1,6 +1,6 @@
 [package]
 name = "modeldock"
-version = "0.5.0"
+version = "0.6.0"
 description = "ModelDock local model control center"
 edition = "2021"
 
