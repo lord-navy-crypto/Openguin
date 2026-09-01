@@ -11,17 +11,17 @@ require(conf.get('productName')=='Openguin','Tauri productName must be Openguin'
 require(conf['app']['windows'][0].get('title')=='Openguin','Main window title must be Openguin')
 require(resources.get('resources/ollama-runtime/')=='ollama-runtime/','Complete Ollama runtime resource mapping missing')
 require('externalBin' not in conf.get('bundle',{}),'Legacy CLI-only externalBin should not be used')
-require(conf['version']=='0.10.0','Tauri version mismatch')
+require(conf['version']=='0.10.1','Tauri version mismatch')
 for icon_path in ['icons/32x32.png','icons/128x128.png','icons/128x128@2x.png','icons/icon.icns','icons/icon.png']:
     require(icon_path in icons,f'Missing Tauri bundle icon: {icon_path}')
 pkg=json.loads((root/'package.json').read_text())
-require(pkg['version']=='0.10.0','package version mismatch')
+require(pkg['version']=='0.10.1','package version mismatch')
 require(pkg['name']=='openguin-preview','npm package must use Openguin branding')
 for step in ['apply-build-fixes.py','apply-full-logs.py','apply-observatory.py','apply-performance09.py','apply-task-center.py','apply-expansion010.py','apply-openguin-brand.py','ensure-app-icon.py','prepare-ollama-sidecar.sh']:
     require(step in pkg['scripts']['desktop:prepare'],f'Missing desktop prepare step: {step}')
 cargo=(root/'src-tauri/Cargo.toml').read_text()
 require('name = "openguin"' in cargo and 'name = "openguin_lib"' in cargo,'Rust crate must use Openguin branding')
-require('version = "0.10.0"' in cargo,'Rust version mismatch')
+require('version = "0.10.1"' in cargo,'Rust version mismatch')
 lib=(root/'src-tauri/src/lib.rs').read_text()
 for token in ['runtime_discovery','start_bundled_ollama','stop_bundled_ollama','ollama_json','pull_model','cancel_pull','cancel_hf_import','search_huggingface','list_hf_gguf_variants','import_hf_gguf','system_profile','127.0.0.1:11435','127.0.0.1:11434','runtime_dir','runtime_complete','OLLAMA_LIBRARY_PATH','llama-server','/api/generate','/api/ps','mod v010','universal_model_search','universal_model_variants','repair_bundled_runtime']:
     require(token in lib, f'Missing engine token: {token}')
@@ -55,7 +55,7 @@ for token in ['Top K','Min P','Repeat penalty','Seed','Keep model loaded']:
 dev=(root/'src/DeveloperStudio010.tsx').read_text()
 require('random code sample' in dev and 'Runtime architecture' in dev and 'Debug order' in dev,'Developer redesign missing')
 task_center=(root/'src/TaskCenter.tsx').read_text()
-for token in ['Activity','Stalled','cancel_pull','cancel_hf_import','modeldock://pull-progress','modeldock://import-progress','STALL_MS','Measured progress']:
+for token in ['Activity','Stalled','cancel_pull','cancel_hf_import','modeldock://pull-progress','modeldock://import-progress','STALL_MS','Measured progress','cancelOrDismiss','dismiss(r.id)','Remove']:
     require(token.lower() in task_center.lower(),f'Missing Task Center token: {token}')
 task_bus=(root/'src/taskBus.ts').read_text()
 require('openguin:task' in task_bus and 'CustomEvent' in task_bus and 'startTask' in task_bus,'Task Center event bus missing')
@@ -78,7 +78,8 @@ if errors:
     print('Desktop verification FAILED:')
     for e in errors: print(' -',e)
     sys.exit(1)
-print('Desktop verification OK — Openguin 0.10.0')
+print('Desktop verification OK — Openguin 0.10.1 Alpha')
+print(' - every Task Center row can now be cancelled when supported or removed/dismissed')
 print(' - Global Model Index: Ollama registry + Hugging Face GGUF + GitHub discovery wired')
 print(' - family-to-variant downloads and local hardware recommendation wired')
 print(' - self-repairing private Ollama runtime + Overview Download / Repair control wired')
