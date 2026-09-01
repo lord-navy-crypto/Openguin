@@ -1,0 +1,19 @@
+import {useEffect,useState} from 'react';
+import {invoke} from '@tauri-apps/api/core';
+import './performance09.css';
+type Mode='bundled'|'external';
+type Model={name:string;size:number;details?:{parameter_size?:string;quantization_level?:string;family?:string}};
+type Active={name:string;size_vram?:number;context_length?:number};
+const GB=1024**3;
+const fmt=(n=0)=>n?`${(n/GB).toFixed(n>10*GB?1:2)} GB`:'—';
+const api=(mode:Mode,method:string,path:string,body?:unknown)=>invoke<any>('ollama_json',{mode,method,path,body:body??null});
+function params(s=''){const m=s.toLowerCase().match(/([\d.]+)\s*b/);return m?Number(m[1]):0}
+function plan(m:Model|undefined,memory:number){if(!m||!memory)return{recommended:4096,ceiling:8192,head:0};const usable=memory*.76,head=Math.max(0,usable-m.size*1.08),p=params(m.details?.parameter_size);const per=Math.max(32*1024,Math.min(360*1024,(p||4)*11*1024)),raw=Math.floor(head/per),levels=[4096,8192,16384,32768,65536,131072],ceiling=levels.filter(x=>x<=raw).pop()||4096,recommended=Math.min(ceiling,head>4*GB?32768:head>2*GB?16384:8192);return{recommended,ceiling,head}}
+export default function RuntimeControl09({mode,memoryBytes}:{mode:Mode;memoryBytes:number}){
+ const [models,setModels]=useState<Model[]>([]),[active,setActive]=useState<Active[]>([]),[target,setTarget]=useState(''),[ttl,setTtl]=useState('10m'),[busy,setBusy]=useState(''),[status,setStatus]=useState('');
+ async function refresh(){try{const[t,p]=await Promise.all([api(mode,'GET','/api/tags'),api(mode,'GET','/api/ps')]);setModels(t.models??[]);setActive(p.models??[]);if(!target&&t.models?.[0])setTarget(t.models[0].name)}catch(e){setStatus(String(e))}}
+ useEffect(()=>{refresh();const id=setInterval(refresh,3000);return()=>clearInterval(id)},[mode]);
+ const m=models.find(x=>x.name===target),p=plan(m,memoryBytes);
+ async function action(kind:'load'|'unload'){if(!target)return;setBusy(kind);try{await api(mode,'POST','/api/generate',{model:target,prompt:'',stream:false,keep_alive:kind==='unload'?0:ttl});setStatus(kind==='unload'?`${target} unloaded.`:`${target} preloaded for ${ttl}.`);await refresh()}catch(e){setStatus(String(e))}finally{setBusy('')}}
+ return <div className="p09-grid"><section className="p09-card"><div className="p09-head"><div><span>RUNTIME CONTROL</span><h3>Load, keep alive, or release memory</h3></div><small>{active.length} resident</small></div><label>Model<select value={target} onChange={e=>setTarget(e.target.value)}>{models.map(x=><option key={x.name}>{x.name}</option>)}</select></label><label>Keep alive<select value={ttl} onChange={e=>setTtl(e.target.value)}><option value="1m">1 minute</option><option value="5m">5 minutes</option><option value="10m">10 minutes</option><option value="30m">30 minutes</option><option value="1h">1 hour</option></select></label><div className="p09-actions"><button disabled={!!busy} onClick={()=>action('load')}>{busy==='load'?'Loading…':'Preload'}</button><button disabled={!!busy} onClick={()=>action('unload')}>{busy==='unload'?'Unloading…':'Unload'}</button></div>{status&&<p className="p09-status">{status}</p>}<div className="p09-resident">{active.map(a=><div key={a.name}><b>{a.name}</b><span>{fmt(a.size_vram??0)} · {(a.context_length??0).toLocaleString()} ctx</span></div>)}</div></section><section className="p09-card"><div className="p09-head"><div><span>CONTEXT OPTIMIZER</span><h3>Conservative hardware-aware context</h3></div></div><div className="p09-context"><div><small>Recommended</small><b>{p.recommended.toLocaleString()}</b><span>tokens</span></div><div><small>Estimated ceiling</small><b>{p.ceiling.toLocaleString()}</b><span>tokens</span></div></div><div className="p09-meter"><i style={{width:`${Math.min(100,p.recommended/131072*100)}%`}}/></div><p>{fmt(p.head)} estimated headroom after model weights. This is a planning estimate; Observatory runtime measurements remain authoritative.</p></section></div>
+}
