@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -17,13 +17,14 @@ function qRank(q:string){return ({Q2_K:2,Q3_K_M:3,Q4_0:4,Q4_K_S:4.2,Q4_K_M:4.5,Q
 function recommendation(v:Variant[],memory:number){return [...v].sort((a,b)=>{const af=fit(a.size,memory).score,bf=fit(b.size,memory).score;const as=af>=70?100+qRank(a.quantization):af,bs=bf>=70?100+qRank(b.quantization):bf;return bs-as})[0]?.filename}
 
 export default function App(){
+ const modeRef=useRef<Mode>('bundled');
  const [tab,setTab]=useState<Tab>('overview'),[mode,setMode]=useState<Mode>('bundled'),[profile,setProfile]=useState<Profile|null>(null),[online,setOnline]=useState(false),[version,setVersion]=useState(''),[models,setModels]=useState<OllamaModel[]>([]),[selected,setSelected]=useState(''),[notice,setNotice]=useState('');
  const [pullName,setPullName]=useState(''),[pulls,setPulls]=useState<Record<string,Pull>>({});
  const [hfQuery,setHfQuery]=useState('qwen gguf'),[hf,setHf]=useState<HfModel[]>([]),[hfSelected,setHfSelected]=useState<HfModel|null>(null),[variants,setVariants]=useState<Variant[]>([]),[imports,setImports]=useState<Record<string,ImportEvent>>({}),[busy,setBusy]=useState(false);
  const [ctx,setCtx]=useState(8192),[temp,setTemp]=useState(.7),[topP,setTopP]=useState(.9),[maxOut,setMaxOut]=useState(512),[system,setSystem]=useState('You are a concise, accurate local assistant.'),[prompt,setPrompt]=useState('Explain why local inference can be private.'),[answer,setAnswer]=useState(''),[speed,setSpeed]=useState<number|null>(null),[thinking,setThinking]=useState(false);
  const memory=profile?.memoryBytes??0; const best=useMemo(()=>[...models].sort((a,b)=>fit(b.size,memory).score-fit(a.size,memory).score)[0],[models,memory]);
- async function refresh(){try{const [v,t]=await Promise.all([api(mode,'GET','/api/version'),api(mode,'GET','/api/tags')]);setOnline(true);setVersion(v.version??'');setModels(t.models??[]);if(!selected&&t.models?.[0])setSelected(t.models[0].name)}catch(e){setOnline(false);setNotice(String(e))}}
- async function switchMode(next:Mode){setMode(next);setNotice('');if(next==='bundled'){try{await invoke('start_bundled_ollama');setTimeout(refresh,700)}catch(e){setNotice(String(e))}}else{try{await invoke('stop_bundled_ollama')}catch{}setTimeout(refresh,150)}}
+ async function refresh(which:Mode=modeRef.current){try{const [v,t]=await Promise.all([api(which,'GET','/api/version'),api(which,'GET','/api/tags')]);setOnline(true);setVersion(v.version??'');setModels(t.models??[]);if(!selected&&t.models?.[0])setSelected(t.models[0].name)}catch(e){setOnline(false);setNotice(String(e))}}
+ async function switchMode(next:Mode){modeRef.current=next;setMode(next);setNotice('');if(next==='bundled'){try{await invoke('start_bundled_ollama');setTimeout(refresh,700)}catch(e){setNotice(String(e))}}else{try{await invoke('stop_bundled_ollama')}catch{}setTimeout(refresh,150)}}
  useEffect(()=>{invoke<Profile>('system_profile').then(setProfile).catch(e=>setNotice(String(e)));switchMode('bundled');const unsubs:Promise<()=>void>[]=[];unsubs.push(listen<Pull>('modeldock://pull-progress',e=>{setPulls(p=>({...p,[e.payload.model]:e.payload}));if(e.payload.done&&!e.payload.error)refresh()}));unsubs.push(listen<ImportEvent>('modeldock://import-progress',e=>{setImports(p=>({...p,[e.payload.importId]:e.payload}));if(e.payload.done&&!e.payload.error)refresh()}));return()=>{unsubs.forEach(p=>p.then(f=>f()))}},[]);
  async function run(){if(!selected)return;setBusy(true);setAnswer('');setSpeed(null);const started=performance.now();try{const r=await api(mode,'POST','/api/chat',{model:selected,messages:[{role:'system',content:system},{role:'user',content:prompt}],stream:false,think:thinking,options:{num_ctx:ctx,temperature:temp,top_p:topP,num_predict:maxOut}});setAnswer(r.message?.content||r.response||'');const evalCount=r.eval_count??0,evalDuration=r.eval_duration??0;setSpeed(evalDuration?evalCount/(evalDuration/1e9):evalCount/((performance.now()-started)/1000))}catch(e){setAnswer(`Error: ${e}`)}finally{setBusy(false)}}
  async function pull(){const name=pullName.trim();if(!name)return;setPulls(p=>({...p,[name]:{model:name,status:'Starting',done:false,cancelled:false}}));invoke('pull_model',{mode,model:name}).catch(e=>setPulls(p=>({...p,[name]:{model:name,status:'Failed',done:true,cancelled:false,error:String(e)}})))}
