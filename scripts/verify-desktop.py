@@ -13,7 +13,7 @@ lib=(root/'src-tauri/src/lib.rs').read_text()
 for token in ['start_bundled_ollama','stop_bundled_ollama','ollama_json','pull_model','cancel_pull','search_huggingface','list_hf_gguf_variants','import_hf_gguf','cancel_hf_import','system_profile','OLLAMA_MODELS','127.0.0.1:11435','127.0.0.1:11434']:
     require(token in lib, f'Missing desktop engine token: {token}')
 app=(root/'src/App.tsx').read_text()
-for token in ['start_bundled_ollama','engineMode','Bundled','External','ollama_json','pull_model','search_huggingface','list_hf_gguf_variants','import_hf_gguf','modeldock://pull-progress','modeldock://import-progress']:
+for token in ['start_bundled_ollama','mode','Bundled','External','ollama_json','pull_model','search_huggingface','list_hf_gguf_variants','import_hf_gguf','modeldock://pull-progress','modeldock://import-progress']:
     require(token in app, f'Missing frontend engine integration: {token}')
 require((root/'scripts/prepare-ollama-sidecar.sh').exists(),'Missing sidecar preparation script')
 if errors:
