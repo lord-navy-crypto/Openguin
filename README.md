@@ -1,101 +1,94 @@
-# ModelDock Desktop Alpha 0.7
+# Openguin Desktop Alpha 0.8
 
-ModelDock is a **desktop-only local model control center** for discovering, installing, understanding, tuning, benchmarking, and managing local AI models.
+Openguin is a **desktop-only local AI control center and runtime observatory** for discovering, installing, understanding, tuning, benchmarking, visualizing, and managing local models.
 
-> ModelDock is an independent project. It is not affiliated with or endorsed by Ollama Inc.
+> Openguin is an independent project. It is not affiliated with or endorsed by Ollama Inc. Ollama remains a third-party runtime/API compatibility layer.
 
-## 0.7 — unified desktop architecture
+## 0.8 — local AI you can see
 
-0.7 replaces the temporary floating Lab+/Diagnostics additions with one unified desktop experience.
+The 0.8 release turns runtime state and measured performance into first-class UI instead of hiding them behind logs or command-line tools.
 
-### Runtime manager
+### Runtime Observatory
 
-- Bundled Ollama remains the default private runtime on `127.0.0.1:11435`.
-- Existing Ollama is detected on `127.0.0.1:11434`.
-- Bundled startup must pass a real readiness check before ModelDock reports it online.
-- If the bundled runtime fails and an external Ollama is already running, ModelDock can automatically fall back to it.
-- End users do **not** need to install Ollama separately in a distributed ModelDock build.
+The new **Observatory** page polls the active Ollama engine through `/api/ps` and visualizes:
 
-### Capability-aware Model Lab
+- models currently resident in memory;
+- Ollama-reported runtime memory (`size_vram`);
+- actual allocated context length;
+- parameter size and quantization;
+- keep-alive / expiry state;
+- total local runtime allocation versus system/unified memory;
+- recent measured decode throughput;
+- context residency across loaded models.
 
-ModelDock calls Ollama `/api/show` for the selected installed model and uses the model's actual reported capabilities.
+On Apple Silicon, Openguin intentionally describes memory as unified memory instead of pretending CPU RAM and GPU VRAM are separate pools.
 
-- Thinking controls are enabled only when the installed model reports `thinking`.
-- GPT-OSS exposes `low`, `medium`, and `high` thinking levels.
-- Context controls use model metadata when a context length is exposed.
-- Responses stream through a Rust/Tauri bridge instead of relying on a browser-to-localhost request.
-- Thinking and answer text are separated during streaming.
-- Generation progress is clearly labelled as an estimate while streaming; final tokens and tok/s use Ollama `eval_count` / `eval_duration`.
+### Generation pipeline telemetry
 
-### Live official Ollama Library
+The Rust/Tauri streaming bridge now preserves the final Ollama timing metrics:
 
-0.7 adds a backend command that reads the public Ollama Library and extracts model names, capabilities, and advertised size variants.
+- total duration;
+- model load duration;
+- prompt token count;
+- prompt evaluation / prefill duration;
+- generated token count;
+- decode duration;
+- stop reason.
 
-- Popular / Newest / Featured views
-- search
-- capability badges such as vision, tools, thinking, embedding, and cloud
-- size/variant selector when exposed
-- one-click install through ModelDock's existing pull pipeline
-- local cached catalog fallback if the live Library cannot be refreshed
+The UI can therefore show a real **Load → Prefill → Decode** timeline and measured tok/s history rather than relying on synthetic timing guesses.
 
-A small built-in fallback catalog remains available so the Library is not blank offline.
+### Model Lab
 
-### Hugging Face GGUF import retained
+- capability-aware Thinking controls from `/api/show`;
+- GPT-OSS thinking levels;
+- context controls based on model metadata;
+- streaming thinking and answer output;
+- generation progress estimate while streaming;
+- final real token count and tok/s;
+- benchmark history feeding the Observatory.
 
-The 0.6 verified GGUF workflow remains available:
+### Model Library
 
-- list GGUF variants
-- local SHA-256 calculation
-- compare with Hugging Face LFS SHA-256 when available
-- upload verified blob to Ollama
-- create model
-- save provenance and license metadata
-- remove duplicate staging GGUF after successful import
+- live public Ollama Library synchronization;
+- Popular / Newest / Featured views;
+- capability badges;
+- variant selector;
+- one-click install through the selected local engine;
+- cached offline fallback;
+- Hugging Face GGUF discovery and verified import retained.
 
 ### Hardware Fit 3
 
-Hardware Fit now combines:
+Hardware Fit combines model weight size, parameter metadata, context/KV allowance and OS/runtime headroom. It is explicitly an estimate, while Observatory measurements are labelled as runtime measurements.
 
-- model weight size
-- model parameter metadata when available
-- context/KV allowance
-- runtime/OS headroom
+### Full diagnostics
 
-It exposes a confidence level and remains explicitly an **estimate**, not a benchmark guarantee.
-
-### Diagnostics & Usage
-
-Diagnostics is now a normal application section rather than a floating debug panel.
-
-Stored locally on the device:
-
-- runtime switches and failures
-- model install/import results
-- inference completion/failures
-- benchmark history
-- sessions
-- average generation speed
-
-ModelDock does **not** store full prompts or model answers in the diagnostic log.
+Diagnostics contains both Openguin application events and raw bundled Ollama stdout/stderr. Full prompts, model answers and thinking text are not intentionally written to the diagnostic log.
 
 ## Architecture
 
 ```text
-ModelDock.app
-├── React / Vite unified desktop UI
-├── Tauri 2 / Rust security boundary
-│   ├── restricted Ollama JSON bridge
-│   ├── streaming chat bridge
+Openguin.app
+├── React / Vite desktop UI
+│   ├── Overview
+│   ├── Observatory
+│   ├── Model Passports
+│   ├── Model Lab
+│   ├── Library
+│   └── Diagnostics
+├── Tauri 2 / Rust boundary
+│   ├── restricted Ollama API bridge
+│   ├── streaming + timing telemetry bridge
 │   ├── official Ollama Library reader
 │   └── verified Hugging Face GGUF importer
-├── bundled Ollama sidecar → 127.0.0.1:11435
-├── isolated ModelDock model store
+├── complete bundled Ollama runtime → 127.0.0.1:11435
+├── isolated local model store
 └── optional existing Ollama → 127.0.0.1:11434
 ```
 
 ## Build on macOS
 
-The machine **building** ModelDock needs Node.js/npm, Rust/Cargo, and the normal macOS Tauri prerequisites. End-user Macs do not need Rust.
+The build machine needs Node.js/npm, Rust/Cargo, and normal macOS Tauri prerequisites. Distributed end-user builds do not require Rust or a separate Ollama installation.
 
 ```bash
 git pull origin main
@@ -103,36 +96,29 @@ chmod +x BUILD_MACOS.command
 ./BUILD_MACOS.command
 ```
 
-The build script:
-
-1. installs Rust automatically if the build machine does not have it;
-2. applies the current runtime/build integration fixes;
-3. runs the static ModelDock verifier;
-4. prepares the bundled Ollama sidecar, downloading the official macOS Ollama archive if necessary;
-5. installs frontend dependencies;
-6. builds the Tauri app and DMG.
-
 Expected output:
 
 ```text
-src-tauri/target/release/bundle/macos/ModelDock.app
+src-tauri/target/release/bundle/macos/Openguin.app
 src-tauri/target/release/bundle/dmg/
 ```
 
+The build pipeline applies runtime fixes, full-log integration, Observatory integration, Openguin branding, the generated penguin icon, static verification, bundled-runtime preparation, and then the real Tauri build.
+
 ## Licensing / legal
 
-- ModelDock source: [`LICENSE`](LICENSE) — MIT
+- Openguin source: [`LICENSE`](LICENSE) — MIT
 - copyright: [`COPYRIGHT.md`](COPYRIGHT.md)
 - project / trademark notice: [`NOTICE.md`](NOTICE.md)
 - third-party notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 - model licensing policy: [`docs/MODEL_LICENSING.md`](docs/MODEL_LICENSING.md)
 - security policy: [`SECURITY.md`](SECURITY.md)
 
-Model weights always retain their own upstream licenses. Being downloadable or runnable through ModelDock does not grant additional rights.
+Model weights retain their upstream licenses. Being downloadable or runnable through Openguin does not grant additional rights.
 
 ## Alpha limitations
 
 - The macOS app is not yet a signed/notarized public release.
-- Live Ollama Library parsing depends on the public Library page structure; ModelDock falls back to its cached catalog if parsing fails.
-- Hardware Fit remains an estimate.
-- Interrupted Hugging Face GGUF download resume and gated/private Hugging Face authentication remain future work.
+- Public Ollama Library parsing depends on the website structure and falls back to cached results if parsing fails.
+- Hardware Fit is an estimate; runtime Observatory data comes from the selected Ollama engine.
+- Interrupted Hugging Face GGUF resume and gated/private Hugging Face authentication remain future work.
