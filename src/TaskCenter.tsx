@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
-import type {TaskState,TaskUpdate} from './taskCenter';
+import type {TaskState,TaskUpdate} from './taskBus';
 import './task-center.css';
 
 type Row=TaskUpdate&{state:TaskState;createdAt:number;updatedAt:number;percent?:number};
