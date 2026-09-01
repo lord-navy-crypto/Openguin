@@ -29,7 +29,7 @@ v07=(root/'src-tauri/src/v07.rs').read_text()
 for token in ['official_ollama_catalog','chat_stream','modeldock://chat-stream','https://ollama.com/library','total_duration','load_duration','prompt_eval_count','prompt_eval_duration','eval_count','eval_duration','done_reason']:
     require(token in v07,f'Missing generation telemetry token: {token}')
 app=(root/'src/App07.tsx').read_text()
-for token in ['Openguin','Thinking','Streaming playground','Sync official','Hardware Fit 3','Diagnostics & Usage','HUGGING FACE GGUF','Observatory','Runtime Observatory','openguin:task','BrandMark']:
+for token in ['Openguin','Thinking','Streaming playground','Sync official','Hardware Fit 3','Diagnostics & Usage','HUGGING FACE GGUF','Observatory','Runtime Observatory','BrandMark']:
     require(token in app,f'Missing Openguin frontend integration: {token}')
 obs=(root/'src/Observatory.tsx').read_text()
 for token in ['/api/ps','Runtime memory map','Decode performance trend','Last generation pipeline','Context residency','size_vram','context_length','RuntimeControl09','CompareBench09']:
@@ -43,6 +43,8 @@ for token in ['MODEL COMPARATOR','COLD / WARM BENCHMARK','MEMORY HISTORY','openg
 task_center=(root/'src/TaskCenter.tsx').read_text()
 for token in ['Activity','Stalled','cancel_pull','cancel_hf_import','modeldock://pull-progress','modeldock://import-progress','STALL_MS','Measured progress']:
     require(token.lower() in task_center.lower(),f'Missing Task Center token: {token}')
+task_bus=(root/'src/taskCenter.ts').read_text()
+require('openguin:task' in task_bus and 'CustomEvent' in task_bus and 'startTask' in task_bus,'Task Center event bus missing')
 main=(root/'src/main.tsx').read_text()
 require("TaskCenter" in main and '<TaskCenter/>' in main,'Global Task Center is not mounted')
 for file in ['src/taskCenter.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
@@ -55,7 +57,6 @@ for token in ['https://ollama.com/download/Ollama-darwin.zip','Contents/Resource
 icon=(root/'scripts/ensure-app-icon.py').read_text()
 for token in ['Openguin','penguin','icon.icns','iconutil','32x32.png','128x128@2x.png']:
     require(token in icon,f'Complete Openguin icon generator missing token: {token}')
-# When verifier runs through the standard build/CI chain, ensure-app-icon.py has already run.
 if sys.platform == 'darwin':
     require((root/'src-tauri/icons/icon.icns').exists(),'Generated macOS icon.icns is missing')
 if errors:
