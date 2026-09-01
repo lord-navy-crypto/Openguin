@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.9.1
+
+### Global Task Center
+- Added a floating global task window for long-running actions.
+- Tasks appear immediately when a supported button is pressed so users can see that the action registered.
+- Shows task title, source, detail, elapsed time, status, percentage and a green progress bar.
+- Supports multiple concurrent tasks and displays the active-task count on the collapsed Tasks button.
+- Keeps recent finished/failed/cancelled tasks visible until cleared.
+
+### Progress semantics
+- Ollama model pulls and Hugging Face GGUF imports use real backend progress percentages when byte totals are available.
+- Runtime switching, model preload/unload, catalog sync, inference and controlled benchmarks use explicitly labelled stage progress rather than pretending estimated percentages are measured transfer progress.
+- Tasks with no update for 15 seconds are visually marked `Stalled` without automatically killing the underlying process.
+
+### Cancellation and safety
+- Model pulls can be cancelled through the existing `cancel_pull` backend command.
+- GGUF imports can be cancelled through `cancel_hf_import`.
+- Unsupported actions do not show a fake cancel control.
+
+### Integration
+- Runtime preload/unload and cold/warm benchmark stages now report into the global Task Center.
+- Runtime switching, Model Lab inference, Ollama Library sync/search/install, Hugging Face search and GGUF import are instrumented by the deterministic build integration step.
+- Version synchronized to 0.9.1 across npm, Cargo and Tauri.
+- CI/verifier require the Task Center files, mount point, progress events and build integration.
+
 ## 0.9.0
 
 ### Closed-loop runtime control
