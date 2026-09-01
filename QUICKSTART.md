@@ -1,4 +1,4 @@
-# ModelDock 0.7 quick start (macOS)
+# Openguin 0.9 quick start (macOS)
 
 ## Fastest development test
 
@@ -8,7 +8,7 @@ chmod +x RUN_DEV.command
 ./RUN_DEV.command
 ```
 
-The launcher applies the current runtime/build integrations, verifies the repository, installs npm dependencies when needed, prepares the bundled Ollama sidecar, and starts Tauri development mode.
+The launcher applies runtime fixes, full logs, Observatory integration, 0.9 performance controls, Openguin branding, the generated penguin icon, static verification, bundled-runtime preparation, and then starts Tauri development mode.
 
 ## Development prerequisites
 
@@ -17,28 +17,29 @@ The launcher applies the current runtime/build integrations, verifies the reposi
 - Xcode Command Line Tools / normal Tauri macOS prerequisites
 - standard macOS `curl`, `ditto`, and Python 3
 
-You do **not** need to install Ollama separately. If no Ollama CLI is available on the build machine, ModelDock's preparation script downloads the official macOS Ollama archive and extracts the bundled runtime.
+You do **not** need to install Ollama separately. The preparation step can download the official macOS Ollama archive and bundle its complete runtime resources.
 
 ## Runtime behavior
 
-- Bundled ModelDock Ollama: `127.0.0.1:11435`
+- Bundled Openguin Ollama runtime: `127.0.0.1:11435`
 - Existing normal Ollama: `127.0.0.1:11434`
-- Bundled remains the default when it starts successfully.
-- A readiness check confirms that `11435` is actually listening before the UI reports it online.
-- If bundled startup fails and an external Ollama is already running, ModelDock can fall back to External mode.
-- ModelDock does not rewrite the external Ollama model directory, port, or environment settings.
+- Bundled remains the default when it passes readiness checks.
+- If bundled startup fails and an external Ollama is already running, Openguin can fall back to External mode.
+- Openguin does not rewrite the external Ollama model directory, port, or environment settings.
 
-## 0.7 test checklist
+## 0.9 test checklist
 
-1. Open **Overview** and confirm Runtime health is sensible.
-2. Switch Bundled → External → Bundled and confirm the installed-model list changes appropriately.
-3. Open **My Models**, select a model, and inspect capability badges and Hardware Fit 3.
-4. Open **Model Lab**. For a model that reports `thinking`, confirm the Thinking control becomes available.
-5. Run a prompt and confirm the response streams progressively, the Thinking trace is separate when present, and the progress bar reaches 100% at completion.
-6. Confirm final token count and tok/s are recorded in **Diagnostics**.
-7. Open **Library**, press **Sync official**, switch Popular/Newest/Featured, search, choose a size variant, and start an install.
-8. Test Hugging Face GGUF search/import if desired; confirm license and SHA/provenance behavior remains available.
-9. Open **Diagnostics** and confirm runtime/task/inference events appear without complete prompt or answer text.
+1. Open **Overview** and confirm runtime health.
+2. Open **Observatory** and confirm `/api/ps` live telemetry updates.
+3. Run a model in **Model Lab**, then confirm Loaded Models, Runtime Memory Map, Context Residency and Generation Pipeline update.
+4. In Observatory, test **Preload** with a short keep-alive, then **Unload** and verify memory is released.
+5. Check **Context Optimizer** for the selected model. Treat its values as estimates, then compare them with actual `/api/ps` allocation.
+6. Select up to three models in **Model Comparator** and confirm disk size, params, quantization and family are displayed side-by-side.
+7. Run **Cold + warm benchmark** and confirm cold/warm load time and tok/s are stored separately.
+8. Leave Observatory open briefly and confirm the rolling memory-history SVG updates.
+9. Test a thinking-capable model and confirm Thinking controls and separate thinking output remain functional.
+10. Open **Library**, press **Sync official**, and test an install.
+11. Open **Diagnostics** and confirm application events and raw bundled Ollama logs are available without complete prompt/answer contents.
 
 ## Build a real `.app` / `.dmg`
 
@@ -51,7 +52,7 @@ chmod +x BUILD_MACOS.command
 Expected output:
 
 ```text
-src-tauri/target/release/bundle/macos/ModelDock.app
+src-tauri/target/release/bundle/macos/Openguin.app
 src-tauri/target/release/bundle/dmg/
 ```
 
@@ -61,4 +62,4 @@ Open the output directory with:
 open src-tauri/target/release/bundle
 ```
 
-ModelDock is still alpha software and the resulting macOS bundle is not yet a signed/notarized public release.
+Openguin is still alpha software and the resulting macOS bundle is not yet a signed/notarized public release.
