@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
-import {task} from './taskCenter';
+import {task} from './taskBus';
 import './performance09.css';
 type Mode='bundled'|'external';
 type Model={name:string;size:number;details?:{parameter_size?:string;quantization_level?:string;family?:string}};
