@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "ModelDock",
+  "productName": "Openguin",
   "version": "0.7.0",
   "identifier": "app.modeldock.desktop",
   "build": {
@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{"label":"main","title":"ModelDock","width":1380,"height":860,"minWidth":1050,"minHeight":680,"center":true}],
+    "windows": [{"label":"main","title":"Openguin","width":1380,"height":860,"minWidth":1050,"minHeight":680,"center":true}],
     "security": {
       "csp": "default-src 'self'; img-src 'self' asset: data:; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:11434 http://127.0.0.1:11435 ipc: http://ipc.localhost"
     }
