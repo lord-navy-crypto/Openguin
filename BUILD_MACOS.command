@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 cd "$(dirname "$0")"
-printf '\nOpenguin Desktop Build 0.10.0\n=============================\n'
+printf '\nOpenguin Desktop Build 0.10.1 Alpha\n===================================\n'
 if ! command -v rustc >/dev/null 2>&1 || ! command -v cargo >/dev/null 2>&1; then
   echo "Rust toolchain not found. Installing the official rustup toolchain for this build machine..."
   curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
