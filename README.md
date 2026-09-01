@@ -1,124 +1,138 @@
-# ModelDock Desktop Alpha 0.6
+# ModelDock Desktop Alpha 0.7
 
-ModelDock is a **desktop-only local model control center** designed to make local AI models easier to discover, install, understand, tune, benchmark, and integrate.
+ModelDock is a **desktop-only local model control center** for discovering, installing, understanding, tuning, benchmarking, and managing local AI models.
 
 > ModelDock is an independent project. It is not affiliated with or endorsed by Ollama Inc.
 
-## What 0.6 adds
+## 0.7 — unified desktop architecture
 
-### Zero separate Ollama setup for end users
+0.7 replaces the temporary floating Lab+/Diagnostics additions with one unified desktop experience.
 
-Production builds bundle an Ollama CLI/runtime sidecar inside the ModelDock application. On first launch ModelDock starts its isolated runtime on `127.0.0.1:11435` and stores its models in ModelDock app data. End users do not need to install Ollama separately.
+### Runtime manager
 
-The repository does not commit the large third-party Ollama binary. During a macOS build, `scripts/prepare-ollama-sidecar.sh` follows this order:
+- Bundled Ollama remains the default private runtime on `127.0.0.1:11435`.
+- Existing Ollama is detected on `127.0.0.1:11434`.
+- Bundled startup must pass a real readiness check before ModelDock reports it online.
+- If the bundled runtime fails and an external Ollama is already running, ModelDock can automatically fall back to it.
+- End users do **not** need to install Ollama separately in a distributed ModelDock build.
 
-1. use `OLLAMA_BIN` if the builder explicitly supplies one;
-2. reuse a locally installed Ollama CLI if present;
-3. otherwise download the official macOS Ollama archive at build time and extract the CLI for Tauri sidecar bundling.
+### Capability-aware Model Lab
 
-### Existing Ollama auto-detection
+ModelDock calls Ollama `/api/show` for the selected installed model and uses the model's actual reported capabilities.
 
-If a user already has Ollama installed, ModelDock detects common macOS CLI locations and probes the normal local API at `127.0.0.1:11434`.
+- Thinking controls are enabled only when the installed model reports `thinking`.
+- GPT-OSS exposes `low`, `medium`, and `high` thinking levels.
+- Context controls use model metadata when a context length is exposed.
+- Responses stream through a Rust/Tauri bridge instead of relying on a browser-to-localhost request.
+- Thinking and answer text are separated during streaming.
+- Generation progress is clearly labelled as an estimate while streaming; final tokens and tok/s use Ollama `eval_count` / `eval_duration`.
 
-- **Bundled remains the default** when available, so ModelDock stays isolated.
-- If a development build is missing the bundled sidecar but an external Ollama service is already running, ModelDock automatically falls back to External mode.
-- If external Ollama is installed but stopped, ModelDock reports that state and lets the user switch after they start it.
-- ModelDock does **not** silently rewrite external ports, environment variables, or model directories.
+### Live official Ollama Library
 
-See [`docs/ENGINE_BEHAVIOR.md`](docs/ENGINE_BEHAVIOR.md).
+0.7 adds a backend command that reads the public Ollama Library and extracts model names, capabilities, and advertised size variants.
 
-### Runtime Auto Setup UI
+- Popular / Newest / Featured views
+- search
+- capability badges such as vision, tools, thinking, embedding, and cloud
+- size/variant selector when exposed
+- one-click install through ModelDock's existing pull pipeline
+- local cached catalog fallback if the live Library cannot be refreshed
 
-Overview now shows bundled availability, external Ollama detection, external version/path, and one-click switching between the isolated ModelDock runtime and an existing Ollama service.
+A small built-in fallback catalog remains available so the Library is not blank offline.
 
-### Hardware Fit 2
+### Hugging Face GGUF import retained
 
-Hardware Fit now includes a conservative runtime-memory estimate based on model weight size plus a context allowance. This remains an estimate rather than a benchmark. Model Lab updates the estimate when context changes.
+The 0.6 verified GGUF workflow remains available:
 
-### Persistent local benchmark history
+- list GGUF variants
+- local SHA-256 calculation
+- compare with Hugging Face LFS SHA-256 when available
+- upload verified blob to Ollama
+- create model
+- save provenance and license metadata
+- remove duplicate staging GGUF after successful import
 
-Model Lab stores the last 20 local runs on the device and displays model, context, and measured generation speed. No benchmark history is uploaded by ModelDock.
+### Hardware Fit 3
 
-### Provenance / lineage visibility
+Hardware Fit now combines:
 
-Hugging Face results continue to display upstream license metadata and now surface base-model lineage tags when the Hub provides them. Direct GGUF import still hashes downloads locally, verifies LFS SHA-256 when available, records provenance, registers the blob with Ollama, and removes duplicate staging data after successful import.
+- model weight size
+- model parameter metadata when available
+- context/KV allowance
+- runtime/OS headroom
 
-## Core architecture
+It exposes a confidence level and remains explicitly an **estimate**, not a benchmark guarantee.
+
+### Diagnostics & Usage
+
+Diagnostics is now a normal application section rather than a floating debug panel.
+
+Stored locally on the device:
+
+- runtime switches and failures
+- model install/import results
+- inference completion/failures
+- benchmark history
+- sessions
+- average generation speed
+
+ModelDock does **not** store full prompts or model answers in the diagnostic log.
+
+## Architecture
 
 ```text
 ModelDock.app
-├── React / Vite desktop UI
+├── React / Vite unified desktop UI
 ├── Tauri 2 / Rust security boundary
+│   ├── restricted Ollama JSON bridge
+│   ├── streaming chat bridge
+│   ├── official Ollama Library reader
+│   └── verified Hugging Face GGUF importer
 ├── bundled Ollama sidecar → 127.0.0.1:11435
 ├── isolated ModelDock model store
 └── optional existing Ollama → 127.0.0.1:11434
 ```
 
-The frontend does not receive arbitrary shell access. Local privileged operations are exposed through narrow Tauri commands.
+## Build on macOS
 
-## Build and run on macOS
-
-### Prerequisites
-
-You need these only to **develop/build** ModelDock:
-
-- Node.js + npm
-- Rust + Cargo
-- macOS Tauri prerequisites / Xcode command line tools
-- curl + ditto (standard macOS tools)
-
-You do **not** need to separately install Ollama: the sidecar preparation script can fetch the official macOS archive at build time.
-
-### Development
+The machine **building** ModelDock needs Node.js/npm, Rust/Cargo, and the normal macOS Tauri prerequisites. End-user Macs do not need Rust.
 
 ```bash
-npm install
-npm run desktop:dev
-```
-
-### Build `.app` / `.dmg`
-
-```bash
+git pull origin main
+chmod +x BUILD_MACOS.command
 ./BUILD_MACOS.command
 ```
 
-Or:
+The build script:
 
-```bash
-npm install
-npm run desktop:build
+1. installs Rust automatically if the build machine does not have it;
+2. applies the current runtime/build integration fixes;
+3. runs the static ModelDock verifier;
+4. prepares the bundled Ollama sidecar, downloading the official macOS Ollama archive if necessary;
+5. installs frontend dependencies;
+6. builds the Tauri app and DMG.
+
+Expected output:
+
+```text
+src-tauri/target/release/bundle/macos/ModelDock.app
+src-tauri/target/release/bundle/dmg/
 ```
-
-Built bundles are under `src-tauri/target/release/bundle/`.
-
-## Test checklist
-
-1. Launch ModelDock.
-2. Overview should show **Bundled Ollama ready** in a production bundle.
-3. If normal Ollama is installed/running, Overview should also show **Existing Ollama: Running** and its version/path.
-4. Keep Bundled selected and install a small test model in Library.
-5. Open Model Lab and run a prompt. Confirm tok/s and benchmark history appear.
-6. If you already use normal Ollama, switch to External and confirm its models appear without moving or copying them.
-7. Switch back to Bundled and confirm the ModelDock model list is isolated again.
 
 ## Licensing / legal
 
-- ModelDock source: [`LICENSE`](LICENSE) (MIT)
+- ModelDock source: [`LICENSE`](LICENSE) — MIT
 - copyright: [`COPYRIGHT.md`](COPYRIGHT.md)
-- project / trademark notices: [`NOTICE.md`](NOTICE.md)
-- third-party notices, including the Ollama MIT notice: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
+- project / trademark notice: [`NOTICE.md`](NOTICE.md)
+- third-party notices: [`THIRD_PARTY_NOTICES.md`](THIRD_PARTY_NOTICES.md)
 - model licensing policy: [`docs/MODEL_LICENSING.md`](docs/MODEL_LICENSING.md)
 - security policy: [`SECURITY.md`](SECURITY.md)
 
-Model weights always keep their own upstream licenses. ModelDock does not grant additional rights to a model merely because it can download or run it.
+Model weights always retain their own upstream licenses. Being downloadable or runnable through ModelDock does not grant additional rights.
 
 ## Alpha limitations
 
-- ModelDock is not yet a signed/notarized production release.
-- Hardware Fit is an estimate and should not be treated as a measured performance guarantee.
-- Resume support for interrupted Hugging Face GGUF downloads is still planned.
-- Gated/private Hugging Face repositories require future authentication support.
-
-## Next
-
-0.7 priorities: richer model-family graph, resumable downloads, editable imported-model names, release automation/signing groundwork, and deeper per-hardware benchmark comparison.
+- The macOS app is not yet a signed/notarized public release.
+- Live Ollama Library parsing depends on the public Library page structure; ModelDock falls back to its cached catalog if parsing fails.
+- Hardware Fit remains an estimate.
+- Interrupted Hugging Face GGUF download resume and gated/private Hugging Face authentication remain future work.
