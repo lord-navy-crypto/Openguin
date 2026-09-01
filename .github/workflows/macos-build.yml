@@ -1,4 +1,4 @@
-name: macOS build check
+name: Openguin macOS build check
 
 on:
   push:
@@ -26,19 +26,22 @@ jobs:
       - name: Verify source integrations
         run: |
           python3 scripts/apply-build-fixes.py
+          python3 scripts/apply-full-logs.py
+          python3 scripts/apply-openguin-brand.py
+          python3 scripts/ensure-app-icon.py
           python3 scripts/verify-desktop.py
 
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Build ModelDock
+      - name: Build Openguin
         run: npm run desktop:build
 
       - name: Upload macOS bundles
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: ModelDock-macOS-${{ github.sha }}
+          name: Openguin-macOS-${{ github.sha }}
           path: src-tauri/target/release/bundle/
           if-no-files-found: error
           retention-days: 7
