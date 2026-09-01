@@ -57,12 +57,13 @@ require('random code sample' in dev and 'Runtime architecture' in dev and 'Debug
 task_center=(root/'src/TaskCenter.tsx').read_text()
 for token in ['Activity','Stalled','cancel_pull','cancel_hf_import','modeldock://pull-progress','modeldock://import-progress','STALL_MS','Measured progress']:
     require(token.lower() in task_center.lower(),f'Missing Task Center token: {token}')
-task_bus=(root/'src/taskCenter.ts').read_text()
+task_bus=(root/'src/taskBus.ts').read_text()
 require('openguin:task' in task_bus and 'CustomEvent' in task_bus and 'startTask' in task_bus,'Task Center event bus missing')
 main=(root/'src/main.tsx').read_text()
 require("TaskCenter" in main and '<TaskCenter/>' in main,'Global Task Center is not mounted')
-for file in ['src/taskCenter.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','src/mega-library.css','src/developer010.css','src/runtime-installer.css','src/advanced-settings010.css','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
+for file in ['src/taskBus.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','src/mega-library.css','src/developer010.css','src/runtime-installer.css','src/advanced-settings010.css','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
     require((root/file).exists(),f'Missing required file: {file}')
+require(not (root/'src/taskCenter.ts').exists(),'Legacy taskCenter.ts must be removed to avoid macOS case-insensitive collision with TaskCenter.tsx')
 index=(root/'index.html').read_text()
 require('/openguin.svg' in index and '<title>Openguin</title>' in index,'Openguin document title/favicon not wired')
 prep=(root/'scripts/prepare-ollama-sidecar.sh').read_text()
