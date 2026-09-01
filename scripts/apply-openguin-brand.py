@@ -34,7 +34,6 @@ for path in files:
     text = text.replace("Desktop Alpha 0.9", "Desktop Alpha 0.9.1")
     path.write_text(text)
 
-# Wire the real penguin mark into the main sidebar instead of a letter badge.
 app = root / "src" / "App07.tsx"
 if app.exists():
     text = app.read_text()
@@ -44,4 +43,12 @@ if app.exists():
     text = text.replace('<div className="v07-brand"><span>P</span><div>Openguin', '<div className="v07-brand"><span className="openguin-brand-mark"><BrandMark size={34}/></span><div>Openguin')
     app.write_text(text)
 
-print("Applied Openguin 0.9.1 branding and wired the penguin brand mark into the main UI.")
+css = root / "src" / "app07.css"
+if css.exists():
+    text = css.read_text()
+    marker = ".openguin-brand-mark{"
+    if marker not in text:
+        text += "\n.openguin-brand-mark{display:grid!important;place-items:center!important;width:38px!important;height:38px!important;border-radius:11px!important;background:#fff!important;color:#0c0c0e!important;padding:3px!important;overflow:hidden}.openguin-brand-mark svg{display:block;width:32px;height:32px}\n"
+    css.write_text(text)
+
+print("Applied Openguin 0.9.1 branding and wired the black/white penguin mark into the main UI.")
