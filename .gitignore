@@ -7,3 +7,5 @@ src-tauri/binaries/ollama-modeldock-*
 *.log
 __pycache__/
 *.pyc
+
+.build-cache/
