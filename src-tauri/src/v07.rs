@@ -23,6 +23,11 @@ struct ChatStreamEvent {
     thinking: String,
     content: String,
     done: bool,
+    done_reason: Option<String>,
+    total_duration: Option<u64>,
+    load_duration: Option<u64>,
+    prompt_eval_count: Option<u64>,
+    prompt_eval_duration: Option<u64>,
     eval_count: Option<u64>,
     eval_duration: Option<u64>,
     error: Option<String>,
@@ -76,7 +81,7 @@ fn parse_catalog(html: &str) -> Vec<OfficialModel> {
 #[tauri::command]
 pub async fn official_ollama_catalog(sort: Option<String>, query: Option<String>) -> Result<Vec<OfficialModel>, String> {
     let sort = match sort.as_deref() { Some("newest") => "newest", Some("popular") => "popular", _ => "featured" };
-    let client = reqwest::Client::builder().timeout(Duration::from_secs(15)).user_agent("ModelDock/0.7").build().map_err(|e| e.to_string())?;
+    let client = reqwest::Client::builder().timeout(Duration::from_secs(15)).user_agent("Openguin/0.8").build().map_err(|e| e.to_string())?;
     let mut req = client.get("https://ollama.com/library").query(&[("sort", sort)]);
     if let Some(q) = query.as_ref().filter(|q| !q.trim().is_empty()) { req = req.query(&[("q", q.trim())]); }
     let response = req.send().await.map_err(|e| e.to_string())?;
@@ -113,6 +118,11 @@ pub async fn chat_stream(app: AppHandle, mode: String, request_id: String, mut b
                         thinking: message.and_then(|m| m.get("thinking")).and_then(Value::as_str).unwrap_or("").to_string(),
                         content: message.and_then(|m| m.get("content")).and_then(Value::as_str).unwrap_or("").to_string(),
                         done: v.get("done").and_then(Value::as_bool).unwrap_or(false),
+                        done_reason: v.get("done_reason").and_then(Value::as_str).map(str::to_string),
+                        total_duration: v.get("total_duration").and_then(Value::as_u64),
+                        load_duration: v.get("load_duration").and_then(Value::as_u64),
+                        prompt_eval_count: v.get("prompt_eval_count").and_then(Value::as_u64),
+                        prompt_eval_duration: v.get("prompt_eval_duration").and_then(Value::as_u64),
                         eval_count: v.get("eval_count").and_then(Value::as_u64),
                         eval_duration: v.get("eval_duration").and_then(Value::as_u64),
                         error: v.get("error").and_then(Value::as_str).map(str::to_string),
@@ -120,7 +130,12 @@ pub async fn chat_stream(app: AppHandle, mode: String, request_id: String, mut b
                     let _ = app.emit("modeldock://chat-stream", event);
                 }
                 Err(e) => {
-                    let _ = app.emit("modeldock://chat-stream", ChatStreamEvent { request_id: request_id.clone(), thinking: String::new(), content: String::new(), done: false, eval_count: None, eval_duration: None, error: Some(format!("Invalid Ollama stream chunk: {e}")) });
+                    let _ = app.emit("modeldock://chat-stream", ChatStreamEvent {
+                        request_id: request_id.clone(), thinking: String::new(), content: String::new(), done: false,
+                        done_reason: None, total_duration: None, load_duration: None, prompt_eval_count: None,
+                        prompt_eval_duration: None, eval_count: None, eval_duration: None,
+                        error: Some(format!("Invalid Ollama stream chunk: {e}"))
+                    });
                 }
             }
         }
