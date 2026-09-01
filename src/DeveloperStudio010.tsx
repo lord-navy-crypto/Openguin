@@ -1,0 +1,13 @@
+import './developer010.css';
+
+export default function DeveloperStudio010(){
+ const uses=[
+  ['Private assistant','Run chat, summarization and drafting without sending prompts to a cloud provider.'],
+  ['Coding & analysis','Use coding-capable local models for source explanation, refactoring and structured reasoning.'],
+  ['Vision','Run image-capable models locally when the installed runtime reports vision support.'],
+  ['Embeddings / RAG','Use embedding models to build local semantic search and retrieval workflows.'],
+  ['Automation','Tool-capable models can participate in controlled local workflows when an application supplies the tools.'],
+  ['Research','Compare quantizations, context sizes, cold/warm load cost and decode throughput in Observatory.']
+ ];
+ return <div className="dev10"><section className="dev10-hero"><span>DEVELOPER STUDIO</span><h2>Understand the local AI stack without a random code sample.</h2><p>This page describes what Openguin exposes, where the data comes from, and which layer to inspect when something fails. The old JavaScript example has been removed because it did not help manage the desktop runtime.</p></section><div className="dev10-grid"><section><h3>What local AI is useful for</h3>{uses.map(([a,b])=><div className="dev10-row" key={a}><b>{a}</b><p>{b}</p></div>)}</section><section><h3>Runtime architecture</h3><div className="dev10-stack"><div><b>Openguin UI</b><small>Library · Model Lab · Observatory · Task Center</small></div><i>↓</i><div><b>Tauri / Rust boundary</b><small>Validated local API calls, downloads, imports and logs</small></div><i>↓</i><div><b>Provider</b><small>Private Ollama :11435 or existing Ollama :11434</small></div><i>↓</i><div><b>Local model files</b><small>Ollama manifests / GGUF imports / upstream licenses</small></div></div></section></div><div className="dev10-grid"><section><h3>Useful local endpoints</h3><div className="dev10-endpoints"><span><code>/api/version</code><b>Engine health</b></span><span><code>/api/tags</code><b>Installed models</b></span><span><code>/api/show</code><b>Capabilities & metadata</b></span><span><code>/api/ps</code><b>Resident models & memory</b></span><span><code>/api/chat</code><b>Streaming inference</b></span></div></section><section><h3>Debug order</h3><ol><li>Check Task Center to see whether the action actually started.</li><li>Check Overview runtime status and selected provider.</li><li>Open Observatory for resident model/memory/context state.</li><li>Open Diagnostics for Openguin events and raw Ollama stdout/stderr.</li><li>If private runtime is missing, use Download / Repair Ollama on Overview.</li></ol></section></div></div>
+}
