@@ -42,5 +42,9 @@ if not m:
     raise SystemExit('Could not locate importHf function; refusing a partial Task Center patch.')
 t = t[:m.start()] + canonical_import + "\n async function removeModel" + t[m.end():]
 
+# React state narrowing is not retained inside the legacy variants.map callback.
+# The old Library is replaced by MegaLibrary in 0.10, but it still has to compile.
+t=t.replace("const id=`${hfSelected.id}:${v.filename}`", "const id=`${hfSelected?.id??''}:${v.filename}`")
+
 p.write_text(t)
 print('Applied Openguin floating Task Center instrumentation to main long-running actions (idempotent).')
