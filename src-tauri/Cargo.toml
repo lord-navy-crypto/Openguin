@@ -1,6 +1,6 @@
 [package]
 name = "openguin"
-version = "0.10.0"
+version = "0.10.1"
 description = "Openguin local AI control center, runtime observatory, and global model index"
 edition = "2021"
 
