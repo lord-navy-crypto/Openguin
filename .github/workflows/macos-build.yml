@@ -1,4 +1,4 @@
-name: Openguin macOS build check
+name: Openguin macOS Universal2 Build
 
 on:
   push:
@@ -7,10 +7,14 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
-  build-macos:
+  build-universal2:
     runs-on: macos-14
-    timeout-minutes: 45
+    timeout-minutes: 60
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,8 +24,10 @@ jobs:
         with:
           node-version: '22'
 
-      - name: Setup Rust
+      - name: Setup Rust Universal2 targets
         uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Verify source integrations
         run: |
@@ -38,14 +44,30 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
-      - name: Build Openguin
-        run: npm run desktop:build
+      - name: Build Universal2 app and DMG
+        run: npm run desktop:build -- --target universal-apple-darwin
 
-      - name: Upload macOS bundles
+      - name: Verify Universal2 executable
+        shell: bash
+        run: |
+          set -euo pipefail
+          APP="src-tauri/target/universal-apple-darwin/release/bundle/macos/Openguin.app"
+          EXE="$APP/Contents/MacOS/Openguin"
+          test -d "$APP"
+          test -x "$EXE"
+          ARCHS="$(lipo -archs "$EXE")"
+          echo "Architectures: $ARCHS"
+          echo " $ARCHS " | grep -q " arm64 "
+          echo " $ARCHS " | grep -q " x86_64 "
+          find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f -print -quit | grep -q .
+
+      - name: Upload Universal2 bundles
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.10.1-Alpha-macOS-${{ github.sha }}
-          path: src-tauri/target/release/bundle/
+          name: Openguin-0.10.1-Universal2-${{ github.sha }}
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
           if-no-files-found: error
           retention-days: 7
