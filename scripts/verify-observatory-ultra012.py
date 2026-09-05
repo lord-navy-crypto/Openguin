@@ -8,6 +8,7 @@ center=(ROOT/'src/BenchmarkCenter012.tsx').read_text()
 telemetry=(ROOT/'src/benchmarkTelemetry012.ts').read_text()
 package=(ROOT/'package.json').read_text()
 docs=(ROOT/'docs/OBSERVATORY_0_12.md').read_text() if (ROOT/'docs/OBSERVATORY_0_12.md').exists() else ''
+ioe=(ROOT/'docs/ENGINEERING_IOE_012.md').read_text() if (ROOT/'docs/ENGINEERING_IOE_012.md').exists() else ''
 
 checks={
  'Observatory Ultra marker is static': 'OPENGUIN_012_OBSERVATORY_ULTRA' in obs,
@@ -22,8 +23,13 @@ checks={
  'Median P95 and CV are computed': 'median012' in telemetry and 'p95012' in telemetry and 'cv012' in telemetry,
  'Benchmark history is bounded': 'const LIMIT=30' in telemetry,
  'JSON and CSV export exist': "format:'json'|'csv'" in telemetry and 'benchmarkSessionsCsv012' in telemetry,
+ 'Live runtime resource state is captured': 'captureResource' in center and 'size_vram' in center and 'measuredContext' in center,
+ 'Resource efficiency is explicit': 'benchmarkMemoryEfficiency012' in telemetry and 'decode_tok_s_per_runtime_gb' in telemetry,
+ 'Tail latency remains visible': 'benchmarkTailRatio012' in telemetry and 'ttft_tail_ratio' in telemetry,
+ 'Pareto analysis preserves multi-objective tradeoffs': 'benchmarkParetoStatus012' in telemetry and 'dominates012' in telemetry and 'same runtime mode and context' in center,
  'No arbitrary Penguin Score is introduced': 'Penguin Score' not in center and 'penguinScore' not in telemetry,
- 'Methodology documentation exists': 'Observed TTFT' in docs and 'P95' in docs and 'coefficient of variation' in docs.lower(),
+ 'Methodology documentation covers resource/Pareto analysis': 'Observed TTFT' in docs and 'P95' in docs and 'coefficient of variation' in docs.lower() and 'Pareto-efficient' in docs and 'runtime memory' in docs,
+ 'IOE integration document exists': 'Industrial & Operations Engineering' in ioe and 'Performance measurement' in ioe and 'Pareto' in ioe and 'Human systems integration' in ioe,
  'Production verification includes Observatory Ultra': 'verify:observatory-ultra' in package and 'verify-observatory-ultra012.py' in package,
 }
 
