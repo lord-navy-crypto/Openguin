@@ -4,6 +4,8 @@ root=Path(__file__).resolve().parents[1]
 errors=[]
 def require(cond,msg):
     if not cond: errors.append(msg)
+def require_any(text,tokens,msg):
+    if not any(token in text for token in tokens): errors.append(msg)
 conf=json.loads((root/'src-tauri/tauri.conf.json').read_text())
 resources=conf.get('bundle',{}).get('resources',{})
 icons=conf.get('bundle',{}).get('icon',[])
@@ -32,8 +34,13 @@ v010=(root/'src-tauri/src/v010.rs').read_text()
 for token in ['universal_model_search','universal_model_variants','repair_bundled_runtime','huggingface.co/api/models','api.github.com/search/repositories','/tags','Ollama-darwin.zip','openguin://runtime-install-progress']:
     require(token in v010,f'Missing 0.10 backend token: {token}')
 app=(root/'src/App07.tsx').read_text()
-for token in ['Openguin','Thinking','Streaming playground','Hardware Fit 3','Diagnostics & Usage','Observatory','Runtime Observatory','BrandMark','MegaLibrary','RuntimeInstallerCard','DeveloperStudio010','AdvancedSettings010','top_k:topK','min_p:minP','repeat_penalty:repeatPenalty','keep_alive:keepAlive']:
+for token in ['Openguin','Thinking','Streaming playground','Hardware Fit 3','Diagnostics & Usage','Observatory','Runtime Observatory','BrandMark','MegaLibrary','RuntimeInstallerCard','DeveloperStudio010','AdvancedSettings010','FullLogs','OPENGUIN_011_STATIC_COMPOSITION']:
     require(token in app,f'Missing Openguin frontend integration: {token}')
+require_any(app,['top_k:topK','top_k:runTopK'],'Missing advanced inference request: top_k')
+require_any(app,['min_p:minP','min_p:runMinP'],'Missing advanced inference request: min_p')
+require_any(app,['repeat_penalty:repeatPenalty','repeat_penalty:runRepeatPenalty'],'Missing advanced inference request: repeat_penalty')
+require_any(app,['keep_alive:keepAlive','keep_alive:runKeepAlive'],'Missing advanced inference request: keep_alive')
+require('loadMs:p.loadDuration' in app and 'promptMs:p.promptEvalDuration' in app and 'decodeMs:p.evalDuration' in app,'Generation pipeline telemetry is not captured in App07 benchmark records')
 obs=(root/'src/Observatory.tsx').read_text()
 for token in ['/api/ps','Runtime memory map','Decode performance trend','Last generation pipeline','Context residency','size_vram','context_length','RuntimeControl09','CompareBench09']:
     require(token in obs,f'Missing Observatory visualization/control token: {token}')
@@ -61,7 +68,7 @@ task_bus=(root/'src/taskBus.ts').read_text()
 require('openguin:task' in task_bus and 'CustomEvent' in task_bus and 'startTask' in task_bus,'Task Center event bus missing')
 main=(root/'src/main.tsx').read_text()
 require("TaskCenter" in main and '<TaskCenter/>' in main,'Global Task Center is not mounted')
-for file in ['src/taskBus.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','src/mega-library.css','src/developer010.css','src/runtime-installer.css','src/advanced-settings010.css','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
+for file in ['src/taskBus.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','src/mega-library.css','src/developer010.css','src/runtime-installer.css','src/advanced-settings010.css','src/FullLogs.tsx','src/full-logs.css','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
     require((root/file).exists(),f'Missing required file: {file}')
 require(not (root/'src/taskCenter.ts').exists(),'Legacy taskCenter.ts must be removed to avoid macOS case-insensitive collision with TaskCenter.tsx')
 index=(root/'index.html').read_text()
@@ -79,11 +86,12 @@ if errors:
     for e in errors: print(' -',e)
     sys.exit(1)
 print('Desktop verification OK — Openguin 0.10.1 Alpha')
+print(' - static 0.11 App07 composition verified')
 print(' - every Task Center row can now be cancelled when supported or removed/dismissed')
 print(' - Global Model Index: Ollama registry + Hugging Face GGUF + GitHub discovery wired')
 print(' - family-to-variant downloads and local hardware recommendation wired')
 print(' - self-repairing private Ollama runtime + Overview Download / Repair control wired')
-print(' - advanced sampling/residency settings are sent to the inference request')
+print(' - advanced sampling/residency request snapshots are wired')
 print(' - Developer Studio redesigned without the old JavaScript sample')
-print(' - Runtime Observatory, Task Center, full logs and Hardware Fit retained')
+print(' - Runtime Observatory pipeline telemetry, Task Center, full logs and Hardware Fit retained')
 print(' - complete Openguin branding and macOS icon chain retained')
