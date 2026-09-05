@@ -3,6 +3,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parents[1]
 lib=root/'src-tauri/src/lib.rs'
 app=root/'src/App07.tsx'
+full_logs=root/'src/FullLogs.tsx'
 
 text=lib.read_text()
 if 'mod diagnostics;' not in text:
@@ -11,8 +12,6 @@ if 'mod diagnostics;' not in text:
         raise SystemExit('Could not locate v07 integration point; refusing partial diagnostics integration.')
     text=text.replace(marker, marker+'mod diagnostics;\nuse diagnostics::{append_modeldock_log,bundled_ollama_log,clear_diagnostic_log,modeldock_backend_log};\n')
 
-# Register diagnostics commands independent of whatever other version modules have
-# already appended to the Tauri handler.
 start_marker='.invoke_handler(tauri::generate_handler!['
 end_marker=']).setup('
 start=text.find(start_marker)
@@ -34,20 +33,23 @@ if static:
     for required in ["import FullLogs from './FullLogs';","<FullLogs/>"]:
         if required not in ui:
             raise SystemExit(f'apply-full-logs: static composition missing required UI integration: {required}')
-else:
-    if "import FullLogs from './FullLogs';" not in ui:
-        ui=ui.replace("import './app07.css';", "import './app07.css';\nimport FullLogs from './FullLogs';")
-    needle='<section className="v07-card"><h3>Benchmark history</h3>'
-    if '<FullLogs />' not in ui and '<FullLogs/>' not in ui:
-        ui=ui.replace(needle,'<FullLogs />'+needle)
+    fl=full_logs.read_text()
+    for required in ['localStorage:modeldock-logs','UI events','Rust backend','Ollama process']:
+        if required not in fl:
+            raise SystemExit(f'apply-full-logs: static three-layer log integration missing: {required}')
+    print('Diagnostics UI patch skipped: static App07 + three-layer Full Logs already own UI event history.')
+    raise SystemExit(0)
 
-# Persistent app-event logging is still prepared here until the Rust diagnostics
-# command set itself is moved into static lib.rs composition.
+if "import FullLogs from './FullLogs';" not in ui:
+    ui=ui.replace("import './app07.css';", "import './app07.css';\nimport FullLogs from './FullLogs';")
 old_log="const log=(level:Log['level'],message:string)=>setLogs(prev=>{const next=[{at:new Date().toISOString(),level,message},...prev].slice(0,300);save('modeldock-logs',next);return next});"
 new_log="const log=(level:Log['level'],message:string)=>{void invoke('append_modeldock_log',{level,message}).catch(()=>{});setLogs(prev=>{const next=[{at:new Date().toISOString(),level,message},...prev].slice(0,300);save('modeldock-logs',next);return next})};"
 if old_log in ui:
     ui=ui.replace(old_log,new_log,1)
 elif new_log not in ui:
     raise SystemExit('apply-full-logs: log integration anchor missing; refusing to lose persistent app events')
+needle='<section className="v07-card"><h3>Benchmark history</h3>'
+if '<FullLogs />' not in ui and '<FullLogs/>' not in ui:
+    ui=ui.replace(needle,'<FullLogs />'+needle)
 app.write_text(ui)
-print('Applied diagnostics command registration; static 0.11 UI composition preserved.')
+print('Applied legacy full diagnostics UI and handler registration.')
