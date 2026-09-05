@@ -3,9 +3,11 @@ import { invoke } from '@tauri-apps/api/core';
 import './observatory.css';
 import RuntimeControl09 from './RuntimeControl09';
 import CompareBench09 from './CompareBench09';
+import BenchmarkCenter012 from './BenchmarkCenter012';
 import {saveEngineeringCalibration} from './engineeringTelemetry011';
 
 // OPENGUIN_011_STATIC_OBSERVATORY
+// OPENGUIN_012_OBSERVATORY_ULTRA
 
 type Mode='bundled'|'external';
 type ActiveModel={name:string;model?:string;size:number;size_vram?:number;context_length?:number;expires_at?:string;details?:{parameter_size?:string;quantization_level?:string;family?:string}};
@@ -56,6 +58,7 @@ export default function Observatory({mode,memoryBytes,installedCount,online}:Pro
   </div>
   <RuntimeControl09 mode={mode} memoryBytes={memoryBytes}/>
   <CompareBench09 mode={mode}/>
+  <BenchmarkCenter012 mode={mode}/>
   <section className="obs-card"><h3>Context residency</h3><p className="obs-muted">Actual context allocated to every model currently loaded by Ollama.</p><div className="ctx-grid">{active.map(m=><div className="ctx-item" key={m.name}><div><b>{m.name}</b><span>{m.details?.quantization_level||'quantization unknown'}</span></div><strong>{(m.context_length??0).toLocaleString()}</strong><small>tokens allocated</small><div className="ctx-scale"><i style={{width:`${Math.min(100,(m.context_length??0)/131072*100)}%`}}/></div></div>)}{!active.length&&<div className="obs-empty">Context allocation appears when a model is loaded.</div>}</div></section>
  </div>
 }
