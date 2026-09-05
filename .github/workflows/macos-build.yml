@@ -29,7 +29,7 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Verify source integrations
+      - name: Prepare and verify source integrations
         run: |
           python3 scripts/apply-build-fixes.py
           python3 scripts/apply-full-logs.py
@@ -40,6 +40,16 @@ jobs:
           python3 scripts/apply-openguin-brand.py
           python3 scripts/ensure-app-icon.py
           python3 scripts/verify-desktop.py
+          python3 scripts/verify-engineering011.py
+          python3 scripts/verify-prepared-backend.py
+
+      - name: Audit build-time source mutation
+        shell: bash
+        run: |
+          echo 'Tracked-source changes produced by the legacy prepare layer:'
+          git status --short
+          git diff --stat -- src-tauri/src/lib.rs src/App07.tsx src/main.tsx || true
+          echo 'This audit is informational until issue #2 removes core-source mutation.'
 
       - name: Install frontend dependencies
         run: npm install
@@ -65,7 +75,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.10.1-Universal2-${{ github.sha }}
+          name: Openguin-0.11-Engineering-Universal2-${{ github.sha }}
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
