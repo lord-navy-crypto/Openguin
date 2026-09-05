@@ -10,6 +10,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: openguin-universal2-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-universal2:
     runs-on: macos-14
@@ -29,23 +33,31 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Verify source integrations
+      - name: Prepare runtime and assets once
+        run: npm run desktop:prepare
+
+      - name: Verify static source contracts
+        run: npm run verify:all
+
+      - name: Enforce whole-tree clean source invariant
+        shell: bash
         run: |
-          python3 scripts/apply-build-fixes.py
-          python3 scripts/apply-full-logs.py
-          python3 scripts/apply-observatory.py
-          python3 scripts/apply-performance09.py
-          python3 scripts/apply-task-center.py
-          python3 scripts/apply-expansion010.py
-          python3 scripts/apply-openguin-brand.py
-          python3 scripts/ensure-app-icon.py
-          python3 scripts/verify-desktop.py
+          set -euo pipefail
+          echo '0.11 invariant: preparation may create ignored runtime resources, but it may not modify any tracked source, docs, config, or assets.'
+          if ! git diff --quiet; then
+            echo 'Tracked files changed during desktop:prepare:'
+            git status --short --untracked-files=no
+            git diff --stat
+            git diff
+            exit 1
+          fi
+          echo 'Whole tracked tree is identical to the checked-in source after desktop:prepare.'
 
       - name: Install frontend dependencies
         run: npm install
 
       - name: Build Universal2 app and DMG
-        run: npm run desktop:build -- --target universal-apple-darwin
+        run: npx tauri build --target universal-apple-darwin
 
       - name: Verify Universal2 executable
         shell: bash
@@ -65,7 +77,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.10.1-Universal2-${{ github.sha }}
+          name: Openguin-0.11-Engineering-Universal2-${{ github.sha }}
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg

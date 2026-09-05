@@ -4,11 +4,25 @@ import {listen} from '@tauri-apps/api/event';
 import {task} from './taskBus';
 import './runtime-installer.css';
 
-type Runtime={bundledAvailable?:boolean;bundledRunning?:boolean;externalRunning?:boolean;reason?:string}|null;
+type RuntimeState={bundledAvailable?:boolean;bundledRunning?:boolean;externalRunning?:boolean;reason?:string};
+type Runtime=RuntimeState|null;
 type P={stage:string;detail:string;percent:number;done:boolean;error?:string};
 export default function RuntimeInstallerCard({runtime,onReady}:{runtime:Runtime;onReady:()=>void|Promise<void>}){
- const [p,setP]=useState<P|null>(null),[busy,setBusy]=useState(false),[err,setErr]=useState('');
- useEffect(()=>{let off:(()=>void)|undefined;listen<P>('openguin://runtime-install-progress',e=>{setP(e.payload);task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:e.payload.detail,state:e.payload.error?'failed':e.payload.done?'done':'running',percent:e.payload.percent,progressKind:'real'});}).then(x=>off=x);return()=>off?.()},[]);
- async function repair(){setBusy(true);setErr('');task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:'Connecting to official Ollama download…',state:'running',percent:1,progressKind:'real'});try{await invoke<string>('repair_bundled_runtime');await onReady()}catch(e){setErr(String(e));task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:String(e),state:'failed',percent:100,progressKind:'real'})}finally{setBusy(false)}}
- return <section className="runtime-installer"><div><span>PRIVATE OLLAMA RUNTIME</span><h3>{runtime?.bundledRunning?'Bundled Ollama is running.':runtime?.bundledAvailable?'Bundled Ollama is installed.':'Bundled Ollama is unavailable.'}</h3><p>{runtime?.reason||'Openguin can keep a private Ollama runtime in its own application data instead of requiring a separate system installation.'}</p></div><div className="runtime-install-action"><button onClick={repair} disabled={busy}>{busy?'Downloading / repairing…':runtime?.bundledAvailable?'Repair Ollama Runtime':'Download Ollama Now'}</button>{p&&<><div className="ri-bar"><i style={{width:`${Math.max(0,Math.min(100,p.percent))}%`}}/></div><small>{Math.round(p.percent)}% · {p.detail}</small></>}{err&&<small className="ri-error">{err}</small>}<em>Downloads the official macOS Ollama archive into Openguin's private App Data runtime. It does not run arbitrary third-party installers.</em></div></section>
+ const [p,setP]=useState<P|null>(null),[busy,setBusy]=useState(false),[err,setErr]=useState(''),[verified,setVerified]=useState(false);
+ useEffect(()=>{let off:(()=>void)|undefined;listen<P>('openguin://runtime-install-progress',e=>{const x=e.payload;setP(x);if(x.error)setErr(x.error);task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:x.error?x.error:x.done?'Runtime files installed · verifying discovery…':`${x.stage} · ${x.detail}`,state:x.error?'failed':'running',percent:x.error?100:x.done?96:x.percent,progressKind:'real'});}).then(x=>off=x);return()=>off?.()},[]);
+ async function repair(){
+  setBusy(true);setErr('');setVerified(false);setP(null);
+  task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:'Connecting to official Ollama download…',state:'running',percent:1,progressKind:'real'});
+  try{
+   await invoke<string>('repair_bundled_runtime');
+   const discovered=await invoke<RuntimeState>('runtime_discovery');
+   if(!discovered.bundledAvailable)throw new Error('Runtime files were written, but OpenPenguin could not rediscover the private Ollama executable.');
+   setVerified(true);setP(x=>x?{...x,stage:'verified',detail:'Private runtime installed and rediscovered successfully.',percent:100,done:true}:x);
+   task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:'Private runtime installed and rediscovered successfully',state:'done',percent:100,progressKind:'real'});
+   await onReady();
+  }catch(e){const message=String(e);setErr(message);task({id:'runtime-repair',title:'Download / Repair Ollama',source:'Overview',detail:message,state:'failed',percent:100,progressKind:'real'})}
+  finally{setBusy(false)}
+ }
+ const displayPercent=Math.max(0,Math.min(100,p?.percent??0));
+ return <section className="runtime-installer"><div><span>PRIVATE OLLAMA RUNTIME</span><h3>{runtime?.bundledRunning?'Bundled Ollama is running.':runtime?.bundledAvailable?'Bundled Ollama is installed.':'Bundled Ollama is unavailable.'}</h3><p>{runtime?.reason||'OpenPenguin can keep a private Ollama runtime in its own application data instead of requiring a separate system installation.'}</p>{verified&&<small>✓ Last repair passed post-install runtime discovery.</small>}</div><div className="runtime-install-action"><button onClick={repair} disabled={busy}>{busy?'Downloading / verifying…':runtime?.bundledAvailable?'Repair Ollama Runtime':'Download Ollama Now'}</button>{p&&<><div className="ri-bar" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(displayPercent)}><i style={{width:`${displayPercent}%`}}/></div><small>{Math.round(displayPercent)}% · {p.stage} · {p.detail}</small></>}{err&&<small className="ri-error">{err}</small>}<em>Downloads the official macOS Ollama archive into OpenPenguin's private App Data runtime, then verifies that the executable can be rediscovered. It does not run arbitrary third-party installers.</em></div></section>
 }
