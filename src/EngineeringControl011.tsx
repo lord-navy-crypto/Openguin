@@ -6,11 +6,14 @@ type Profile={os:string;arch:string;chip:string;memoryBytes:number;logicalCores:
 type Runtime={bundledAvailable:boolean;bundledRunning:boolean;externalInstalled:boolean;externalRunning:boolean;externalPath?:string;externalVersion?:string;recommendedMode:'bundled'|'external';reason:string};
 type Check={id:string;label:string;status:'pass'|'warn'|'fail';detail:string;repairable:boolean};
 type Plan={status:'safe'|'balanced'|'constrained';requestedContext:number;recommendedContext:number;resident:number;kv:number;projected:number;budget:number;reserve:number;keepAlive:string;unloadOtherModels:boolean;reason:string};
+type EnvelopeState='safe'|'constrained'|'outside';
 
 const GB=1024**3;
 const MB=1024**2;
 const fmt=(n?:number)=>n==null?'—':`${(n/GB).toFixed(n>=10*GB?1:2)} GB`;
 const ctx=(n?:number)=>!n?'—':n>=1024?`${Math.round(n/1024)}K`:`${n}`;
+const envelopeFootprints=[2,4,7,10,14];
+const envelopeContexts=[65536,32768,16384,8192,4096];
 
 function projected(size:number,context:number){
   const resident=size*1.18+.25*GB;
@@ -18,10 +21,21 @@ function projected(size:number,context:number){
   return {resident,kv,total:resident+kv+384*MB};
 }
 
-function runtimePlan(memory:number,modelGb:number,requested:number,profile:string,workload:string):Plan{
+function memoryBudget(memory:number,policy:string){
   const total=Math.max(memory,8*GB),reserve=Math.max(total*.25,3*GB),raw=total-reserve;
-  const ratio=profile==='safe'?.82:profile==='maximum'?.96:.90;
-  const budget=raw*ratio,size=Math.max(.25,modelGb)*GB;
+  const ratio=policy==='safe'?.82:policy==='maximum'?.96:.90;
+  return {total,reserve,ratio,budget:raw*ratio};
+}
+
+function envelopeState(memory:number,modelGb:number,context:number,policy:string):EnvelopeState{
+  const {budget}=memoryBudget(memory,policy);
+  const load=projected(Math.max(.25,modelGb)*GB,context).total/budget;
+  return load<=.70?'safe':load<=1?'constrained':'outside';
+}
+
+function runtimePlan(memory:number,modelGb:number,requested:number,profile:string,workload:string):Plan{
+  const {reserve,ratio,budget}=memoryBudget(memory,profile);
+  const size=Math.max(.25,modelGb)*GB;
   const target=workload==='research'||workload==='long-context'?32768:workload==='coding'?16384:8192;
   const req=requested||target;
   let recommended=2048;
@@ -75,9 +89,11 @@ export default function EngineeringControl011(){
   }
 
   const report=useMemo(()=>doctor(machine,runtime),[machine,runtime]);
-  const plan=useMemo(()=>runtimePlan(machine?.memoryBytes??16*GB,modelGb,requested,profile,workload),[machine,modelGb,requested,profile,workload]);
+  const memory=machine?.memoryBytes??16*GB;
+  const plan=useMemo(()=>runtimePlan(memory,modelGb,requested,profile,workload),[memory,modelGb,requested,profile,workload]);
   const pass=report.checks.filter(x=>x.status==='pass').length;
   const warn=report.checks.filter(x=>x.status==='warn').length;
+  const controlMargin=Math.round(Math.max(-100,Math.min(100,(plan.budget-plan.projected)/Math.max(plan.budget,1)*100)));
 
   return <div className={`eng011-host ${open?'open':''}`}>
     <button className="eng011-launch" onClick={toggle}><span>ENG</span><b>Engineering</b><i>{report.score||'0'}</i></button>
@@ -119,11 +135,22 @@ export default function EngineeringControl011(){
             <span><small>Recommended context</small><b>{ctx(plan.recommendedContext)}</b></span>
             <span><small>Projected runtime</small><b>{fmt(plan.projected)}</b></span>
             <span><small>Runtime budget</small><b>{fmt(plan.budget)}</b></span>
-            <span><small>Keep alive</small><b>{plan.keepAlive==='0'?'Unload':plan.keepAlive}</b></span>
+            <span><small>Control margin</small><b>{controlMargin}%</b></span>
             <p>{plan.reason}</p>
-            {plan.unloadOtherModels&&<em>Memory Guard recommends unloading other models before launch.</em>}
+            {plan.unloadOtherModels&&<em>Memory Guard recommends unloading other models before launch. Keep-alive policy: {plan.keepAlive==='0'?'unload immediately':plan.keepAlive}.</em>}
           </div>
         </article>
+      </div>
+
+      <div className="eng011-envelope">
+        <div className="eng011-title"><div><b>Operating Envelope</b><small>Estimated model footprint × context on this Mac · click a cell to load that operating point</small></div><span>{profile} policy</span></div>
+        <div className="eng011-envelope-scroll">
+          <div className="eng011-matrix" style={{gridTemplateColumns:`72px repeat(${envelopeFootprints.length},minmax(82px,1fr))`}}>
+            <div className="axis corner">Context</div>{envelopeFootprints.map(g=><div className="axis" key={`h-${g}`}>{g} GB</div>)}
+            {envelopeContexts.map(c=><div className="eng011-matrix-row" key={c} style={{display:'contents'}}><div className="axis">{ctx(c)}</div>{envelopeFootprints.map(g=>{const state=envelopeState(memory,g,c,profile);return <button key={`${c}-${g}`} className={`env-cell ${state} ${requested===c&&Math.abs(modelGb-g)<.01?'selected':''}`} onClick={()=>{setRequested(c);setModelGb(g)}} aria-label={`${g} GB at ${ctx(c)} context: ${state}`}><b>{state==='safe'?'SAFE':state==='constrained'?'TIGHT':'OUT'}</b><small>{Math.round(projected(g*GB,c).total/GB*10)/10} GB</small></button>})}</div>)}
+          </div>
+        </div>
+        <div className="eng011-legend"><span><i className="safe"/>Safe</span><span><i className="constrained"/>Constrained</span><span><i className="outside"/>Outside recommended envelope</span><em>Engineering estimate, not a benchmark. Observatory measurements will be used to calibrate this model in a later control-loop stage.</em></div>
       </div>
 
       <div className="eng011-doctor">
