@@ -3,35 +3,53 @@ from pathlib import Path
 import sys
 
 root = Path(__file__).resolve().parents[1]
-app = root / "src" / "App07.tsx"
 errors: list[str] = []
 
 
-def require(needle: str, description: str) -> None:
-    text = app.read_text()
+def require(path: str, needle: str, description: str) -> None:
+    p = root / path
+    if not p.is_file():
+        errors.append(f"missing file: {path}")
+        return
+    text = p.read_text()
     if needle not in text:
-        errors.append(f"App07.tsx: missing {description}: {needle}")
+        errors.append(f"{path}: missing {description}: {needle}")
 
 
-require("refreshSeq=useRef(0)", "refresh monotonic sequence")
-require("inspectSeq=useRef(0)", "model-inspection sequence")
-require("catalogSeq=useRef(0)", "catalog sequence")
-require("hfSearchSeq=useRef(0)", "Hugging Face search sequence")
-require("hfVariantSeq=useRef(0)", "Hugging Face variant sequence")
-require("modeTransitionRef=useRef(false)", "synchronous runtime transition lock")
-require("activeGenerationRef=useRef('')", "synchronous generation lock")
-require("async function probeEngine(which:Mode)", "target-engine readiness probe")
-require("snapshot=await probeEngine('external')", "external readiness before runtime commit")
-require("which!==modeRef.current", "stale runtime response rejection")
-require("token!==inspectSeq.current||which!==modeRef.current", "stale model-passport rejection")
-require("runModel=selected,runMode=modeRef.current", "generation input snapshot")
-require("p.requestId!==requestId||activeGenerationRef.current!==requestId", "stream request ownership check")
-require("if(token!==catalogSeq.current)return", "catalog stale-response rejection")
-require("if(token!==hfSearchSeq.current)return", "HF search stale-response rejection")
-require("if(token!==hfVariantSeq.current)return", "HF variant stale-response rejection")
-require("current&&s.models.some(m=>m.name===current)?current", "selection preservation across refresh")
-require("External Ollama did not pass readiness; the current runtime was left unchanged", "non-destructive external switch failure")
-require("import BrandMark from './BrandMark';", "static OpenPenguin brand wiring")
+# Main application state ownership.
+require("src/App07.tsx", "refreshSeq=useRef(0)", "refresh monotonic sequence")
+require("src/App07.tsx", "inspectSeq=useRef(0)", "model-inspection sequence")
+require("src/App07.tsx", "catalogSeq=useRef(0)", "catalog sequence")
+require("src/App07.tsx", "hfSearchSeq=useRef(0)", "Hugging Face search sequence")
+require("src/App07.tsx", "hfVariantSeq=useRef(0)", "Hugging Face variant sequence")
+require("src/App07.tsx", "modeTransitionRef=useRef(false)", "synchronous runtime transition lock")
+require("src/App07.tsx", "activeGenerationRef=useRef('')", "synchronous generation lock")
+require("src/App07.tsx", "async function probeEngine(which:Mode)", "target-engine readiness probe")
+require("src/App07.tsx", "snapshot=await probeEngine('external')", "external readiness before runtime commit")
+require("src/App07.tsx", "which!==modeRef.current", "stale runtime response rejection")
+require("src/App07.tsx", "token!==inspectSeq.current||which!==modeRef.current", "stale model-passport rejection")
+require("src/App07.tsx", "runModel=selected,runMode=modeRef.current", "generation input snapshot")
+require("src/App07.tsx", "p.requestId!==requestId||activeGenerationRef.current!==requestId", "stream request ownership check")
+require("src/App07.tsx", "if(token!==catalogSeq.current)return", "catalog stale-response rejection")
+require("src/App07.tsx", "if(token!==hfSearchSeq.current)return", "HF search stale-response rejection")
+require("src/App07.tsx", "if(token!==hfVariantSeq.current)return", "HF variant stale-response rejection")
+require("src/App07.tsx", "current&&s.models.some(m=>m.name===current)?current", "selection preservation across refresh")
+require("src/App07.tsx", "External Ollama did not pass readiness; the current runtime was left unchanged", "non-destructive external switch failure")
+require("src/App07.tsx", "import BrandMark from './BrandMark';", "static OpenPenguin brand wiring")
+
+# Smart Lab must share the validated backend path rather than maintaining a second direct-http implementation.
+require("src/SmartLab.tsx", "invoke('chat_stream'", "Tauri streaming path")
+require("src/SmartLab.tsx", "listen<StreamEvent>('modeldock://chat-stream'", "stream event ownership")
+require("src/SmartLab.tsx", "activeGenerationRef=useRef('')", "Smart Lab generation lock")
+require("src/SmartLab.tsx", "inspectSeq=useRef(0)", "Smart Lab stale inspection guard")
+require("src/SmartLab.tsx", "official_ollama_catalog", "shared official catalog backend")
+require("src/SmartLab.tsx", "modeldock://pull-progress", "shared install progress event")
+require("src/SmartLab.tsx", "task({id:`smartlab-install:${name}`", "Task Center install integration")
+smart = (root / "src/SmartLab.tsx").read_text()
+if "fetch(`http://127.0.0.1" in smart:
+    errors.append("src/SmartLab.tsx: direct localhost streaming path returned")
+if "for(let i=0;i<120" in smart:
+    errors.append("src/SmartLab.tsx: legacy 120-second install polling returned")
 
 if errors:
     print("OpenPenguin 0.11 core state verification FAILED")
@@ -45,3 +63,4 @@ print(" - Stale refresh/model/catalog/HF responses are rejected")
 print(" - Generation ownership is locked to one request")
 print(" - Model selection survives compatible refreshes")
 print(" - External-switch failure leaves the current runtime intact")
+print(" - Smart Lab shares validated streaming/catalog/install paths")
