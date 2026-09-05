@@ -2,6 +2,7 @@ import {useEffect,useMemo,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
 import {task} from './taskBus';
+import BenchmarkDecision012 from './BenchmarkDecision012';
 import {addBenchmarkSession012,benchmarkMemoryEfficiency012,benchmarkParetoStatus012,benchmarkTailRatio012,clearBenchmarkSessions012,downloadBenchmarkSessions012,loadBenchmarkSessions012,summarizeBenchmark012,type BenchmarkResource012,type BenchmarkSample012,type BenchmarkSession012} from './benchmarkTelemetry012';
 import './benchmark-center012.css';
 
@@ -144,6 +145,7 @@ export default function BenchmarkCenter012({mode}:{mode:Mode}){
     </>:<div className="b12-empty">No Observatory Ultra benchmark session yet.</div>}
     <div className="b12-actions"><button disabled={!sessions.length} onClick={()=>downloadBenchmarkSessions012('json',sessions)}>Export JSON</button><button disabled={!sessions.length} onClick={()=>downloadBenchmarkSessions012('csv',sessions)}>Export CSV</button><button disabled={!sessions.length} onClick={clear}>Clear sessions</button><button onClick={refreshModels}>Refresh models</button></div>
     {sessions.length?<div className="b12-table"><div className="b12-row head"><span>Model</span><span>Context</span><span>TTFT med</span><span>Decode</span><span>CV</span><span>Runtime</span><span>tok/s/GB</span><span>Tail</span><span>Pareto</span></div>{sessions.slice(0,10).map(s=>{const e=benchmarkMemoryEfficiency012(s),tail=benchmarkTailRatio012(s),p=benchmarkParetoStatus012(s,sessions);return <div className="b12-row" key={s.id}><b title={s.model}>{s.model}</b><span>{(s.context/1024).toFixed(0)}K</span><span>{ms(s.summary.ttftMedianMs)}</span><span>{rate(s.summary.decodeTokSMedian)}</span><span>{s.summary.decodeTokSCvPct==null?'—':`${s.summary.decodeTokSCvPct.toFixed(1)}%`}</span><span>{bytes(s.resource?.runtimeBytes)}</span><span>{e==null?'—':e.toFixed(1)}</span><span>{tail==null?'—':`${tail.toFixed(2)}×`}</span><span>{p}</span></div>})}</div>:null}
+    <BenchmarkDecision012 sessions={sessions} mode={mode}/>
     <p className="b12-note">Method: pre-load target model → verify residency through `/api/ps` → run 2–5 fixed streaming trials with temperature 0 / seed 42 → capture `/api/ps` resource state → report median/P95 TTFT, prefill/decode rates, decode CV, runtime-memory efficiency and Pareto status. Observed TTFT includes OpenPenguin IPC/HTTP delivery overhead by design, so it represents user-visible latency rather than a model-kernel-only timer.</p>
   </section>
 }
