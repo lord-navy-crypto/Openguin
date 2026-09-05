@@ -6,7 +6,8 @@ root = Path(__file__).resolve().parents[1]
 errors: list[str] = []
 
 app = root / "src" / "App07.tsx"
-css = root / "src" / "app07.css"
+brand = root / "src" / "BrandMark.tsx"
+css = root / "src" / "brand-mark.css"
 
 if not app.is_file():
     errors.append("missing src/App07.tsx")
@@ -21,8 +22,10 @@ else:
         if token not in text:
             errors.append(f"src/App07.tsx missing brand/static token: {token}")
 
+if not brand.is_file() or "import './brand-mark.css';" not in brand.read_text():
+    errors.append("src/BrandMark.tsx must own/import its static brand styling")
 if not css.is_file() or ".openguin-brand-mark{" not in css.read_text():
-    errors.append("src/app07.css missing .openguin-brand-mark styling")
+    errors.append("src/brand-mark.css missing .openguin-brand-mark styling")
 
 # Only the production component tree and current docs are brand-gated here.
 # Unmounted pre-0.11 legacy source may remain for migration/history, but it is
@@ -75,6 +78,7 @@ if errors:
 
 print("OpenPenguin 0.11 static branding verification PASSED")
 print(" - Mounted production source is branded directly in Git")
+print(" - BrandMark owns its checked-in styling")
 print(" - Current product docs contain no legacy ModelDock branding")
 print(" - Unmounted legacy source cannot re-enter the production tree silently")
 print(" - No build-time rename/migration is required")
