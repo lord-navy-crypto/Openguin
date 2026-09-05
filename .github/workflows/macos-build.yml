@@ -29,50 +29,31 @@ jobs:
         with:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Prepare and verify source integrations
-        run: |
-          python3 scripts/apply-build-fixes.py
-          python3 scripts/apply-full-logs.py
-          python3 scripts/apply-observatory.py
-          python3 scripts/apply-performance09.py
-          python3 scripts/apply-task-center.py
-          python3 scripts/apply-expansion010.py
-          python3 scripts/apply-openguin-brand.py
-          python3 scripts/ensure-app-icon.py
-          python3 scripts/verify-desktop.py
-          python3 scripts/verify-engineering011.py
-          python3 scripts/verify-prepared-backend.py
-          python3 scripts/verify-legacy-hardening011.py
-          python3 scripts/verify-core-state011.py
+      - name: Prepare runtime and assets once
+        run: npm run desktop:prepare
 
-      - name: Enforce clean prepared production source
+      - name: Verify static source contracts
+        run: npm run verify:all
+
+      - name: Enforce whole-tree clean source invariant
         shell: bash
         run: |
           set -euo pipefail
-          echo '0.11 invariant: prepare may verify production source but may not rewrite Rust/UI composition.'
-          git diff --exit-code -- \
-            src-tauri/src/lib.rs \
-            src/App07.tsx \
-            src/Observatory.tsx \
-            src/SmartLab.tsx \
-            src/FullLogs.tsx \
-            src/EngineeringControl011.tsx \
-            src/main.tsx
-          echo 'Prepared Rust/UI source is identical to the checked-in source.'
-
-      - name: Audit remaining build-time mutation
-        shell: bash
-        run: |
-          echo 'Remaining tracked-source changes produced by legacy preparation:'
-          git status --short
-          git diff --stat -- README.md NOTICE.md COPYRIGHT.md CONTRIBUTING.md SECURITY.md docs || true
-          echo 'Issue #2 now tracks only remaining docs/branding mutation before the whole-tree clean invariant.'
+          echo '0.11 invariant: preparation may create ignored runtime resources, but it may not modify any tracked source, docs, config, or assets.'
+          if ! git diff --quiet; then
+            echo 'Tracked files changed during desktop:prepare:'
+            git status --short --untracked-files=no
+            git diff --stat
+            git diff
+            exit 1
+          fi
+          echo 'Whole tracked tree is identical to the checked-in source after desktop:prepare.'
 
       - name: Install frontend dependencies
         run: npm install
 
       - name: Build Universal2 app and DMG
-        run: npm run desktop:build -- --target universal-apple-darwin
+        run: npx tauri build --target universal-apple-darwin
 
       - name: Verify Universal2 executable
         shell: bash
