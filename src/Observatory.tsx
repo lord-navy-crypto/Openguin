@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import './observatory.css';
+import RuntimeControl09 from './RuntimeControl09';
+import CompareBench09 from './CompareBench09';
+
+// OPENGUIN_011_STATIC_OBSERVATORY
 
 type Mode='bundled'|'external';
 type ActiveModel={name:string;model?:string;size:number;size_vram?:number;context_length?:number;expires_at?:string;details?:{parameter_size?:string;quantization_level?:string;family?:string}};
@@ -35,6 +39,8 @@ export default function Observatory({mode,memoryBytes,installedCount,online}:Pro
    <section className="obs-card"><h3>Decode performance trend</h3><p className="obs-muted">Measured output-token throughput from recent Model Lab runs. Variation above ~20% is flagged as a stability signal, not automatically treated as a fault.</p><Spark rows={recent}/><div className="trend-footer"><span>slowest <b>{bench.length?Math.min(...bench.map(b=>b.tokS)).toFixed(1):'—'}</b></span><span>average <b>{avg?avg.toFixed(1):'—'}</b></span><span>fastest <b>{bench.length?Math.max(...bench.map(b=>b.tokS)).toFixed(1):'—'}</b> tok/s</span></div></section>
    <section className="obs-card"><h3>Last generation pipeline</h3><p className="obs-muted">Load → prompt prefill → token decode. Values appear after a telemetry-enabled run.</p>{latest?<Pipeline b={latest}/>:<div className="obs-empty">No benchmark telemetry yet.</div>}</section>
   </div>
+  <RuntimeControl09 mode={mode} memoryBytes={memoryBytes}/>
+  <CompareBench09 mode={mode}/>
   <section className="obs-card"><h3>Context residency</h3><p className="obs-muted">Actual context allocated to every model currently loaded by Ollama.</p><div className="ctx-grid">{active.map(m=><div className="ctx-item" key={m.name}><div><b>{m.name}</b><span>{m.details?.quantization_level||'quantization unknown'}</span></div><strong>{(m.context_length??0).toLocaleString()}</strong><small>tokens allocated</small><div className="ctx-scale"><i style={{width:`${Math.min(100,(m.context_length??0)/131072*100)}%`}}/></div></div>)}{!active.length&&<div className="obs-empty">Context allocation appears when a model is loaded.</div>}</div></section>
  </div>
 }
