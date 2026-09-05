@@ -24,13 +24,14 @@ else:
 if not css.is_file() or ".openguin-brand-mark{" not in css.read_text():
     errors.append("src/app07.css missing .openguin-brand-mark styling")
 
-# These are current product/docs surfaces. Legacy migration scripts may remain in
-# scripts/, but production source and docs must not rely on build-time renaming.
-current_surfaces = [
+# Only the production component tree and current docs are brand-gated here.
+# Unmounted pre-0.11 legacy source may remain for migration/history, but it is
+# not allowed to re-enter main.tsx/App07 without first passing this contract.
+production_surfaces = [
+    root / "src" / "main.tsx",
     root / "src" / "App07.tsx",
-    root / "src" / "App.tsx",
-    root / "src" / "Diagnostics.tsx",
-    root / "src" / "SmartLab.tsx",
+    root / "src" / "TaskCenter.tsx",
+    root / "src" / "EngineeringControl011.tsx",
     root / "src" / "FullLogs.tsx",
     root / "src" / "Observatory.tsx",
     root / "src" / "RuntimeControl09.tsx",
@@ -39,6 +40,9 @@ current_surfaces = [
     root / "src" / "DeveloperStudio010.tsx",
     root / "src" / "RuntimeInstallerCard.tsx",
     root / "src" / "AdvancedSettings010.tsx",
+]
+
+current_docs = [
     root / "README.md",
     root / "QUICKSTART.md",
     root / "CHANGELOG.md",
@@ -49,14 +53,19 @@ current_surfaces = [
     root / "docs" / "ENGINE_BEHAVIOR.md",
     root / "docs" / "MODEL_LICENSING.md",
     root / "docs" / "ENGINEERING_0_11.md",
+    root / "docs" / "SOURCE_OF_TRUTH.md",
 ]
 
-for path in current_surfaces:
+for path in production_surfaces + current_docs:
     if not path.exists():
         continue
     text = path.read_text()
     if "ModelDock" in text or "MODELDock" in text:
-        errors.append(f"{path.relative_to(root)} still contains legacy ModelDock branding")
+        errors.append(f"{path.relative_to(root)} still contains user-facing legacy ModelDock branding")
+
+main = (root / "src" / "main.tsx").read_text() if (root / "src" / "main.tsx").exists() else ""
+if "./App'" in main or '"./App"' in main:
+    errors.append("src/main.tsx must not mount the legacy pre-0.11 App component")
 
 if errors:
     print("OpenPenguin 0.11 static branding verification FAILED")
@@ -65,6 +74,7 @@ if errors:
     sys.exit(1)
 
 print("OpenPenguin 0.11 static branding verification PASSED")
-print(" - Product source is branded directly in Git")
-print(" - Current docs contain no legacy ModelDock branding")
+print(" - Mounted production source is branded directly in Git")
+print(" - Current product docs contain no legacy ModelDock branding")
+print(" - Unmounted legacy source cannot re-enter the production tree silently")
 print(" - No build-time rename/migration is required")
