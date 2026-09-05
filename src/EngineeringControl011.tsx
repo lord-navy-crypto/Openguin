@@ -1,6 +1,7 @@
-import {useMemo,useState} from 'react';
+import {useEffect,useMemo,useState} from 'react';
 import {invoke} from '@tauri-apps/api/core';
 import './engineering-control011.css';
+import {ENGINEERING_CALIBRATION_EVENT,ENGINEERING_CALIBRATION_KEY,loadEngineeringCalibration,type EngineeringCalibration} from './engineeringTelemetry011';
 
 type Profile={os:string;arch:string;chip:string;memoryBytes:number;logicalCores:number;freeStorageBytes:number};
 type Runtime={bundledAvailable:boolean;bundledRunning:boolean;externalInstalled:boolean;externalRunning:boolean;externalPath?:string;externalVersion?:string;recommendedMode:'bundled'|'external';reason:string};
@@ -68,6 +69,7 @@ export default function EngineeringControl011(){
   const [open,setOpen]=useState(false);
   const [machine,setMachine]=useState<Profile|null>(null);
   const [runtime,setRuntime]=useState<Runtime|null>(null);
+  const [calibration,setCalibration]=useState<EngineeringCalibration|null>(()=>loadEngineeringCalibration());
   const [modelGb,setModelGb]=useState(4.7);
   const [requested,setRequested]=useState(16384);
   const [profile,setProfile]=useState('balanced');
@@ -75,11 +77,19 @@ export default function EngineeringControl011(){
   const [busy,setBusy]=useState(false);
   const [error,setError]=useState('');
 
+  useEffect(()=>{
+    const update=(event:Event)=>{const value=(event as CustomEvent<EngineeringCalibration>).detail;if(value)setCalibration(value)};
+    const storage=(event:StorageEvent)=>{if(event.key===ENGINEERING_CALIBRATION_KEY)setCalibration(loadEngineeringCalibration())};
+    window.addEventListener(ENGINEERING_CALIBRATION_EVENT,update);
+    window.addEventListener('storage',storage);
+    return()=>{window.removeEventListener(ENGINEERING_CALIBRATION_EVENT,update);window.removeEventListener('storage',storage)};
+  },[]);
+
   async function refresh(){
     setBusy(true);setError('');
     try{
       const [p,r]=await Promise.all([invoke<Profile>('system_profile'),invoke<Runtime>('runtime_discovery')]);
-      setMachine(p);setRuntime(r);
+      setMachine(p);setRuntime(r);setCalibration(loadEngineeringCalibration());
     }catch(e){setError(String(e))}finally{setBusy(false)}
   }
 
@@ -94,12 +104,18 @@ export default function EngineeringControl011(){
   const pass=report.checks.filter(x=>x.status==='pass').length;
   const warn=report.checks.filter(x=>x.status==='warn').length;
   const controlMargin=Math.round(Math.max(-100,Math.min(100,(plan.budget-plan.projected)/Math.max(plan.budget,1)*100)));
+  const calibratedResident=calibration?Math.max(.25,modelGb)*GB*calibration.residencyFactor:null;
+  const calibratedProjected=calibratedResident==null?null:calibratedResident+Math.max(0,plan.projected-plan.resident);
+  const calibrationDelta=calibratedProjected==null?null:(calibratedProjected-plan.projected)/Math.max(plan.projected,1)*100;
+  const calibrationAge=calibration?Math.max(0,Date.now()-new Date(calibration.at).getTime()):null;
+  const calibrationFresh=calibrationAge!=null&&calibrationAge<30*60*1000;
+  const calibrationContext=calibration?.contexts.length?Math.max(...calibration.contexts):0;
 
   return <div className={`eng011-host ${open?'open':''}`}>
     <button className="eng011-launch" onClick={toggle}><span>ENG</span><b>Engineering</b><i>{report.score||'0'}</i></button>
     {open&&<section className="eng011">
       <div className="eng011-head">
-        <div><span>SYSTEM ENGINEERING CONTROL LOOP · 0.11</span><h3>Sense → Estimate → Decide → Verify</h3><p>OpenPenguin treats local inference as a constrained engineering system: machine data becomes a state estimate, the runtime planner applies a memory policy, and Penguin Doctor verifies the operating envelope.</p></div>
+        <div><span>SYSTEM ENGINEERING CONTROL LOOP · 0.11</span><h3>Sense → Estimate → Decide → Verify</h3><p>OpenPenguin treats local inference as a constrained engineering system: machine data becomes a state estimate, the runtime planner applies a memory policy, and Observatory measurements close the feedback loop without enabling unvalidated automatic control.</p></div>
         <div className="eng011-head-actions"><button onClick={refresh} disabled={busy}>{busy?'Reading…':'Refresh sensors'}</button><button onClick={()=>setOpen(false)}>Close</button></div>
       </div>
 
@@ -107,7 +123,7 @@ export default function EngineeringControl011(){
         <div><i>1</i><b>Sense</b><span>Chip · unified memory · storage · runtime</span></div>
         <div><i>2</i><b>Estimate</b><span>Model residency · KV cache · headroom</span></div>
         <div><i>3</i><b>Control</b><span>Context · keep-alive · unload policy</span></div>
-        <div><i>4</i><b>Verify</b><span>Runtime availability · health envelope</span></div>
+        <div><i>4</i><b>Verify</b><span>Observatory measurement · runtime health</span></div>
       </div>
 
       <div className="eng011-grid">
@@ -142,6 +158,23 @@ export default function EngineeringControl011(){
         </article>
       </div>
 
+      <div className="eng011-calibration">
+        <div className="eng011-title"><div><b>Plan vs Measured</b><small>Observatory feedback · advisory calibration only</small></div><span>{calibration?`${calibrationFresh?'fresh':'stale'} · ${calibration.mode}`:'waiting for measurement'}</span></div>
+        {calibration?<>
+          <div className="eng011-cal-grid">
+            <span><small>Heuristic projection</small><b>{fmt(plan.projected)}</b></span>
+            <span><small>Latest measured runtime</small><b>{fmt(calibration.runtimeBytes)}</b></span>
+            <span><small>Observed residency factor</small><b>{calibration.residencyFactor.toFixed(2)}×</b></span>
+            <span><small>Calibrated projection</small><b>{fmt(calibratedProjected??undefined)}</b></span>
+            <span><small>Observed memory pressure</small><b>{calibration.memoryPressurePct.toFixed(0)}%</b></span>
+            <span><small>Measured model footprint</small><b>{fmt(calibration.modelBytes)}</b></span>
+            <span><small>Loaded models</small><b>{calibration.loadedModels}</b></span>
+            <span><small>Largest measured context</small><b>{ctx(calibrationContext)}</b></span>
+          </div>
+          <p>Latest `/api/ps` snapshot: {new Date(calibration.at).toLocaleTimeString()}. Applying its residency factor to the current planner input changes the projection by <b>{calibrationDelta==null?'—':`${calibrationDelta>=0?'+':''}${calibrationDelta.toFixed(1)}%`}</b>. This does not automatically change the controller because the measured snapshot may represent a different model or context.</p>
+        </>:<p>Load a model and open Observatory to capture a real runtime-residency snapshot. Engineering will then compare the heuristic with measured allocation while keeping control decisions advisory.</p>}
+      </div>
+
       <div className="eng011-envelope">
         <div className="eng011-title"><div><b>Operating Envelope</b><small>Estimated model footprint × context on this Mac · click a cell to load that operating point</small></div><span>{profile} policy</span></div>
         <div className="eng011-envelope-scroll">
@@ -150,7 +183,7 @@ export default function EngineeringControl011(){
             {envelopeContexts.map(c=><div className="eng011-matrix-row" key={c} style={{display:'contents'}}><div className="axis">{ctx(c)}</div>{envelopeFootprints.map(g=>{const state=envelopeState(memory,g,c,profile);return <button key={`${c}-${g}`} className={`env-cell ${state} ${requested===c&&Math.abs(modelGb-g)<.01?'selected':''}`} onClick={()=>{setRequested(c);setModelGb(g)}} aria-label={`${g} GB at ${ctx(c)} context: ${state}`}><b>{state==='safe'?'SAFE':state==='constrained'?'TIGHT':'OUT'}</b><small>{Math.round(projected(g*GB,c).total/GB*10)/10} GB</small></button>})}</div>)}
           </div>
         </div>
-        <div className="eng011-legend"><span><i className="safe"/>Safe</span><span><i className="constrained"/>Constrained</span><span><i className="outside"/>Outside recommended envelope</span><em>Engineering estimate, not a benchmark. Observatory measurements will be used to calibrate this model in a later control-loop stage.</em></div>
+        <div className="eng011-legend"><span><i className="safe"/>Safe</span><span><i className="constrained"/>Constrained</span><span><i className="outside"/>Outside recommended envelope</span><em>Engineering estimate, not a benchmark. Plan-vs-Measured uses Observatory snapshots for calibration but does not silently actuate runtime settings.</em></div>
       </div>
 
       <div className="eng011-doctor">
