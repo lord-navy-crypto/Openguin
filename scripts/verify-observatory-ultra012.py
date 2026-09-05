@@ -5,6 +5,7 @@ import sys
 ROOT=Path(__file__).resolve().parents[1]
 obs=(ROOT/'src/Observatory.tsx').read_text()
 center=(ROOT/'src/BenchmarkCenter012.tsx').read_text()
+decision=(ROOT/'src/BenchmarkDecision012.tsx').read_text() if (ROOT/'src/BenchmarkDecision012.tsx').exists() else ''
 telemetry=(ROOT/'src/benchmarkTelemetry012.ts').read_text()
 package=(ROOT/'package.json').read_text()
 docs=(ROOT/'docs/OBSERVATORY_0_12.md').read_text() if (ROOT/'docs/OBSERVATORY_0_12.md').exists() else ''
@@ -27,7 +28,11 @@ checks={
  'Resource efficiency is explicit': 'benchmarkMemoryEfficiency012' in telemetry and 'decode_tok_s_per_runtime_gb' in telemetry,
  'Tail latency remains visible': 'benchmarkTailRatio012' in telemetry and 'ttft_tail_ratio' in telemetry,
  'Pareto analysis preserves multi-objective tradeoffs': 'benchmarkParetoStatus012' in telemetry and 'dominates012' in telemetry and 'same runtime mode and context' in center,
- 'No arbitrary Penguin Score is introduced': 'Penguin Score' not in center and 'penguinScore' not in telemetry,
+ 'Decision analysis is mounted from Benchmark Center': "import BenchmarkDecision012 from './BenchmarkDecision012'" in center and '<BenchmarkDecision012 sessions={sessions} mode={mode}/>' in center,
+ 'Pareto map fixes context before comparison': 'contextRows' in decision and 's.context===context' in decision and 'Pareto map' in decision,
+ 'Raw-sample scatter uses retained individual samples': 'Raw-sample scatter' in decision and 'session.samples.filter' in decision and 'Sample ${s.index}' in decision,
+ 'Decision view retains runtime memory and CV context': 'runtime memory' in decision.lower() and 'decodeTokSCvPct' in decision,
+ 'No arbitrary Penguin Score is introduced': 'Penguin Score' not in center and 'penguinScore' not in telemetry and 'Penguin Score' not in decision,
  'Methodology documentation covers resource/Pareto analysis': 'Observed TTFT' in docs and 'P95' in docs and 'coefficient of variation' in docs.lower() and 'Pareto-efficient' in docs and 'runtime memory' in docs,
  'IOE integration document exists': 'Industrial & Operations Engineering' in ioe and 'Performance measurement' in ioe and 'Pareto' in ioe and 'Human systems integration' in ioe,
  'Production verification includes Observatory Ultra': 'verify:observatory-ultra' in package and 'verify-observatory-ultra012.py' in package,
