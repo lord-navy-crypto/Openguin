@@ -44,6 +44,12 @@ require("src/observatory.css", ".obs-health", "health-state styling")
 require("src/RuntimeInstallerCard.tsx", "invoke<RuntimeState>('runtime_discovery')", "post-repair runtime discovery")
 require("src/RuntimeInstallerCard.tsx", "rediscovered successfully", "verified repair completion")
 
+# Runtime Control: actuators must verify the observed state instead of trusting request completion.
+require("src/RuntimeControl09.tsx", "Verifying /api/ps runtime state", "post-actuation verification stage")
+require("src/RuntimeControl09.tsx", "model did not appear in /api/ps", "preload verification")
+require("src/RuntimeControl09.tsx", "model is still resident in /api/ps", "unload verification")
+require("src/RuntimeControl09.tsx", "if(!document.hidden)refresh()", "background polling reduction")
+
 if errors:
     print("OpenPenguin 0.11 legacy hardening verification FAILED")
     for error in errors:
@@ -56,3 +62,4 @@ print(" - Full Logs exposes bounded severity-aware diagnostics")
 print(" - Global Library rejects stale responses and preserves cache")
 print(" - Observatory exposes health/calibration signals")
 print(" - Runtime Repair requires post-install rediscovery")
+print(" - Runtime Control verifies live load/unload state")
