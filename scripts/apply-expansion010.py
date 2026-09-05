@@ -4,6 +4,25 @@ root=Path(__file__).resolve().parents[1]
 p=root/'src'/'App07.tsx'
 t=p.read_text()
 
+# 0.11 keeps production composition directly in App07. This script remains in
+# desktop:prepare for legacy checkout compatibility, but must not rewrite the
+# static state machine.
+if 'OPENGUIN_011_STATIC_COMPOSITION' in t:
+    required=[
+        "import MegaLibrary from './MegaLibrary';",
+        "import DeveloperStudio010 from './DeveloperStudio010';",
+        "import RuntimeInstallerCard from './RuntimeInstallerCard';",
+        "import AdvancedSettings010 from './AdvancedSettings010';",
+        'setTopK', 'setMinP', 'setRepeatPenalty', 'setSeed', 'setKeepAlive',
+        'top_k:runTopK', 'min_p:runMinP', 'repeat_penalty:runRepeatPenalty', 'keep_alive:runKeepAlive',
+        '<AdvancedSettings010', '<MegaLibrary mode={mode}', '<RuntimeInstallerCard', '<DeveloperStudio010/>'
+    ]
+    missing=[x for x in required if x not in t]
+    if missing:
+        raise SystemExit('apply-expansion010: static 0.11 composition incomplete: '+', '.join(missing))
+    print('0.10 expansion patch skipped: 0.11 subsystem composition is already static and verified.')
+    raise SystemExit(0)
+
 imports="""import MegaLibrary from './MegaLibrary';
 import DeveloperStudio010 from './DeveloperStudio010';
 import RuntimeInstallerCard from './RuntimeInstallerCard';
@@ -18,7 +37,6 @@ if 'setTopK' not in t:
         raise SystemExit('apply-expansion010: advanced-state anchor not found; refusing silent partial integration')
     t=t.replace(state_anchor,state_anchor+"\n const [topK,setTopK]=useState(40),[minP,setMinP]=useState(0),[repeatPenalty,setRepeatPenalty]=useState(1.1),[seed,setSeed]=useState(-1),[keepAlive,setKeepAlive]=useState('5m');")
 
-# Support both the original 0.10 request and the 0.11 request-snapshot state machine.
 option_rewrites={
     "options:{num_ctx:ctx,num_predict:maxOut,temperature:temp,top_p:topP}}":
         "options:{num_ctx:ctx,num_predict:maxOut,temperature:temp,top_p:topP,top_k:topK,min_p:minP,repeat_penalty:repeatPenalty,...(seed>=0?{seed}: {})},keep_alive:keepAlive}",
@@ -29,9 +47,7 @@ if 'top_k:topK' not in t:
     replaced=False
     for old,new in option_rewrites.items():
         if old in t:
-            t=t.replace(old,new,1)
-            replaced=True
-            break
+            t=t.replace(old,new,1);replaced=True;break
     if not replaced:
         raise SystemExit('apply-expansion010: inference options anchor not found; advanced settings would be disconnected')
 
@@ -45,13 +61,11 @@ if runtime_card.strip() not in t and "{tab==='overview'&&" in t:
 
 if "<MegaLibrary mode={mode} memoryBytes={memory}/>" not in t and "{tab==='library'&&" in t:
     t=t.replace("{tab==='library'&&","{tab==='library'&&<MegaLibrary mode={mode} memoryBytes={memory}/>}\n  {false&&",1)
-
 if "<DeveloperStudio010/>" not in t and "{tab==='developer'&&" in t:
     t=t.replace("{tab==='developer'&&","{tab==='developer'&&<DeveloperStudio010/>}\n  {false&&",1)
 
 for required in ['top_k:topK','min_p:minP','repeat_penalty:repeatPenalty','keep_alive:keepAlive','AdvancedSettings010','MegaLibrary','RuntimeInstallerCard','DeveloperStudio010']:
     if required not in t:
         raise SystemExit(f'apply-expansion010: required integration missing after patch: {required}')
-
 p.write_text(t)
-print('Applied Openguin 0.10 Global Library, runtime repair, Developer Studio, and advanced inference settings with 0.11 state-machine compatibility.')
+print('Applied legacy 0.10 expansion integration.')
