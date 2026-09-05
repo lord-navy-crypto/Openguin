@@ -87,7 +87,7 @@ export function p95012(values:number[]){if(!values.length)return null;const s=[.
 export function cv012(values:number[]){if(values.length<2)return null;const mean=values.reduce((a,b)=>a+b,0)/values.length;if(!mean)return null;const variance=values.reduce((sum,v)=>sum+(v-mean)**2,0)/(values.length-1);return Math.sqrt(variance)/mean*100}
 
 export function summarizeBenchmark012(samples:BenchmarkSample012[]):BenchmarkSummary012{
-  const nums=<K extends keyof BenchmarkSample012>(key:K)=>samples.map(s=>s[key]).filter((v):v is BenchmarkSample012[K]&number=>typeof v==='number'&&Number.isFinite(v));
+  const nums=(key:keyof BenchmarkSample012)=>samples.map(s=>s[key]).filter((v):v is number=>typeof v==='number'&&Number.isFinite(v));
   const decode=nums('decodeTokS');
   return{
     ttftMedianMs:median012(nums('observedTtftMs')),
