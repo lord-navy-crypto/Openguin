@@ -4,7 +4,8 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 mega=(ROOT/'src/MegaLibrary.tsx').read_text()
-portfolio=(ROOT/'src/libraryPortfolio013.ts').read_text()
+portfolio_path=ROOT/'src/libraryPortfolioStore013.ts'
+portfolio=portfolio_path.read_text()
 ui=(ROOT/'src/LibraryPortfolio013.tsx').read_text()
 css=(ROOT/'src/library-portfolio013.css').read_text()
 package=(ROOT/'package.json').read_text()
@@ -12,6 +13,8 @@ docs=(ROOT/'docs/LIBRARY_PORTFOLIO_0_13.md').read_text() if (ROOT/'docs/LIBRARY_
 
 checks={
  'Portfolio planner is mounted in Global Library': "import LibraryPortfolio013 from './LibraryPortfolio013'" in mega and '<LibraryPortfolio013' in mega,
+ 'Portfolio store has a case-distinct filename': portfolio_path.exists() and not (ROOT/'src/libraryPortfolio013.ts').exists(),
+ 'Portfolio UI and Library use the distinct store module': "from './libraryPortfolioStore013'" in ui and "from './libraryPortfolioStore013'" in mega,
  'Variants can be pinned to portfolio': "addLibraryPortfolioItem013" in mega and 'Pin plan' in mega,
  'Portfolio dataset is bounded': 'const LIMIT=24' in portfolio,
  'Portfolio export schema is versioned': "openguin.library.portfolio.v1" in portfolio,
