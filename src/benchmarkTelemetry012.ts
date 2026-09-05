@@ -61,11 +61,9 @@ export function loadBenchmarkSessions012():BenchmarkSession012[]{
 export function saveBenchmarkSessions012(rows:BenchmarkSession012[]){
   const next=rows.slice(0,LIMIT);
   localStorage.setItem(BENCHMARK_SESSIONS_KEY,JSON.stringify(next));
-  window.dispatchEvent(new CustomEvent(BenchmarkEvent(BENCHMARK_SESSIONS_EVENT),{detail:next}));
+  window.dispatchEvent(new CustomEvent<BenchmarkSession012[]>(BENCHMARK_SESSIONS_EVENT,{detail:next}));
   return next;
 }
-
-function BenchmarkEvent(name:string){return name}
 
 export function addBenchmarkSession012(row:BenchmarkSession012){
   return saveBenchmarkSessions012([row,...loadBenchmarkSessions012()]);
