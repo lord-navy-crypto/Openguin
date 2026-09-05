@@ -15,44 +15,79 @@ OpenPenguin maps those methods onto a local inference system:
 | Performance measurement | Controlled Benchmark Center sessions | TTFT median/P95, prefill tok/s, decode tok/s, load time |
 | Data analytics | Persistent benchmark/calibration datasets | JSON/CSV session exports and calibration records |
 | Variability / stochastic behavior | Repeated trials rather than single-run claims | decode coefficient of variation, P95/median TTFT tail ratio |
-| Operations research | Compare feasible operating points without hiding tradeoffs | same-context/mode Pareto analysis |
+| Operations research | Compare feasible operating points without hiding tradeoffs | environment-blocked Pareto analysis |
 | Resource allocation | Treat unified memory as a constrained resource | runtime bytes, residency factor, tok/s per runtime GB |
 | Decision analysis | Keep objectives separate and inspect consequences | responsiveness vs throughput vs stability vs memory |
+| Experiment design | Hold request controls fixed and record nuisance/blocking variables | environment provenance + raw repeated trials |
 | Quality / reliability engineering | Detect unstable or degraded behavior | CV bands, tail latency, failed warm-state preconditions, regression contracts |
 | Human systems integration | Make system state and uncertainty legible to the operator | Task Center, Full Logs, explicit advisory labels, no opaque auto-tuning |
 
 ## 2. Why Pareto analysis instead of one Penguin Score
 
-A single score would require arbitrary hidden weights. A user who values low TTFT may choose differently from one who values maximum throughput or minimal memory residency.
+A single score would require hidden value weights. A user who values low TTFT may choose differently from one who values maximum throughput or minimal memory residency.
 
 Benchmark Center therefore treats the problem as multi-objective:
-
 - minimize median TTFT,
 - minimize P95/tail latency,
 - maximize decode throughput,
 - minimize throughput variability,
 - minimize runtime memory,
-- preserve a requested context and runtime mode.
+- preserve requested operating constraints.
 
-For comparable sessions (same runtime mode and context), a point is marked **Pareto-efficient** when no other measured point is at least as good on every tracked objective and strictly better on at least one. This is decision support, not automatic selection.
+A point is marked **Pareto-efficient** only inside a comparable measurement block. OpenPenguin does not claim a frontier across arbitrary machines or runtime versions.
 
 ## 3. IOE experiment-design discipline
 
-0.12 benchmark sessions use a controlled method:
+0.12 treats benchmark factors and responses explicitly.
 
-1. preload the target model,
-2. verify warm residency through `/api/ps`,
-3. hold prompt, seed and sampling settings fixed,
-4. run multiple repeats,
-5. measure user-visible TTFT at the OpenPenguin UI boundary,
-6. capture Ollama load/prefill/decode durations,
-7. capture `/api/ps` resource state,
-8. summarize with medians, P95 and coefficient of variation,
-9. export the raw samples as well as summaries.
+### Controlled decision variables / factors
+- target model,
+- requested context,
+- fixed prompt,
+- seed,
+- sampling controls,
+- warm-state condition.
 
-This makes later comparisons auditable and reduces the temptation to optimize around one favorable run.
+### Responses
+- Observed TTFT,
+- P95/tail TTFT,
+- prompt throughput,
+- decode throughput,
+- decode CV,
+- runtime memory,
+- residency factor,
+- throughput per runtime GB.
 
-## 4. ECE / control engineering connection
+### Blocking / nuisance variables recorded as provenance
+- chip,
+- architecture,
+- unified/system memory,
+- Ollama runtime version,
+- logical cores,
+- free storage at measurement time,
+- model family / parameter-size metadata / quantization,
+- number of concurrently loaded models.
+
+The current Pareto comparison block requires the same runtime mode, requested context and environment key (architecture + chip + memory + Ollama version). Sessions with unknown provenance are not silently assumed comparable.
+
+This is important experimentally: if the machine or runtime changed, a measured performance delta cannot safely be attributed only to the model.
+
+## 4. Evidence correlation with Engineering calibration
+
+0.11 Engineering Calibration Recorder and 0.12 Benchmark Center measure related but not identical things. 0.12 can therefore create an **evidence link**, not an identity claim.
+
+A calibration point is eligible only when:
+- runtime mode matches,
+- requested/measured context matches,
+- model-size delta is at most 20%,
+- runtime-allocation delta is at most 30%,
+- measurement separation is at most two hours.
+
+A link is labeled **strong** only at tighter thresholds: ≤30 minutes, ≤10% model-size delta and ≤15% runtime-allocation delta. Otherwise a qualifying link is **moderate**.
+
+The link is intentionally conservative because the 0.11 calibration schema does not store model name. Timing alone is never enough. Correlation is preserved for later analysis but never actuates controller settings.
+
+## 5. ECE / control engineering connection
 
 The 0.11 Engineering loop is:
 
@@ -60,10 +95,9 @@ The 0.11 Engineering loop is:
 
 That is structurally a feedback-system view. Hardware/runtime telemetry is the sensed state; the memory/context model is an estimator; policy is a controller recommendation; Observatory is the verification channel.
 
-0.12 adds higher-quality measurements but deliberately does **not** close the loop with automatic actuation yet. Controller constants should change only after physical-Mac measurements establish calibration quality.
+0.12 adds higher-quality measurements and evidence links but deliberately does **not** close the loop with automatic actuation. Controller constants should change only after physical-Mac measurements establish calibration quality.
 
 Relevant broader concepts:
-
 - sensing and state estimation,
 - feedback and robustness,
 - operating envelopes,
@@ -71,12 +105,11 @@ Relevant broader concepts:
 - stability and transient response,
 - controller verification before actuation.
 
-## 5. Systems engineering connection
+## 6. Systems engineering connection
 
 OpenPenguin is a system-of-components rather than one benchmark function:
-
 - private/external runtime,
-- model storage and import,
+- model storage/import,
 - streaming inference,
 - Task Center,
 - Observatory,
@@ -85,18 +118,17 @@ OpenPenguin is a system-of-components rather than one benchmark function:
 - Engineering planner,
 - recovery/repair paths.
 
-The systems-engineering questions are therefore about interfaces, requirements and tradeoffs:
-
-- Does a runtime transition preserve service when readiness fails?
-- Does the benchmark method measure the same operating condition each time?
+Systems-engineering questions therefore include:
+- Does runtime transition preserve service when readiness fails?
+- Does the benchmark measure the same operating condition each time?
+- Are compared sessions actually from the same environment?
 - Can the build be reproduced without source mutation?
 - Can the operator trace a failed action across UI, Rust and Ollama logs?
-- Do performance improvements cause unacceptable memory or tail-latency regressions?
+- Does a throughput gain create unacceptable memory, variability or tail-latency cost?
 
-## 6. Software / reliability engineering connection
+## 7. Software / reliability engineering connection
 
-The same project also demonstrates software reliability engineering:
-
+The project also demonstrates software reliability engineering:
 - stale-response guards,
 - immutable request ownership,
 - verified runtime transitions,
@@ -107,43 +139,42 @@ The same project also demonstrates software reliability engineering:
 - clean-source CI,
 - Universal2 architecture verification.
 
-Benchmark variability is therefore not treated only as a performance statistic. It is also a potential reliability signal that can trigger deeper diagnosis.
+Benchmark variability and tail latency are therefore potential reliability signals, not merely performance statistics.
 
-## 7. HCI / human factors connection
+## 8. HCI / human factors connection
 
 The operator is part of the system. A technically optimal controller that hides uncertainty or makes failures hard to understand is not a good engineering interface.
 
 OpenPenguin therefore favors:
-
 - explicit state labels,
-- visible task progress and failures,
+- visible task progress/failures,
 - advisory rather than silent automatic tuning,
 - explainable tradeoffs instead of one opaque score,
-- separation of measured values from estimated values,
-- clear distinction between fresh and stale telemetry,
-- exports that allow independent analysis.
+- measured vs estimated separation,
+- fresh/stale/evidence-confidence distinctions,
+- exportable data for independent analysis.
 
-## 8. 0.12 implementation requirements
+## 9. 0.12 implementation requirements
 
 Observatory Ultra / Benchmark Center should preserve these rules:
+- TTFT is **observed UI-boundary latency**, not kernel-only latency.
+- Sessions use repeated controlled samples.
+- Warm-state claims are verified through live runtime state.
+- Resource measurements come from live runtime state rather than model-name heuristics.
+- Variability and tail behavior remain visible.
+- Environment provenance is persisted with new benchmark sessions.
+- Pareto claims require a known, matching environment block.
+- Multi-objective comparisons never silently collapse into one weighted score.
+- Calibration correlation uses multiple evidence gates and never auto-actuates.
+- Raw data remains exportable.
+- 0.11 physical-Mac validation remains a separate release gate.
 
-- TTFT must be labeled as **observed UI-boundary latency**, not kernel-only latency.
-- A benchmark session must use repeated controlled samples.
-- Warm-state claims must be verified through live runtime state.
-- Resource measurements must come from the live runtime rather than model-name heuristics.
-- Variability must remain visible.
-- Multi-objective comparisons must not silently collapse into one weighted score.
-- Comparisons must state their comparability constraints (currently same runtime mode and context for Pareto analysis).
-- Raw data must remain exportable.
-- 0.11 physical-Mac validation remains a separate release gate and is not replaced by 0.12 CI.
+## 10. Academic reference points
 
-## 9. Academic reference points
-
-The design language above is aligned with official University of Michigan engineering descriptions of:
-
+The design language is aligned with official University of Michigan engineering descriptions of:
 - IOE computing/analytics, operations research, human systems integration and quality engineering,
 - IOE data analytics and optimization research,
 - EE control systems and embedded feedback systems,
 - CSE engineering interactive systems and evaluation.
 
-OpenPenguin is not claiming to implement a university curriculum. These references are used to keep the project vocabulary and engineering method grounded in real disciplinary practice.
+OpenPenguin is not claiming to implement a university curriculum. These references are used to keep project vocabulary and engineering method grounded in real disciplinary practice.
