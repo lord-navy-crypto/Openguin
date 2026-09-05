@@ -4,6 +4,8 @@
 
 Benchmark Center is a measurement tool, not a leaderboard. It is designed to make repeated local-inference measurements comparable on the same Mac and runtime while preserving the raw samples needed for later analysis.
 
+0.12 is developed as a stacked branch on top of the validated 0.11 head. Its CI base exists only to allow independent Universal2 validation without modifying the frozen 0.11 release-gate branch. Product changes remain confined to `feature/0.12-observatory-benchmark-ultra` and are tracked in Issue #4 / Draft PR #5.
+
 ## Controlled warm-state procedure
 
 Each Benchmark Center session:
