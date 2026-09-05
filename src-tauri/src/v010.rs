@@ -2,7 +2,7 @@ use futures_util::StreamExt;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
-use std::{collections::HashSet, fs, path::PathBuf, process::Command, time::{Duration,SystemTime,UNIX_EPOCH}};
+use std::{collections::HashSet, fs, process::Command, time::{Duration,SystemTime,UNIX_EPOCH}};
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::io::AsyncWriteExt;
 
@@ -35,11 +35,10 @@ fn strip_html(s:&str)->String{
 }
 fn parse_bytes(s:&str)->Option<u64>{
     let re=Regex::new(r"(?i)(\d+(?:\.\d+)?)\s*(KB|MB|GB|TB)").ok()?; let c=re.captures(s)?;
-    let n:c_long_double = c.get(1)?.as_str().parse::<f64>().ok()? as c_long_double;
+    let n:f64 = c.get(1)?.as_str().parse::<f64>().ok()?;
     let m=match c.get(2)?.as_str().to_ascii_uppercase().as_str(){"KB"=>1024f64,"MB"=>1024f64.powi(2),"GB"=>1024f64.powi(3),"TB"=>1024f64.powi(4),_=>1.0};
-    Some((n as f64*m) as u64)
+    Some((n*m) as u64)
 }
-type c_long_double=f64;
 fn known_license(tags:&[String],card:&Value)->Option<String>{
     card.get("license").and_then(Value::as_str).map(str::to_string).or_else(||tags.iter().find_map(|t|t.strip_prefix("license:").map(str::to_string)))
 }

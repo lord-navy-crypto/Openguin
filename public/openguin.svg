@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" role="img" aria-label="Openguin penguin">
-  <g fill="#0c0c0e">
-    <ellipse cx="128" cy="139" rx="72" ry="92"/><ellipse cx="128" cy="78" rx="66" ry="58"/>
-    <ellipse cx="62" cy="148" rx="22" ry="65"/><ellipse cx="194" cy="148" rx="22" ry="65"/>
-    <ellipse cx="101" cy="224" rx="31" ry="12"/><ellipse cx="155" cy="224" rx="31" ry="12"/>
-    <path d="M119 25 130 5 132 31ZM131 26 148 12 143 36Z"/>
-  </g>
-  <g fill="#fafafa"><ellipse cx="104" cy="82" rx="36" ry="39"/><ellipse cx="152" cy="82" rx="36" ry="39"/><ellipse cx="128" cy="155" rx="48" ry="64"/></g>
-  <g fill="#0c0c0e"><ellipse cx="105" cy="78" rx="7" ry="10"/><ellipse cx="151" cy="78" rx="7" ry="10"/><path d="M114 101h28l-14 14Z"/></g>
-  <g fill="#fafafa"><ellipse cx="103" cy="75" rx="2" ry="3"/><ellipse cx="149" cy="75" rx="2" ry="3"/></g>
+<g fill="#0c0c0e">
+<ellipse cx="128" cy="139" rx="72" ry="92"/><ellipse cx="128" cy="78" rx="66" ry="58"/>
+<ellipse cx="62" cy="148" rx="22" ry="65"/><ellipse cx="194" cy="148" rx="22" ry="65"/>
+<ellipse cx="101" cy="224" rx="31" ry="12"/><ellipse cx="155" cy="224" rx="31" ry="12"/>
+<path d="M119 25 130 5 132 31ZM131 26 148 12 143 36Z"/>
+</g>
+<g fill="#fafafa"><ellipse cx="104" cy="82" rx="36" ry="39"/><ellipse cx="152" cy="82" rx="36" ry="39"/><ellipse cx="128" cy="155" rx="48" ry="64"/></g>
+<g fill="#0c0c0e"><ellipse cx="105" cy="78" rx="7" ry="10"/><ellipse cx="151" cy="78" rx="7" ry="10"/><path d="M114 101h28l-14 14Z"/></g>
+<g fill="#fafafa"><ellipse cx="103" cy="75" rx="2" ry="3"/><ellipse cx="149" cy="75" rx="2" ry="3"/></g>
 </svg>

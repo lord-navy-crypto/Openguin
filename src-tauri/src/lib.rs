@@ -2,75 +2,916 @@ use futures_util::StreamExt;
 use serde::Serialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::{collections::HashSet, fs, path::{Path, PathBuf}, process::Command, sync::Mutex, time::Duration};
+use std::{
+    collections::HashSet,
+    fs,
+    path::{Path, PathBuf},
+    process::{Child, Command, Stdio},
+    sync::Mutex,
+    time::Duration,
+};
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_shell::{process::CommandChild, ShellExt};
 use tokio::io::AsyncWriteExt;
 use tokio_util::io::ReaderStream;
 
-const BUNDLED_HOST:&str="127.0.0.1:11435";
-const EXTERNAL_HOST:&str="127.0.0.1:11434";
-const MAX_JSON_BYTES:usize=2*1024*1024;
+mod v07;
+use v07::{chat_stream, official_ollama_catalog};
+mod v010;
+use v010::{repair_bundled_runtime, universal_model_search, universal_model_variants};
+mod diagnostics;
+use diagnostics::{append_modeldock_log, bundled_ollama_log, clear_diagnostic_log, modeldock_backend_log};
+
+// OPENGUIN_011_STATIC_RUST_COMPOSITION
+// Runtime helpers, version modules, diagnostics, and Tauri command registration
+// are checked-in production source. desktop:prepare may verify them but must not
+// rewrite this file.
+
+const BUNDLED_HOST: &str = "127.0.0.1:11435";
+const EXTERNAL_HOST: &str = "127.0.0.1:11434";
+const MAX_JSON_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(Default)]
-struct OllamaState{child:Mutex<Option<CommandChild>>,cancelled_pulls:Mutex<HashSet<String>>,cancelled_imports:Mutex<HashSet<String>>}
-#[derive(Serialize)] #[serde(rename_all="camelCase")]
-struct EngineInfo{mode:&'static str,host:&'static str,api_base:String,models_dir:String,running:bool}
-#[derive(Serialize)] #[serde(rename_all="camelCase")]
-struct RuntimeDiscovery{bundled_available:bool,bundled_running:bool,external_installed:bool,external_running:bool,external_path:Option<String>,external_version:Option<String>,recommended_mode:String,reason:String}
-#[derive(Serialize)] #[serde(rename_all="camelCase")]
-struct SystemProfile{os:String,arch:String,chip:String,memory_bytes:u64,logical_cores:usize,free_storage_bytes:u64}
-#[derive(Serialize,Clone)] #[serde(rename_all="camelCase")]
-struct PullProgress{model:String,status:String,digest:Option<String>,total:Option<u64>,completed:Option<u64>,percent:Option<f64>,done:bool,cancelled:bool,error:Option<String>}
-#[derive(Serialize,Clone)] #[serde(rename_all="camelCase")]
-struct ImportProgress{mode:String,import_id:String,repo_id:String,filename:String,model:String,stage:String,status:String,total:Option<u64>,completed:Option<u64>,percent:Option<f64>,sha256:Option<String>,done:bool,cancelled:bool,error:Option<String>}
-#[derive(Serialize)] #[serde(rename_all="camelCase")]
-struct HfVariant{filename:String,size:u64,quantization:String,sha256:Option<String>,source_url:String}
+struct OllamaState {
+    child: Mutex<Option<Child>>,
+    cancelled_pulls: Mutex<HashSet<String>>,
+    cancelled_imports: Mutex<HashSet<String>>,
+}
 
-fn data_dir(app:&AppHandle)->Result<PathBuf,String>{let p=app.path().app_data_dir().map_err(|e|e.to_string())?;fs::create_dir_all(&p).map_err(|e|e.to_string())?;Ok(p)}
-fn models_dir(app:&AppHandle)->Result<PathBuf,String>{let p=data_dir(app)?.join("ollama/models");fs::create_dir_all(&p).map_err(|e|e.to_string())?;Ok(p)}
-fn imports_dir(app:&AppHandle)->Result<PathBuf,String>{let p=data_dir(app)?.join("imports");fs::create_dir_all(&p).map_err(|e|e.to_string())?;Ok(p)}
-fn host(mode:&str)->Result<&'static str,String>{match mode{"bundled"=>Ok(BUNDLED_HOST),"external"=>Ok(EXTERNAL_HOST),_=>Err("Unknown engine mode".into())}}
-fn allowed(path:&str)->bool{matches!(path,"/api/version"|"/api/tags"|"/api/ps"|"/api/show"|"/api/chat"|"/api/generate"|"/api/delete")}
-fn output(cmd:&str,args:&[&str])->Option<String>{Command::new(cmd).args(args).output().ok().filter(|o|o.status.success()).map(|o|String::from_utf8_lossy(&o.stdout).trim().to_string())}
-fn free_bytes()->u64{output("df",&["-k","/"]).and_then(|s|s.lines().last().and_then(|l|l.split_whitespace().nth(3)).and_then(|v|v.parse().ok())).unwrap_or(0)*1024}
-fn safe(s:&str)->String{s.chars().map(|c|if c.is_ascii_alphanumeric()||matches!(c,'-'|'_'|'.'){c}else{'_'}).collect()}
-fn enc_path(s:&str)->String{s.split('/').map(urlencoding::encode).collect::<Vec<_>>().join("/")}
-fn quant(name:&str)->String{let u=name.to_ascii_uppercase();for q in ["IQ1_S","IQ2_XXS","IQ2_XS","IQ2_S","IQ2_M","IQ3_XXS","IQ3_XS","IQ3_S","IQ3_M","IQ4_XS","Q2_K","Q3_K_S","Q3_K_M","Q3_K_L","Q4_0","Q4_1","Q4_K_S","Q4_K_M","Q5_0","Q5_1","Q5_K_S","Q5_K_M","Q6_K","Q8_0","F16","BF16"]{if u.contains(q){return q.into()}}"unknown".into()}
-fn external_path()->Option<String>{if let Some(p)=output("which",&["ollama"]).filter(|p|!p.is_empty()){return Some(p)}for p in ["/Applications/Ollama.app/Contents/Resources/ollama","/opt/homebrew/bin/ollama","/usr/local/bin/ollama"]{if Path::new(p).is_file(){return Some(p.into())}}None}
-async fn probe(h:&str)->(bool,Option<String>){let Ok(c)=reqwest::Client::builder().timeout(Duration::from_millis(900)).build()else{return(false,None)};match c.get(format!("http://{h}/api/version")).send().await{Ok(r)if r.status().is_success()=>{let v=r.json::<Value>().await.ok().and_then(|j|j.get("version").and_then(Value::as_str).map(str::to_owned));(true,v)},_=>(false,None)}}
-fn emit_import(app:&AppHandle,e:ImportProgress){let _=app.emit("modeldock://import-progress",e);}
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct EngineInfo {
+    mode: &'static str,
+    host: &'static str,
+    api_base: String,
+    models_dir: String,
+    running: bool,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct RuntimeDiscovery {
+    bundled_available: bool,
+    bundled_running: bool,
+    external_installed: bool,
+    external_running: bool,
+    external_path: Option<String>,
+    external_version: Option<String>,
+    recommended_mode: String,
+    reason: String,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SystemProfile {
+    os: String,
+    arch: String,
+    chip: String,
+    memory_bytes: u64,
+    logical_cores: usize,
+    free_storage_bytes: u64,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct PullProgress {
+    model: String,
+    status: String,
+    digest: Option<String>,
+    total: Option<u64>,
+    completed: Option<u64>,
+    percent: Option<f64>,
+    done: bool,
+    cancelled: bool,
+    error: Option<String>,
+}
+
+#[derive(Serialize, Clone)]
+#[serde(rename_all = "camelCase")]
+struct ImportProgress {
+    mode: String,
+    import_id: String,
+    repo_id: String,
+    filename: String,
+    model: String,
+    stage: String,
+    status: String,
+    total: Option<u64>,
+    completed: Option<u64>,
+    percent: Option<f64>,
+    sha256: Option<String>,
+    done: bool,
+    cancelled: bool,
+    error: Option<String>,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HfVariant {
+    filename: String,
+    size: u64,
+    quantization: String,
+    sha256: Option<String>,
+    source_url: String,
+}
+
+fn data_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let p = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+    Ok(p)
+}
+
+fn models_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let p = data_dir(app)?.join("ollama/models");
+    fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+    Ok(p)
+}
+
+fn imports_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    let p = data_dir(app)?.join("imports");
+    fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+    Ok(p)
+}
+
+fn runtime_dir(app: &AppHandle) -> Result<PathBuf, String> {
+    // A runtime repaired/downloaded from inside Openguin wins over the packaged copy.
+    let repaired = data_dir(app)?.join("ollama-runtime");
+    if repaired.join("ollama").is_file() {
+        return Ok(repaired);
+    }
+    let packaged = app
+        .path()
+        .resource_dir()
+        .map_err(|e| e.to_string())?
+        .join("ollama-runtime");
+    if packaged.join("ollama").is_file() {
+        return Ok(packaged);
+    }
+    Ok(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("resources/ollama-runtime"))
+}
+
+fn runtime_bin(app: &AppHandle) -> Result<PathBuf, String> {
+    let p = runtime_dir(app)?.join("ollama");
+    if p.is_file() {
+        Ok(p)
+    } else {
+        Err(format!("Bundled Ollama runtime is missing: {}", p.display()))
+    }
+}
+
+fn find_runner(root: &Path) -> Option<PathBuf> {
+    let direct = root.join("llama-server");
+    if direct.is_file() {
+        return Some(direct);
+    }
+    for sub in ["lib", "bin", "mlx_metal_v4"] {
+        let p = root.join(sub).join("llama-server");
+        if p.is_file() {
+            return Some(p);
+        }
+    }
+    None
+}
+
+fn runtime_complete(app: &AppHandle) -> bool {
+    runtime_dir(app)
+        .map(|p| p.join("ollama").is_file() && find_runner(&p).is_some())
+        .unwrap_or(false)
+}
+
+fn runtime_log(app: &AppHandle) -> Result<PathBuf, String> {
+    let p = data_dir(app)?.join("logs");
+    fs::create_dir_all(&p).map_err(|e| e.to_string())?;
+    Ok(p.join("bundled-ollama.log"))
+}
+
+fn host(mode: &str) -> Result<&'static str, String> {
+    match mode {
+        "bundled" => Ok(BUNDLED_HOST),
+        "external" => Ok(EXTERNAL_HOST),
+        _ => Err("Unknown engine mode".into()),
+    }
+}
+
+fn allowed(path: &str) -> bool {
+    matches!(
+        path,
+        "/api/version"
+            | "/api/tags"
+            | "/api/ps"
+            | "/api/show"
+            | "/api/chat"
+            | "/api/generate"
+            | "/api/delete"
+    )
+}
+
+fn output(cmd: &str, args: &[&str]) -> Option<String> {
+    Command::new(cmd)
+        .args(args)
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .map(|o| String::from_utf8_lossy(&o.stdout).trim().to_string())
+}
+
+fn free_bytes() -> u64 {
+    output("df", &["-k", "/"])
+        .and_then(|s| {
+            s.lines()
+                .last()
+                .and_then(|l| l.split_whitespace().nth(3))
+                .and_then(|v| v.parse().ok())
+        })
+        .unwrap_or(0)
+        * 1024
+}
+
+fn safe(s: &str) -> String {
+    s.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.') {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
+fn enc_path(s: &str) -> String {
+    s.split('/')
+        .map(urlencoding::encode)
+        .collect::<Vec<_>>()
+        .join("/")
+}
+
+fn quant(name: &str) -> String {
+    let u = name.to_ascii_uppercase();
+    for q in [
+        "IQ1_S", "IQ2_XXS", "IQ2_XS", "IQ2_S", "IQ2_M", "IQ3_XXS", "IQ3_XS", "IQ3_S",
+        "IQ3_M", "IQ4_XS", "Q2_K", "Q3_K_S", "Q3_K_M", "Q3_K_L", "Q4_0", "Q4_1",
+        "Q4_K_S", "Q4_K_M", "Q5_0", "Q5_1", "Q5_K_S", "Q5_K_M", "Q6_K", "Q8_0", "F16",
+        "BF16",
+    ] {
+        if u.contains(q) {
+            return q.into();
+        }
+    }
+    "unknown".into()
+}
+
+fn external_path() -> Option<String> {
+    if let Some(p) = output("which", &["ollama"]).filter(|p| !p.is_empty()) {
+        return Some(p);
+    }
+    for p in [
+        "/Applications/Ollama.app/Contents/Resources/ollama",
+        "/opt/homebrew/bin/ollama",
+        "/usr/local/bin/ollama",
+    ] {
+        if Path::new(p).is_file() {
+            return Some(p.into());
+        }
+    }
+    None
+}
+
+async fn probe(h: &str) -> (bool, Option<String>) {
+    let Ok(c) = reqwest::Client::builder()
+        .timeout(Duration::from_millis(900))
+        .build()
+    else {
+        return (false, None);
+    };
+    match c.get(format!("http://{h}/api/version")).send().await {
+        Ok(r) if r.status().is_success() => {
+            let v = r
+                .json::<Value>()
+                .await
+                .ok()
+                .and_then(|j| j.get("version").and_then(Value::as_str).map(str::to_owned));
+            (true, v)
+        }
+        _ => (false, None),
+    }
+}
+
+fn emit_import(app: &AppHandle, e: ImportProgress) {
+    let _ = app.emit("modeldock://import-progress", e);
+}
 
 #[tauri::command]
-fn system_profile()->SystemProfile{SystemProfile{os:std::env::consts::OS.into(),arch:std::env::consts::ARCH.into(),chip:output("sysctl",&["-n","machdep.cpu.brand_string"]).or_else(||output("sysctl",&["-n","hw.model"])).unwrap_or_else(||"Unknown processor".into()),memory_bytes:output("sysctl",&["-n","hw.memsize"]).and_then(|v|v.parse().ok()).unwrap_or(0),logical_cores:std::thread::available_parallelism().map(|n|n.get()).unwrap_or(1),free_storage_bytes:free_bytes()}}
-#[tauri::command]
-fn bundled_engine_info(app:AppHandle,state:State<'_,OllamaState>)->Result<EngineInfo,String>{let d=models_dir(&app)?;let running=state.child.lock().map_err(|_|"state lock".to_string())?.is_some();Ok(EngineInfo{mode:"bundled",host:BUNDLED_HOST,api_base:format!("http://{BUNDLED_HOST}"),models_dir:d.to_string_lossy().into(),running})}
-#[tauri::command]
-async fn external_engine_info()->EngineInfo{let(running,_)=probe(EXTERNAL_HOST).await;EngineInfo{mode:"external",host:EXTERNAL_HOST,api_base:format!("http://{EXTERNAL_HOST}"),models_dir:"Managed by external Ollama".into(),running}}
-#[tauri::command]
-async fn runtime_discovery(app:AppHandle,state:State<'_,OllamaState>)->Result<RuntimeDiscovery,String>{let bundled_available=app.shell().sidecar("ollama-modeldock").is_ok();let bundled_running=state.child.lock().map_err(|_|"state lock".to_string())?.is_some();let external_path=external_path();let external_installed=external_path.is_some();let(external_running,external_version)=probe(EXTERNAL_HOST).await;let(recommended_mode,reason)=if bundled_available{("bundled","Bundled Ollama is available. ModelDock will use its isolated runtime by default.")}else if external_running{("external","Bundled sidecar is unavailable in this build, so ModelDock can automatically use the running external Ollama service.")}else if external_installed{("external","An external Ollama installation was found but its local API is not currently running.")}else{("bundled","No external Ollama was detected. Production ModelDock builds are expected to include the bundled runtime.")};Ok(RuntimeDiscovery{bundled_available,bundled_running,external_installed,external_running,external_path,external_version,recommended_mode:recommended_mode.into(),reason:reason.into()})}
-#[tauri::command]
-fn start_bundled_ollama(app:AppHandle,state:State<'_,OllamaState>)->Result<EngineInfo,String>{let d=models_dir(&app)?;let mut g=state.child.lock().map_err(|_|"state lock".to_string())?;if g.is_none(){let cmd=app.shell().sidecar("ollama-modeldock").map_err(|e|format!("Bundled Ollama sidecar unavailable: {e}"))?.arg("serve").env("OLLAMA_HOST",BUNDLED_HOST).env("OLLAMA_MODELS",d.to_string_lossy().to_string()).env("OLLAMA_ORIGINS","tauri://localhost;http://tauri.localhost").env("OLLAMA_KEEP_ALIVE","5m");let(_rx,child)=cmd.spawn().map_err(|e|format!("Failed to start bundled Ollama: {e}"))?;*g=Some(child)}Ok(EngineInfo{mode:"bundled",host:BUNDLED_HOST,api_base:format!("http://{BUNDLED_HOST}"),models_dir:d.to_string_lossy().into(),running:true})}
-#[tauri::command]
-fn stop_bundled_ollama(state:State<'_,OllamaState>)->Result<(),String>{let mut g=state.child.lock().map_err(|_|"state lock".to_string())?;if let Some(c)=g.take(){c.kill().map_err(|e|e.to_string())?}Ok(())}
+fn system_profile() -> SystemProfile {
+    SystemProfile {
+        os: std::env::consts::OS.into(),
+        arch: std::env::consts::ARCH.into(),
+        chip: output("sysctl", &["-n", "machdep.cpu.brand_string"])
+            .or_else(|| output("sysctl", &["-n", "hw.model"]))
+            .unwrap_or_else(|| "Unknown processor".into()),
+        memory_bytes: output("sysctl", &["-n", "hw.memsize"])
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0),
+        logical_cores: std::thread::available_parallelism()
+            .map(|n| n.get())
+            .unwrap_or(1),
+        free_storage_bytes: free_bytes(),
+    }
+}
 
 #[tauri::command]
-async fn ollama_json(mode:String,method:String,path:String,body:Option<Value>)->Result<Value,String>{if !allowed(&path){return Err("This Ollama API path is not allowed by ModelDock".into())}if let Some(b)=&body{if serde_json::to_vec(b).map_err(|e|e.to_string())?.len()>MAX_JSON_BYTES{return Err("Request is too large".into())}}let url=format!("http://{}{}",host(&mode)?,path);let c=reqwest::Client::builder().timeout(Duration::from_secs(600)).build().map_err(|e|e.to_string())?;let req=match method.as_str(){"GET"=>c.get(url),"POST"=>c.post(url).json(&body.unwrap_or_else(||json!({}))),"DELETE"=>c.delete(url).json(&body.unwrap_or_else(||json!({}))),_=>return Err("Unsupported method".into())};let r=req.send().await.map_err(|e|e.to_string())?;let st=r.status();let txt=r.text().await.map_err(|e|e.to_string())?;if !st.is_success(){return Err(format!("Ollama returned {st}: {txt}"))}if txt.trim().is_empty(){Ok(Value::Null)}else{serde_json::from_str(&txt).map_err(|e|e.to_string())}}
+fn bundled_engine_info(app: AppHandle, _state: State<'_, OllamaState>) -> Result<EngineInfo, String> {
+    let d = models_dir(&app)?;
+    let running = std::net::TcpStream::connect(BUNDLED_HOST).is_ok();
+    Ok(EngineInfo {
+        mode: "bundled",
+        host: BUNDLED_HOST,
+        api_base: format!("http://{BUNDLED_HOST}"),
+        models_dir: d.to_string_lossy().into(),
+        running,
+    })
+}
 
 #[tauri::command]
-async fn pull_model(app:AppHandle,state:State<'_,OllamaState>,mode:String,model:String)->Result<(),String>{let model=model.trim().to_string();if model.is_empty()||model.len()>180{return Err("Invalid model name".into())}state.cancelled_pulls.lock().map_err(|_|"lock".to_string())?.remove(&model);let c=reqwest::Client::builder().timeout(Duration::from_secs(21600)).build().map_err(|e|e.to_string())?;let r=c.post(format!("http://{}/api/pull",host(&mode)?)).json(&json!({"model":model,"stream":true})).send().await.map_err(|e|e.to_string())?;if !r.status().is_success(){return Err(format!("Ollama pull failed: {}",r.status()))}let mut s=r.bytes_stream();let mut pending=String::new();while let Some(ch)=s.next().await{if state.cancelled_pulls.lock().map_err(|_|"lock".to_string())?.contains(&model){let _=app.emit("modeldock://pull-progress",PullProgress{model:model.clone(),status:"Cancelled".into(),digest:None,total:None,completed:None,percent:None,done:true,cancelled:true,error:None});return Ok(())}pending.push_str(&String::from_utf8_lossy(&ch.map_err(|e|e.to_string())?));while let Some(pos)=pending.find('\n'){let line=pending[..pos].trim().to_string();pending=pending[pos+1..].to_string();if line.is_empty(){continue}if let Ok(v)=serde_json::from_str::<Value>(&line){let total=v.get("total").and_then(Value::as_u64);let completed=v.get("completed").and_then(Value::as_u64);let percent=match(total,completed){(Some(t),Some(x))if t>0=>Some(x as f64/t as f64*100.0),_=>None};let status=v.get("status").and_then(Value::as_str).unwrap_or("Downloading").to_string();let done=status=="success";let _=app.emit("modeldock://pull-progress",PullProgress{model:model.clone(),status,digest:v.get("digest").and_then(Value::as_str).map(str::to_owned),total,completed,percent,done,cancelled:false,error:v.get("error").and_then(Value::as_str).map(str::to_owned)});}}}Ok(())}
-#[tauri::command]
-fn cancel_pull(state:State<'_,OllamaState>,model:String)->Result<(),String>{state.cancelled_pulls.lock().map_err(|_|"lock".to_string())?.insert(model);Ok(())}
+async fn external_engine_info() -> EngineInfo {
+    let (running, _) = probe(EXTERNAL_HOST).await;
+    EngineInfo {
+        mode: "external",
+        host: EXTERNAL_HOST,
+        api_base: format!("http://{EXTERNAL_HOST}"),
+        models_dir: "Managed by external Ollama".into(),
+        running,
+    }
+}
 
 #[tauri::command]
-async fn search_huggingface(query:String,limit:Option<u8>)->Result<Value,String>{let c=reqwest::Client::builder().timeout(Duration::from_secs(20)).user_agent("ModelDock/0.6").build().map_err(|e|e.to_string())?;let p=[("search",query),("filter","gguf".into()),("sort","downloads".into()),("direction","-1".into()),("limit",limit.unwrap_or(24).min(50).to_string()),("full","true".into())];let r=c.get("https://huggingface.co/api/models").query(&p).send().await.map_err(|e|e.to_string())?;if !r.status().is_success(){return Err(format!("Hugging Face returned {}",r.status()))}r.json().await.map_err(|e|e.to_string())}
-#[tauri::command]
-async fn list_hf_gguf_variants(repo_id:String)->Result<Vec<HfVariant>,String>{if !repo_id.contains('/')||repo_id.len()>180{return Err("Invalid Hugging Face repository ID".into())}let c=reqwest::Client::builder().timeout(Duration::from_secs(30)).user_agent("ModelDock/0.6").build().map_err(|e|e.to_string())?;let r=c.get(format!("https://huggingface.co/api/models/{repo_id}/tree/main")).query(&[("recursive","true"),("expand","true")]).send().await.map_err(|e|e.to_string())?;if !r.status().is_success(){return Err(format!("Unable to list repository files: {}",r.status()))}let items=r.json::<Vec<Value>>().await.map_err(|e|e.to_string())?;let mut out=Vec::new();for item in items{let path=item.get("path").or_else(||item.get("rfilename")).and_then(Value::as_str).unwrap_or("");if !path.to_ascii_lowercase().ends_with(".gguf"){continue}let size=item.get("size").and_then(Value::as_u64).or_else(||item.get("lfs").and_then(|v|v.get("size")).and_then(Value::as_u64)).unwrap_or(0);let sha=item.get("lfs").and_then(|v|v.get("sha256")).and_then(Value::as_str).map(str::to_owned);out.push(HfVariant{filename:path.into(),size,quantization:quant(path),sha256:sha,source_url:format!("https://huggingface.co/{repo_id}/resolve/main/{}?download=true",enc_path(path))})}out.sort_by_key(|v|v.size);Ok(out)}
-#[tauri::command]
-fn cancel_hf_import(state:State<'_,OllamaState>,import_id:String)->Result<(),String>{state.cancelled_imports.lock().map_err(|_|"lock".to_string())?.insert(import_id);Ok(())}
+async fn runtime_discovery(app: AppHandle, _state: State<'_, OllamaState>) -> Result<RuntimeDiscovery, String> {
+    let bundled_available = runtime_complete(&app);
+    let (bundled_running, _) = probe(BUNDLED_HOST).await;
+    let external_path = external_path();
+    let external_installed = external_path.is_some();
+    let (external_running, external_version) = probe(EXTERNAL_HOST).await;
+    let (recommended_mode, reason) = if bundled_running {
+        ("bundled", "Complete private Ollama runtime is running on Openguin port 11435.")
+    } else if bundled_available {
+        ("bundled", "Complete private Ollama runtime is installed and ready to start.")
+    } else if external_running {
+        ("external", "Private runtime is unavailable; the running external Ollama service can be used or repaired from Overview.")
+    } else if external_installed {
+        ("external", "An external Ollama installation was found but its API is not running. Openguin can also download its own private runtime.")
+    } else {
+        ("bundled", "Private Ollama runtime is missing. Use Download / Repair Ollama on Overview.")
+    };
+    Ok(RuntimeDiscovery {
+        bundled_available,
+        bundled_running,
+        external_installed,
+        external_running,
+        external_path,
+        external_version,
+        recommended_mode: recommended_mode.into(),
+        reason: reason.into(),
+    })
+}
 
 #[tauri::command]
-async fn import_hf_gguf(app:AppHandle,state:State<'_,OllamaState>,mode:String,repo_id:String,filename:String,model:String,license:Option<String>,expected_sha256:Option<String>)->Result<(),String>{if !repo_id.contains('/')||!filename.to_ascii_lowercase().ends_with(".gguf")||model.trim().is_empty(){return Err("Invalid GGUF import request".into())}let id=format!("{repo_id}:{filename}");state.cancelled_imports.lock().map_err(|_|"lock".to_string())?.remove(&id);let h=host(&mode)?;let c=reqwest::Client::builder().timeout(Duration::from_secs(43200)).user_agent("ModelDock/0.6").build().map_err(|e|e.to_string())?;let source=format!("https://huggingface.co/{repo_id}/resolve/main/{}?download=true",enc_path(&filename));let r=c.get(&source).send().await.map_err(|e|e.to_string())?;if !r.status().is_success(){return Err(format!("GGUF download failed: {}",r.status()))}let total=r.content_length();if total.is_some_and(|n|free_bytes()>0&&n+2*1024*1024*1024>free_bytes()){return Err("Not enough free disk space for this GGUF plus safety headroom".into())}let dir=imports_dir(&app)?.join(safe(&repo_id));fs::create_dir_all(&dir).map_err(|e|e.to_string())?;let file_path=dir.join(safe(&filename));let mut file=tokio::fs::File::create(&file_path).await.map_err(|e|e.to_string())?;let mut stream=r.bytes_stream();let mut hasher=Sha256::new();let mut completed=0;emit_import(&app,ImportProgress{mode:mode.clone(),import_id:id.clone(),repo_id:repo_id.clone(),filename:filename.clone(),model:model.clone(),stage:"download".into(),status:"Downloading GGUF".into(),total,completed:Some(0),percent:Some(0.0),sha256:None,done:false,cancelled:false,error:None});while let Some(chunk)=stream.next().await{if state.cancelled_imports.lock().map_err(|_|"lock".to_string())?.contains(&id){let _=tokio::fs::remove_file(&file_path).await;emit_import(&app,ImportProgress{mode:mode.clone(),import_id:id,repo_id,filename,model,stage:"cancelled".into(),status:"Cancelled".into(),total,completed:Some(completed),percent:None,sha256:None,done:true,cancelled:true,error:None});return Ok(())}let chunk=chunk.map_err(|e|e.to_string())?;file.write_all(&chunk).await.map_err(|e|e.to_string())?;hasher.update(&chunk);completed+=chunk.len()as u64;let percent=total.filter(|t|*t>0).map(|t|completed as f64/t as f64*100.0);emit_import(&app,ImportProgress{mode:mode.clone(),import_id:id.clone(),repo_id:repo_id.clone(),filename:filename.clone(),model:model.clone(),stage:"download".into(),status:"Downloading GGUF".into(),total,completed:Some(completed),percent,sha256:None,done:false,cancelled:false,error:None})}file.flush().await.map_err(|e|e.to_string())?;drop(file);let sha=format!("{:x}",hasher.finalize());if let Some(exp)=expected_sha256.as_ref().filter(|s|!s.is_empty()){if !exp.eq_ignore_ascii_case(&sha){let _=tokio::fs::remove_file(&file_path).await;return Err(format!("SHA-256 mismatch. Expected {exp}, got {sha}"))}}emit_import(&app,ImportProgress{mode:mode.clone(),import_id:id.clone(),repo_id:repo_id.clone(),filename:filename.clone(),model:model.clone(),stage:"verify".into(),status:"SHA-256 verified".into(),total,completed:Some(completed),percent:Some(100.0),sha256:Some(sha.clone()),done:false,cancelled:false,error:None});let digest=format!("sha256:{sha}");let f=tokio::fs::File::open(&file_path).await.map_err(|e|e.to_string())?;let up=c.put(format!("http://{h}/api/blobs/{digest}")).body(reqwest::Body::wrap_stream(ReaderStream::new(f))).send().await.map_err(|e|e.to_string())?;if !up.status().is_success(){return Err(format!("Ollama blob upload failed: {}",up.status()))}let mut files=serde_json::Map::new();files.insert(filename.clone(),Value::String(digest));let create=c.post(format!("http://{h}/api/create")).json(&json!({"model":model,"files":files,"license":license.clone().unwrap_or_default(),"stream":false})).send().await.map_err(|e|e.to_string())?;let st=create.status();let txt=create.text().await.map_err(|e|e.to_string())?;if !st.is_success(){return Err(format!("Ollama model creation failed: {st}: {txt}"))}let modelfile=format!("# Generated by ModelDock 0.6\n# Source: https://huggingface.co/{repo_id}\n# File: {filename}\n# SHA256: {sha}\n# License metadata: {}\nFROM ./{}\n",license.clone().unwrap_or_else(||"not declared".into()),safe(&filename));fs::write(dir.join(format!("{}.Modelfile",safe(&model))),modelfile).map_err(|e|e.to_string())?;fs::write(dir.join(format!("{}.provenance.json",safe(&model))),serde_json::to_vec_pretty(&json!({"repoId":repo_id,"filename":filename,"model":model,"sha256":sha,"license":license,"sourceUrl":source})).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;let _=tokio::fs::remove_file(&file_path).await;emit_import(&app,ImportProgress{mode:mode.clone(),import_id:id,repo_id,filename,model,stage:"done".into(),status:"Imported successfully".into(),total,completed:Some(completed),percent:Some(100.0),sha256:Some(sha),done:true,cancelled:false,error:None});Ok(())}
+fn start_bundled_ollama(app: AppHandle, state: State<'_, OllamaState>) -> Result<EngineInfo, String> {
+    let d = models_dir(&app)?;
+    let r = runtime_dir(&app)?;
+    let bin = runtime_bin(&app)?;
+    let runner = find_runner(&r).ok_or_else(|| {
+        "Private Ollama runtime is incomplete: llama-server is missing. Use Download / Repair Ollama on Overview.".to_string()
+    })?;
+    {
+        let mut g = state.child.lock().map_err(|_| "state lock".to_string())?;
+        let exited = match g.as_mut() {
+            Some(c) => c.try_wait().map_err(|e| e.to_string())?.is_some(),
+            None => false,
+        };
+        if exited {
+            *g = None;
+        }
+        if g.is_none() {
+            let log_path = runtime_log(&app)?;
+            let log = fs::OpenOptions::new()
+                .create(true)
+                .append(true)
+                .open(&log_path)
+                .map_err(|e| e.to_string())?;
+            let log2 = log.try_clone().map_err(|e| e.to_string())?;
+            let runner_dir = runner.parent().unwrap_or(&r);
+            let lib_path = format!("{}:{}", r.display(), runner_dir.display());
+            let child = Command::new(&bin)
+                .arg("serve")
+                .current_dir(&r)
+                .env("OLLAMA_HOST", BUNDLED_HOST)
+                .env("OLLAMA_MODELS", d.to_string_lossy().to_string())
+                .env("OLLAMA_LIBRARY_PATH", lib_path)
+                .env("DYLD_LIBRARY_PATH", r.to_string_lossy().to_string())
+                .env("OLLAMA_ORIGINS", "tauri://localhost;http://tauri.localhost")
+                .env("OLLAMA_KEEP_ALIVE", "5m")
+                .stdout(Stdio::from(log2))
+                .stderr(Stdio::from(log))
+                .spawn()
+                .map_err(|e| format!("Failed to start private Ollama runtime: {e}"))?;
+            *g = Some(child);
+        }
+    }
+    for _ in 0..160 {
+        if std::net::TcpStream::connect(BUNDLED_HOST).is_ok() {
+            return Ok(EngineInfo {
+                mode: "bundled",
+                host: BUNDLED_HOST,
+                api_base: format!("http://{BUNDLED_HOST}"),
+                models_dir: d.to_string_lossy().into(),
+                running: true,
+            });
+        }
+        std::thread::sleep(Duration::from_millis(125));
+    }
+    let mut g = state.child.lock().map_err(|_| "state lock".to_string())?;
+    if let Some(mut c) = g.take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+    Err(format!(
+        "Private Ollama did not become ready on 127.0.0.1:11435. See {}",
+        runtime_log(&app)?.display()
+    ))
+}
 
-#[cfg_attr(mobile,tauri::mobile_entry_point)]
-pub fn run(){tauri::Builder::default().manage(OllamaState::default()).plugin(tauri_plugin_shell::init()).invoke_handler(tauri::generate_handler![system_profile,bundled_engine_info,external_engine_info,runtime_discovery,start_bundled_ollama,stop_bundled_ollama,ollama_json,pull_model,cancel_pull,search_huggingface,list_hf_gguf_variants,import_hf_gguf,cancel_hf_import]).setup(|app|{let _=models_dir(&app.handle());let _=imports_dir(&app.handle());Ok(())}).run(tauri::generate_context!()).expect("error while running ModelDock");}
+#[tauri::command]
+fn stop_bundled_ollama(state: State<'_, OllamaState>) -> Result<(), String> {
+    let mut g = state.child.lock().map_err(|_| "state lock".to_string())?;
+    if let Some(mut c) = g.take() {
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn ollama_json(mode: String, method: String, path: String, body: Option<Value>) -> Result<Value, String> {
+    if !allowed(&path) {
+        return Err("This Ollama API path is not allowed by Openguin".into());
+    }
+    if let Some(b) = &body {
+        if serde_json::to_vec(b).map_err(|e| e.to_string())?.len() > MAX_JSON_BYTES {
+            return Err("Request is too large".into());
+        }
+    }
+    let url = format!("http://{}{}", host(&mode)?, path);
+    let c = reqwest::Client::builder()
+        .timeout(Duration::from_secs(600))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let req = match method.as_str() {
+        "GET" => c.get(url),
+        "POST" => c.post(url).json(&body.unwrap_or_else(|| json!({}))),
+        "DELETE" => c.delete(url).json(&body.unwrap_or_else(|| json!({}))),
+        _ => return Err("Unsupported method".into()),
+    };
+    let r = req.send().await.map_err(|e| e.to_string())?;
+    let st = r.status();
+    let txt = r.text().await.map_err(|e| e.to_string())?;
+    if !st.is_success() {
+        return Err(format!("Ollama returned {st}: {txt}"));
+    }
+    if txt.trim().is_empty() {
+        Ok(Value::Null)
+    } else {
+        serde_json::from_str(&txt).map_err(|e| e.to_string())
+    }
+}
+
+#[tauri::command]
+async fn pull_model(app: AppHandle, state: State<'_, OllamaState>, mode: String, model: String) -> Result<(), String> {
+    let model = model.trim().to_string();
+    if model.is_empty() || model.len() > 180 {
+        return Err("Invalid model name".into());
+    }
+    state.cancelled_pulls.lock().map_err(|_| "lock".to_string())?.remove(&model);
+    let c = reqwest::Client::builder()
+        .timeout(Duration::from_secs(21600))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let r = c
+        .post(format!("http://{}/api/pull", host(&mode)?))
+        .json(&json!({"model":model,"stream":true}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !r.status().is_success() {
+        return Err(format!("Ollama pull failed: {}", r.status()));
+    }
+    let mut s = r.bytes_stream();
+    let mut pending = String::new();
+    while let Some(ch) = s.next().await {
+        if state
+            .cancelled_pulls
+            .lock()
+            .map_err(|_| "lock".to_string())?
+            .contains(&model)
+        {
+            let _ = app.emit(
+                "modeldock://pull-progress",
+                PullProgress {
+                    model: model.clone(),
+                    status: "Cancelled".into(),
+                    digest: None,
+                    total: None,
+                    completed: None,
+                    percent: None,
+                    done: true,
+                    cancelled: true,
+                    error: None,
+                },
+            );
+            return Ok(());
+        }
+        pending.push_str(&String::from_utf8_lossy(&ch.map_err(|e| e.to_string())?));
+        while let Some(pos) = pending.find('\n') {
+            let line = pending[..pos].trim().to_string();
+            pending = pending[pos + 1..].to_string();
+            if line.is_empty() {
+                continue;
+            }
+            if let Ok(v) = serde_json::from_str::<Value>(&line) {
+                let total = v.get("total").and_then(Value::as_u64);
+                let completed = v.get("completed").and_then(Value::as_u64);
+                let percent = match (total, completed) {
+                    (Some(t), Some(x)) if t > 0 => Some(x as f64 / t as f64 * 100.0),
+                    _ => None,
+                };
+                let status = v
+                    .get("status")
+                    .and_then(Value::as_str)
+                    .unwrap_or("Downloading")
+                    .to_string();
+                let done = status == "success";
+                let _ = app.emit(
+                    "modeldock://pull-progress",
+                    PullProgress {
+                        model: model.clone(),
+                        status,
+                        digest: v.get("digest").and_then(Value::as_str).map(str::to_owned),
+                        total,
+                        completed,
+                        percent,
+                        done,
+                        cancelled: false,
+                        error: v.get("error").and_then(Value::as_str).map(str::to_owned),
+                    },
+                );
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+fn cancel_pull(state: State<'_, OllamaState>, model: String) -> Result<(), String> {
+    state.cancelled_pulls.lock().map_err(|_| "lock".to_string())?.insert(model);
+    Ok(())
+}
+
+#[tauri::command]
+async fn search_huggingface(query: String, limit: Option<u8>) -> Result<Value, String> {
+    let c = reqwest::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent("Openguin/0.10")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let p = [
+        ("search", query),
+        ("filter", "gguf".into()),
+        ("sort", "downloads".into()),
+        ("direction", "-1".into()),
+        ("limit", limit.unwrap_or(24).min(50).to_string()),
+        ("full", "true".into()),
+    ];
+    let r = c
+        .get("https://huggingface.co/api/models")
+        .query(&p)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !r.status().is_success() {
+        return Err(format!("Hugging Face returned {}", r.status()));
+    }
+    r.json().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn list_hf_gguf_variants(repo_id: String) -> Result<Vec<HfVariant>, String> {
+    if !repo_id.contains('/') || repo_id.len() > 180 {
+        return Err("Invalid Hugging Face repository ID".into());
+    }
+    let c = reqwest::Client::builder()
+        .timeout(Duration::from_secs(30))
+        .user_agent("Openguin/0.10")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let r = c
+        .get(format!("https://huggingface.co/api/models/{repo_id}/tree/main"))
+        .query(&[("recursive", "true"), ("expand", "true")])
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !r.status().is_success() {
+        return Err(format!("Unable to list repository files: {}", r.status()));
+    }
+    let items = r.json::<Vec<Value>>().await.map_err(|e| e.to_string())?;
+    let mut out = Vec::new();
+    for item in items {
+        let path = item
+            .get("path")
+            .or_else(|| item.get("rfilename"))
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        if !path.to_ascii_lowercase().ends_with(".gguf") {
+            continue;
+        }
+        let size = item
+            .get("size")
+            .and_then(Value::as_u64)
+            .or_else(|| item.get("lfs").and_then(|v| v.get("size")).and_then(Value::as_u64))
+            .unwrap_or(0);
+        let sha = item
+            .get("lfs")
+            .and_then(|v| v.get("sha256"))
+            .and_then(Value::as_str)
+            .map(str::to_owned);
+        out.push(HfVariant {
+            filename: path.into(),
+            size,
+            quantization: quant(path),
+            sha256: sha,
+            source_url: format!(
+                "https://huggingface.co/{repo_id}/resolve/main/{}?download=true",
+                enc_path(path)
+            ),
+        });
+    }
+    out.sort_by_key(|v| v.size);
+    Ok(out)
+}
+
+#[tauri::command]
+fn cancel_hf_import(state: State<'_, OllamaState>, import_id: String) -> Result<(), String> {
+    state
+        .cancelled_imports
+        .lock()
+        .map_err(|_| "lock".to_string())?
+        .insert(import_id);
+    Ok(())
+}
+
+#[tauri::command]
+async fn import_hf_gguf(
+    app: AppHandle,
+    state: State<'_, OllamaState>,
+    mode: String,
+    repo_id: String,
+    filename: String,
+    model: String,
+    license: Option<String>,
+    expected_sha256: Option<String>,
+) -> Result<(), String> {
+    if !repo_id.contains('/') || !filename.to_ascii_lowercase().ends_with(".gguf") || model.trim().is_empty() {
+        return Err("Invalid GGUF import request".into());
+    }
+    let id = format!("{repo_id}:{filename}");
+    state
+        .cancelled_imports
+        .lock()
+        .map_err(|_| "lock".to_string())?
+        .remove(&id);
+    let h = host(&mode)?;
+    let c = reqwest::Client::builder()
+        .timeout(Duration::from_secs(43200))
+        .user_agent("Openguin/0.10")
+        .build()
+        .map_err(|e| e.to_string())?;
+    let source = format!(
+        "https://huggingface.co/{repo_id}/resolve/main/{}?download=true",
+        enc_path(&filename)
+    );
+    let r = c.get(&source).send().await.map_err(|e| e.to_string())?;
+    if !r.status().is_success() {
+        return Err(format!("GGUF download failed: {}", r.status()));
+    }
+    let total = r.content_length();
+    if total.is_some_and(|n| free_bytes() > 0 && n + 2 * 1024 * 1024 * 1024 > free_bytes()) {
+        return Err("Not enough free disk space for this GGUF plus safety headroom".into());
+    }
+    let dir = imports_dir(&app)?.join(safe(&repo_id));
+    fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let file_path = dir.join(safe(&filename));
+    let mut file = tokio::fs::File::create(&file_path).await.map_err(|e| e.to_string())?;
+    let mut stream = r.bytes_stream();
+    let mut hasher = Sha256::new();
+    let mut completed = 0;
+    emit_import(
+        &app,
+        ImportProgress {
+            mode: mode.clone(),
+            import_id: id.clone(),
+            repo_id: repo_id.clone(),
+            filename: filename.clone(),
+            model: model.clone(),
+            stage: "download".into(),
+            status: "Downloading GGUF".into(),
+            total,
+            completed: Some(0),
+            percent: Some(0.0),
+            sha256: None,
+            done: false,
+            cancelled: false,
+            error: None,
+        },
+    );
+    while let Some(chunk) = stream.next().await {
+        if state
+            .cancelled_imports
+            .lock()
+            .map_err(|_| "lock".to_string())?
+            .contains(&id)
+        {
+            let _ = tokio::fs::remove_file(&file_path).await;
+            emit_import(
+                &app,
+                ImportProgress {
+                    mode: mode.clone(),
+                    import_id: id,
+                    repo_id,
+                    filename,
+                    model,
+                    stage: "cancelled".into(),
+                    status: "Cancelled".into(),
+                    total,
+                    completed: Some(completed),
+                    percent: None,
+                    sha256: None,
+                    done: true,
+                    cancelled: true,
+                    error: None,
+                },
+            );
+            return Ok(());
+        }
+        let chunk = chunk.map_err(|e| e.to_string())?;
+        file.write_all(&chunk).await.map_err(|e| e.to_string())?;
+        hasher.update(&chunk);
+        completed += chunk.len() as u64;
+        let percent = total.filter(|t| *t > 0).map(|t| completed as f64 / t as f64 * 100.0);
+        emit_import(
+            &app,
+            ImportProgress {
+                mode: mode.clone(),
+                import_id: id.clone(),
+                repo_id: repo_id.clone(),
+                filename: filename.clone(),
+                model: model.clone(),
+                stage: "download".into(),
+                status: "Downloading GGUF".into(),
+                total,
+                completed: Some(completed),
+                percent,
+                sha256: None,
+                done: false,
+                cancelled: false,
+                error: None,
+            },
+        );
+    }
+    file.flush().await.map_err(|e| e.to_string())?;
+    drop(file);
+    let sha = format!("{:x}", hasher.finalize());
+    if let Some(exp) = expected_sha256.as_ref().filter(|s| !s.is_empty()) {
+        if !exp.eq_ignore_ascii_case(&sha) {
+            let _ = tokio::fs::remove_file(&file_path).await;
+            return Err(format!("SHA-256 mismatch. Expected {exp}, got {sha}"));
+        }
+    }
+    emit_import(
+        &app,
+        ImportProgress {
+            mode: mode.clone(),
+            import_id: id.clone(),
+            repo_id: repo_id.clone(),
+            filename: filename.clone(),
+            model: model.clone(),
+            stage: "verify".into(),
+            status: "SHA-256 verified".into(),
+            total,
+            completed: Some(completed),
+            percent: Some(100.0),
+            sha256: Some(sha.clone()),
+            done: false,
+            cancelled: false,
+            error: None,
+        },
+    );
+    let digest = format!("sha256:{sha}");
+    let f = tokio::fs::File::open(&file_path).await.map_err(|e| e.to_string())?;
+    let up = c
+        .put(format!("http://{h}/api/blobs/{digest}"))
+        .body(reqwest::Body::wrap_stream(ReaderStream::new(f)))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !up.status().is_success() {
+        return Err(format!("Ollama blob upload failed: {}", up.status()));
+    }
+    let mut files = serde_json::Map::new();
+    files.insert(filename.clone(), Value::String(digest));
+    let create = c
+        .post(format!("http://{h}/api/create"))
+        .json(&json!({"model":model,"files":files,"license":license.clone().unwrap_or_default(),"stream":false}))
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    let st = create.status();
+    let txt = create.text().await.map_err(|e| e.to_string())?;
+    if !st.is_success() {
+        return Err(format!("Ollama model creation failed: {st}: {txt}"));
+    }
+    let modelfile = format!(
+        "# Generated by Openguin\n# Source: https://huggingface.co/{repo_id}\n# File: {filename}\n# SHA256: {sha}\n# License metadata: {}\nFROM ./{}\n",
+        license.clone().unwrap_or_else(|| "not declared".into()),
+        safe(&filename)
+    );
+    fs::write(dir.join(format!("{}.Modelfile", safe(&model))), modelfile).map_err(|e| e.to_string())?;
+    fs::write(
+        dir.join(format!("{}.provenance.json", safe(&model))),
+        serde_json::to_vec_pretty(&json!({
+            "repoId":repo_id,
+            "filename":filename,
+            "model":model,
+            "sha256":sha,
+            "license":license,
+            "sourceUrl":source
+        }))
+        .map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let _ = tokio::fs::remove_file(&file_path).await;
+    emit_import(
+        &app,
+        ImportProgress {
+            mode: mode.clone(),
+            import_id: id,
+            repo_id,
+            filename,
+            model,
+            stage: "done".into(),
+            status: "Imported successfully".into(),
+            total,
+            completed: Some(completed),
+            percent: Some(100.0),
+            sha256: Some(sha),
+            done: true,
+            cancelled: false,
+            error: None,
+        },
+    );
+    Ok(())
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .manage(OllamaState::default())
+        .plugin(tauri_plugin_shell::init())
+        .invoke_handler(tauri::generate_handler![
+            system_profile,
+            bundled_engine_info,
+            external_engine_info,
+            runtime_discovery,
+            start_bundled_ollama,
+            stop_bundled_ollama,
+            ollama_json,
+            pull_model,
+            cancel_pull,
+            search_huggingface,
+            list_hf_gguf_variants,
+            import_hf_gguf,
+            cancel_hf_import,
+            official_ollama_catalog,
+            chat_stream,
+            universal_model_search,
+            universal_model_variants,
+            repair_bundled_runtime,
+            bundled_ollama_log,
+            modeldock_backend_log,
+            append_modeldock_log,
+            clear_diagnostic_log,
+        ])
+        .setup(|app| {
+            let _ = models_dir(&app.handle());
+            let _ = imports_dir(&app.handle());
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running Openguin");
+}

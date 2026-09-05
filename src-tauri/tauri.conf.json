@@ -25,9 +25,6 @@
       "icons/icon.icns",
       "icons/icon.png"
     ],
-    "resources": {
-      "resources/ollama-runtime/": "ollama-runtime/"
-    },
     "macOS": {
       "dmg": {
         "appPosition": {"x": 180, "y": 220},

@@ -5,6 +5,19 @@ root=Path(__file__).resolve().parents[1]
 p=root/'src'/'App07.tsx'
 t=p.read_text()
 
+if 'OPENGUIN_011_STATIC_COMPOSITION' in t:
+    required=[
+        "import Observatory from './Observatory';",
+        "type Tab='overview'|'observatory'",
+        'loadDuration?:number', 'promptEvalDuration?:number', 'loadMs?:number',
+        'loadMs:p.loadDuration', "observatory:'Observatory'", "<Observatory mode={mode}"
+    ]
+    missing=[x for x in required if x not in t]
+    if missing:
+        raise SystemExit('apply-observatory: static 0.11 Observatory composition incomplete: '+', '.join(missing))
+    print('Observatory patch skipped: 0.11 navigation and generation telemetry are already static and verified.')
+    raise SystemExit(0)
+
 if "import Observatory from './Observatory';" not in t:
     t=t.replace("import './app07.css';", "import './app07.css';\nimport Observatory from './Observatory';")
 
@@ -16,14 +29,28 @@ t=t.replace("(['overview','models','lab','library','diagnostics','developer'] as
 t=t.replace("({overview:'Overview',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)", "({overview:'Overview',observatory:'Observatory',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)")
 t=t.replace("({overview:'Control Center',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)", "({overview:'Control Center',observatory:'Runtime Observatory',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)")
 
-old="const b:Bench={at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink};"
-new="const b:Bench={at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink,loadMs:p.loadDuration?p.loadDuration/1e6:undefined,promptMs:p.promptEvalDuration?p.promptEvalDuration/1e6:undefined,decodeMs:p.evalDuration?p.evalDuration/1e6:undefined,promptTokens:p.promptEvalCount,doneReason:p.doneReason};"
-t=t.replace(old,new)
+telemetry="loadMs:p.loadDuration?p.loadDuration/1e6:undefined,promptMs:p.promptEvalDuration?p.promptEvalDuration/1e6:undefined,decodeMs:p.evalDuration?p.evalDuration/1e6:undefined,promptTokens:p.promptEvalCount,doneReason:p.doneReason"
+bench_rewrites={
+    "const b:Bench={at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink};":
+        f"const b:Bench={{at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink,{telemetry}}};",
+    "const b:Bench={at:new Date().toISOString(),model:runModel,ctx:runCtx,temperature:runTemp,tokS:speed,tokens,mode:runMode,thinking:runThinking};":
+        f"const b:Bench={{at:new Date().toISOString(),model:runModel,ctx:runCtx,temperature:runTemp,tokS:speed,tokens,mode:runMode,thinking:runThinking,{telemetry}}};",
+}
+if "loadMs:p.loadDuration" not in t:
+    replaced=False
+    for old,new in bench_rewrites.items():
+        if old in t:
+            t=t.replace(old,new,1);replaced=True;break
+    if not replaced:
+        raise SystemExit('apply-observatory: benchmark construction anchor not found; refusing to lose generation pipeline telemetry')
 
 anchor="  {tab==='models'&&<div className=\"v07-page two\">"
 insert="  {tab==='observatory'&&<Observatory mode={mode} memoryBytes={memory} installedCount={models.length} online={online}/>}\n\n"
 if insert.strip() not in t and anchor in t:
     t=t.replace(anchor,insert+anchor)
 
+for required in ["observatory:'Observatory'","loadDuration?:number","loadMs?:number","loadMs:p.loadDuration","<Observatory mode={mode}"]:
+    if required not in t:
+        raise SystemExit(f'apply-observatory: required integration missing after patch: {required}')
 p.write_text(t)
-print('Applied Openguin Observatory: live /api/ps, memory/context views, performance trend, and generation pipeline telemetry.')
+print('Applied legacy Observatory integration.')
