@@ -1,30 +1,6 @@
 import {invoke} from '@tauri-apps/api/core';
-import {loadEngineeringDataset,type EngineeringCalibrationPoint} from './engineeringCalibrationDataset011';
-import type {BenchmarkResource012} from './benchmarkTelemetry012';
-
-export type BenchmarkEnvironment012={
-  capturedAt:string;
-  chip:string;
-  arch:string;
-  memoryBytes:number;
-  logicalCores:number;
-  freeStorageBytes:number;
-  runtimeVersion:string;
-  modelFamily:string;
-  parameterSize:string;
-  quantization:string;
-};
-
-export type BenchmarkCalibrationLink012={
-  calibrationPointId:string;
-  calibrationRecordedAt:string;
-  confidence:'strong'|'moderate';
-  ageSeconds:number;
-  contextMatch:'requested'|'measured';
-  modelBytesDeltaPct:number;
-  runtimeBytesDeltaPct:number;
-  note:string;
-};
+import {loadEngineeringDataset} from './engineeringCalibrationDataset011';
+import type {BenchmarkCalibrationLink012,BenchmarkEnvironment012,BenchmarkResource012} from './benchmarkTelemetry012';
 
 type Mode='bundled'|'external';
 type Profile={chip?:string;arch?:string;memoryBytes?:number;logicalCores?:number;freeStorageBytes?:number};
