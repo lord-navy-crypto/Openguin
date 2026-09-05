@@ -26,7 +26,19 @@ The planner converts model size and requested context into estimates for:
 - macOS reserve,
 - total projected runtime memory.
 
-These are engineering estimates, not guarantees. The UI must label them as estimates and later compare them against Observatory measurements.
+These are engineering estimates, not guarantees. The UI labels them as estimates and the later calibration stage will compare them against Observatory measurements.
+
+### Operating Envelope
+
+0.11 now renders a two-dimensional operating-envelope map over **estimated model footprint × context window**. Each operating point is classified as:
+
+- **Safe** — projected load stays within the controller's preferred margin.
+- **Constrained** — projected load remains inside the selected policy budget but with reduced headroom.
+- **Outside** — projected load exceeds the recommended runtime budget.
+
+Envelope cells are interactive: selecting one feeds the operating point back into the runtime planner. This makes the map part of the controller workflow rather than a decorative chart.
+
+The planner also exposes **control margin**, the estimated percentage of runtime budget remaining after the selected operating point is applied.
 
 ## Layer C — Controller / policy
 
@@ -56,6 +68,17 @@ Automatic changes should always be reversible, visible in Task Center, and expla
 
 This creates a closed loop rather than a one-shot recommendation system.
 
+### Backend command contract
+
+0.11 adds a prepared-backend contract test after the legacy preparation layer runs. It verifies that the final Tauri handler actually registers the production commands required by:
+
+- core runtime and model management,
+- Global Library,
+- runtime repair,
+- persistent diagnostics / Full Logs.
+
+This test was added after 0.11 found a real patch-order defect: `apply-full-logs.py` imported diagnostic commands but its old exact-string handler replacement no longer matched after v0.10 commands had been appended. The patcher now registers commands by inspecting the handler body and fails loudly if the handler cannot be found.
+
 ## Engineering disciplines represented
 
 ### Electrical and Computer Engineering / Control
@@ -72,7 +95,7 @@ Model selection and runtime configuration become resource-allocation problems: m
 
 ### Software Engineering / Reliability Engineering
 
-Penguin Doctor, runtime repair, deterministic startup, Task Center state, fault reporting and reproducible builds make reliability a first-class subsystem rather than an error dialog.
+Penguin Doctor, runtime repair, deterministic startup, Task Center state, fault reporting, command-contract verification and reproducible builds make reliability a first-class subsystem rather than an error dialog.
 
 ### Human–Computer Interaction
 
@@ -80,7 +103,7 @@ Ordinary users should see simple recommendations such as **Safe**, **Balanced**,
 
 ## Special OpenPenguin features to build from this foundation
 
-1. **Operating Envelope** — show the safe region for model size × context on the current Mac.
+1. **Operating Envelope** — implemented in 0.11; next step is measured calibration.
 2. **Plan vs. Measured** — compare predicted memory and speed with Observatory telemetry after every benchmark.
 3. **Adaptive Context** — automatically lower context only when necessary and explain the change.
 4. **Memory Guard** — unload idle models before macOS reaches severe pressure.
@@ -99,16 +122,22 @@ The current `desktop:prepare` pipeline uses patch scripts to modify core Rust an
 - verification scripts read/check source but do not mutate it,
 - CI builds from a clean checkout and confirms no tracked source changed during preparation.
 
+CI now includes an explicit **build-time source mutation audit**. It is informational while issue #2 is open, so the existing build remains usable while the mutation layer is removed incrementally.
+
 ## 0.11 acceptance sequence
 
 - [x] Create isolated 0.11 feature branch.
 - [x] Add Engineering control drawer.
 - [x] Add explainable memory/context planner.
+- [x] Add Operating Envelope and control-margin visualization.
 - [x] Add advisory Penguin Doctor checks.
 - [x] Add staged native adaptive-runtime backend prototype.
-- [ ] Compile and run on macOS.
+- [x] Build a macOS Universal2 `.app` and `.dmg` in CI.
+- [x] Add prepared-backend command-contract verification.
+- [x] Add build-time source-mutation audit to CI.
+- [ ] Launch and interactively test the 0.11 drawer on a physical Mac.
 - [ ] Validate planner estimates against Observatory measurements.
 - [ ] Move validated native sensors into the production Tauri handler.
 - [ ] Connect safe actuators and Task Center events.
 - [ ] Remove build-time mutation of core source.
-- [ ] Add regression tests and clean-checkout build verification.
+- [ ] Enforce clean-checkout / no-source-mutation CI after the migration.
