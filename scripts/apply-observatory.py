@@ -16,14 +16,31 @@ t=t.replace("(['overview','models','lab','library','diagnostics','developer'] as
 t=t.replace("({overview:'Overview',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)", "({overview:'Overview',observatory:'Observatory',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)")
 t=t.replace("({overview:'Control Center',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)", "({overview:'Control Center',observatory:'Runtime Observatory',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)")
 
-old="const b:Bench={at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink};"
-new="const b:Bench={at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink,loadMs:p.loadDuration?p.loadDuration/1e6:undefined,promptMs:p.promptEvalDuration?p.promptEvalDuration/1e6:undefined,decodeMs:p.evalDuration?p.evalDuration/1e6:undefined,promptTokens:p.promptEvalCount,doneReason:p.doneReason};"
-t=t.replace(old,new)
+telemetry="loadMs:p.loadDuration?p.loadDuration/1e6:undefined,promptMs:p.promptEvalDuration?p.promptEvalDuration/1e6:undefined,decodeMs:p.evalDuration?p.evalDuration/1e6:undefined,promptTokens:p.promptEvalCount,doneReason:p.doneReason"
+bench_rewrites={
+    "const b:Bench={at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink};":
+        f"const b:Bench={{at:new Date().toISOString(),model:selected,ctx,temperature:temp,tokS:speed,tokens,mode:modeRef.current,thinking:thinking&&canThink,{telemetry}}};",
+    "const b:Bench={at:new Date().toISOString(),model:runModel,ctx:runCtx,temperature:runTemp,tokS:speed,tokens,mode:runMode,thinking:runThinking};":
+        f"const b:Bench={{at:new Date().toISOString(),model:runModel,ctx:runCtx,temperature:runTemp,tokS:speed,tokens,mode:runMode,thinking:runThinking,{telemetry}}};",
+}
+if "loadMs:p.loadDuration" not in t:
+    replaced=False
+    for old,new in bench_rewrites.items():
+        if old in t:
+            t=t.replace(old,new,1)
+            replaced=True
+            break
+    if not replaced:
+        raise SystemExit('apply-observatory: benchmark construction anchor not found; refusing to lose generation pipeline telemetry')
 
 anchor="  {tab==='models'&&<div className=\"v07-page two\">"
 insert="  {tab==='observatory'&&<Observatory mode={mode} memoryBytes={memory} installedCount={models.length} online={online}/>}\n\n"
 if insert.strip() not in t and anchor in t:
     t=t.replace(anchor,insert+anchor)
 
+for required in ["observatory:'Observatory'","loadDuration?:number","loadMs?:number","loadMs:p.loadDuration","<Observatory mode={mode}"]:
+    if required not in t:
+        raise SystemExit(f'apply-observatory: required integration missing after patch: {required}')
+
 p.write_text(t)
-print('Applied Openguin Observatory: live /api/ps, memory/context views, performance trend, and generation pipeline telemetry.')
+print('Applied Openguin Observatory with request-snapshot-compatible generation pipeline telemetry.')
