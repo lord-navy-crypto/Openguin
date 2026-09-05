@@ -33,6 +33,7 @@ require("src/MegaLibrary.tsx", "const searchSeq=useRef(0),variantSeq=useRef(0)",
 require("src/MegaLibrary.tsx", "CACHE_TTL=15*60*1000", "local index cache")
 require("src/MegaLibrary.tsx", "cached results preserved", "network-failure cache fallback")
 require("src/MegaLibrary.tsx", "trustedOnly", "license/risk filter")
+require("src/MegaLibrary.tsx", "useEffect(()=>{search(q,source)},[source])", "query-preserving source switch")
 
 # Observatory: health and calibration signals.
 require("src/Observatory.tsx", "SYSTEM HEALTH", "runtime health strip")
@@ -49,6 +50,19 @@ require("src/RuntimeControl09.tsx", "Verifying /api/ps runtime state", "post-act
 require("src/RuntimeControl09.tsx", "model did not appear in /api/ps", "preload verification")
 require("src/RuntimeControl09.tsx", "model is still resident in /api/ps", "unload verification")
 require("src/RuntimeControl09.tsx", "if(!document.hidden)refresh()", "background polling reduction")
+require("src/RuntimeControl09.tsx", "setTarget(v=>v||nextModels[0]?.name||'')", "poll-safe target selection")
+
+# Advanced settings: reversible presets for common operating goals.
+require("src/AdvancedSettings010.tsx", "Reproducible", "reproducible preset")
+require("src/AdvancedSettings010.tsx", "Low residency", "low-residency preset")
+require("src/AdvancedSettings010.tsx", "p.setSeed(42)", "fixed-seed preset")
+require("src/advanced-settings010.css", ".adv10-presets", "preset controls styling")
+
+# Cold/warm benchmark: verify the cold precondition and avoid hidden-window polling.
+require("src/CompareBench09.tsx", "Cold-start precondition failed", "verified unload precondition")
+require("src/CompareBench09.tsx", "options:{num_predict:8,temperature:0,seed:42}", "reproducible benchmark request")
+require("src/CompareBench09.tsx", "if(!document.hidden)sample()", "background sampling reduction")
+require("src/CompareBench09.tsx", "Warm decode delta", "benchmark delta summary")
 
 if errors:
     print("OpenPenguin 0.11 legacy hardening verification FAILED")
@@ -63,3 +77,5 @@ print(" - Global Library rejects stale responses and preserves cache")
 print(" - Observatory exposes health/calibration signals")
 print(" - Runtime Repair requires post-install rediscovery")
 print(" - Runtime Control verifies live load/unload state")
+print(" - Advanced Settings provides reversible workload presets")
+print(" - Cold/warm benchmark verifies its cold-start precondition")
