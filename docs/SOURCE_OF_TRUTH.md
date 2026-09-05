@@ -4,7 +4,7 @@ OpenPenguin 0.11 adopts a static source-of-truth build model.
 
 ## Production rule
 
-The source reviewed in Git must be the source compiled into the desktop app.
+The source reviewed in Git must be the source compiled into the desktop app. Checked-in **production source** is the authoritative implementation.
 
 Production Rust, React, TypeScript, CSS, configuration and documentation changes must be committed directly. A desktop build must not depend on a preparation script rewriting tracked source before compilation.
 
