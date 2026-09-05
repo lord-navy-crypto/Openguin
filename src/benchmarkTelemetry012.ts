@@ -20,6 +20,30 @@ export type BenchmarkResource012={
   measuredContext:number|null;
 };
 
+export type BenchmarkEnvironment012={
+  capturedAt:string;
+  chip:string;
+  arch:string;
+  memoryBytes:number;
+  logicalCores:number;
+  freeStorageBytes:number;
+  runtimeVersion:string;
+  modelFamily:string;
+  parameterSize:string;
+  quantization:string;
+};
+
+export type BenchmarkCalibrationLink012={
+  calibrationPointId:string;
+  calibrationRecordedAt:string;
+  confidence:'strong'|'moderate';
+  ageSeconds:number;
+  contextMatch:'requested'|'measured';
+  modelBytesDeltaPct:number;
+  runtimeBytesDeltaPct:number;
+  note:string;
+};
+
 export type BenchmarkSummary012={
   ttftMedianMs:number|null;
   ttftP95Ms:number|null;
@@ -42,6 +66,8 @@ export type BenchmarkSession012={
   preset:'deterministic-short';
   warmStateVerified:boolean;
   resource?:BenchmarkResource012;
+  environment?:BenchmarkEnvironment012;
+  calibrationLink?:BenchmarkCalibrationLink012|null;
   samples:BenchmarkSample012[];
   summary:BenchmarkSummary012;
 };
@@ -101,13 +127,13 @@ export function benchmarkParetoStatus012(row:BenchmarkSession012,rows:BenchmarkS
 }
 
 export function benchmarkSessionsCsv012(rows:BenchmarkSession012[]){
-  const head=['session_id','at','mode','model','context','sample','observed_ttft_ms','total_ms','load_ms','prompt_ms','decode_ms','prompt_tokens','output_tokens','prompt_tok_s','decode_tok_s','done_reason','runtime_bytes','model_bytes','residency_factor','loaded_models','measured_context','decode_tok_s_per_runtime_gb','ttft_tail_ratio','session_ttft_median_ms','session_ttft_p95_ms','session_decode_tok_s_median','session_decode_tok_s_cv_pct','pareto_status'];
+  const head=['session_id','at','mode','model','context','sample','observed_ttft_ms','total_ms','load_ms','prompt_ms','decode_ms','prompt_tokens','output_tokens','prompt_tok_s','decode_tok_s','done_reason','runtime_bytes','model_bytes','residency_factor','loaded_models','measured_context','decode_tok_s_per_runtime_gb','ttft_tail_ratio','chip','arch','system_memory_bytes','logical_cores','free_storage_bytes','runtime_version','model_family','parameter_size','quantization','calibration_point_id','calibration_confidence','calibration_age_seconds','calibration_context_match','calibration_model_bytes_delta_pct','calibration_runtime_bytes_delta_pct','session_ttft_median_ms','session_ttft_p95_ms','session_decode_tok_s_median','session_decode_tok_s_cv_pct','pareto_status'];
   const out=[head.join(',')];
   for(const row of rows){
-    const efficiency=benchmarkMemoryEfficiency012(row),tail=benchmarkTailRatio012(row),pareto=benchmarkParetoStatus012(row,rows);
+    const efficiency=benchmarkMemoryEfficiency012(row),tail=benchmarkTailRatio012(row),pareto=benchmarkParetoStatus012(row,rows),e=row.environment,c=row.calibrationLink;
     for(const s of row.samples){
       out.push([
-        row.id,row.at,row.mode,row.model,row.context,s.index,s.observedTtftMs,s.totalMs,s.loadMs,s.promptMs,s.decodeMs,s.promptTokens,s.outputTokens,s.promptTokS,s.decodeTokS,s.doneReason,row.resource?.runtimeBytes,row.resource?.modelBytes,row.resource?.residencyFactor,row.resource?.loadedModels,row.resource?.measuredContext,efficiency,tail,row.summary.ttftMedianMs,row.summary.ttftP95Ms,row.summary.decodeTokSMedian,row.summary.decodeTokSCvPct,pareto,
+        row.id,row.at,row.mode,row.model,row.context,s.index,s.observedTtftMs,s.totalMs,s.loadMs,s.promptMs,s.decodeMs,s.promptTokens,s.outputTokens,s.promptTokS,s.decodeTokS,s.doneReason,row.resource?.runtimeBytes,row.resource?.modelBytes,row.resource?.residencyFactor,row.resource?.loadedModels,row.resource?.measuredContext,efficiency,tail,e?.chip,e?.arch,e?.memoryBytes,e?.logicalCores,e?.freeStorageBytes,e?.runtimeVersion,e?.modelFamily,e?.parameterSize,e?.quantization,c?.calibrationPointId,c?.confidence,c?.ageSeconds,c?.contextMatch,c?.modelBytesDeltaPct,c?.runtimeBytesDeltaPct,row.summary.ttftMedianMs,row.summary.ttftP95Ms,row.summary.decodeTokSMedian,row.summary.decodeTokSCvPct,pareto,
       ].map(esc).join(','));
     }
   }
