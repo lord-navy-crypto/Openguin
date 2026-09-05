@@ -24,7 +24,7 @@ const api=(mode:Mode,method:string,path:string,body?:unknown)=>invoke<any>('olla
 export default function SmartLab(){
  const [open,setOpen]=useState(false),[page,setPage]=useState<'lab'|'library'>('lab');
  const [mode,setMode]=useState<Mode>('bundled'),modeRef=useRef<Mode>('bundled');
- const refreshSeq=useRef(0),inspectSeq=useRef(0),catalogSeq=useRef(0),activeGenerationRef=useRef('');
+ const refreshSeq=useRef(0),inspectSeq=useRef(0),catalogSeq=useRef(0),activeGenerationRef=useRef(''),installingRef=useRef('');
  const [models,setModels]=useState<Installed[]>([]),[model,setModel]=useState('');
  const [caps,setCaps]=useState<string[]>([]),[ctx,setCtx]=useState(8192),[maxOut,setMaxOut]=useState(512),[temp,setTemp]=useState(.7);
  const [thinking,setThinking]=useState(false),[thinkLevel,setThinkLevel]=useState<'low'|'medium'|'high'>('medium');
@@ -62,12 +62,19 @@ export default function SmartLab(){
   catch(e){if(token!==catalogSeq.current)return;setError(`Official catalog refresh failed; cached fallback remains available. ${e}`)}
   finally{if(token===catalogSeq.current)setCatalogBusy(false)}
  }
+ useEffect(()=>{if(open)void refresh();else{refreshSeq.current++;inspectSeq.current++;catalogSeq.current++}},[open]);
  useEffect(()=>{
-  if(open)void refresh();
   let off:(()=>void)|undefined;
-  listen<PullEvent>('modeldock://pull-progress',e=>{const p=e.payload;if(!installing||!(p.model===installing||p.model.startsWith(`${installing}:`)))return;if(p.done||p.error||p.cancelled){setInstalling('');if(p.error)setError(p.error);else if(p.cancelled)setError('Install cancelled.');else{setError('');void refresh(modeRef.current)}}}).then(x=>off=x);
+  listen<PullEvent>('modeldock://pull-progress',e=>{
+   const p=e.payload,current=installingRef.current;
+   if(!current||!(p.model===current||p.model.startsWith(`${current}:`)))return;
+   if(p.done||p.error||p.cancelled){
+    installingRef.current='';setInstalling('');
+    if(p.error)setError(p.error);else if(p.cancelled)setError('Install cancelled.');else{setError('');void refresh(modeRef.current)}
+   }
+  }).then(x=>off=x);
   return()=>{refreshSeq.current++;inspectSeq.current++;catalogSeq.current++;off?.()}
- },[open,installing]);
+ },[]);
  useEffect(()=>{if(model)void inspect(model);else setCaps([])},[model,mode]);
 
  async function streamRun(){
@@ -82,9 +89,9 @@ export default function SmartLab(){
   }catch(e){unlisten?.();if(activeGenerationRef.current===requestId)activeGenerationRef.current='';setRunning(false);setError(String(e));setPhase('Failed');task({id:`smartlab:${requestId}`,title:`Smart Lab · ${runModel}`,source:'Smart Lab',detail:String(e),state:'failed',percent:100,progressKind:'stage'})}
  }
  async function install(name:string){
-  if(installing){setError(`${installing} is already being installed.`);return}
-  setInstalling(name);setError('');task({id:`smartlab-install:${name}`,title:`Install ${name}`,source:'Smart Lab',detail:'Starting Ollama pull…',state:'running',percent:2,progressKind:'real',cancellable:true,cancelKind:'pull',cancelTarget:name});
-  invoke('pull_model',{mode:modeRef.current,model:name}).catch(e=>{setInstalling('');setError(String(e));task({id:`smartlab-install:${name}`,title:`Install ${name}`,source:'Smart Lab',detail:String(e),state:'failed',percent:100,progressKind:'real'})});
+  if(installingRef.current){setError(`${installingRef.current} is already being installed.`);return}
+  installingRef.current=name;setInstalling(name);setError('');task({id:`smartlab-install:${name}`,title:`Install ${name}`,source:'Smart Lab',detail:'Starting Ollama pull…',state:'running',percent:2,progressKind:'real',cancellable:true,cancelKind:'pull',cancelTarget:name});
+  invoke('pull_model',{mode:modeRef.current,model:name}).catch(e=>{installingRef.current='';setInstalling('');setError(String(e));task({id:`smartlab-install:${name}`,title:`Install ${name}`,source:'Smart Lab',detail:String(e),state:'failed',percent:100,progressKind:'real'})});
  }
 
  return <>
