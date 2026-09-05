@@ -1,3 +1,5 @@
+import './brand-mark.css';
+
 export default function BrandMark({size=34}:{size?:number}){
   return <svg width={size} height={size} viewBox="0 0 256 256" role="img" aria-label="Openguin penguin logo">
     <g fill="currentColor">
