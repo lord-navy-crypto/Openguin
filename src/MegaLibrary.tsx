@@ -3,7 +3,7 @@ import {invoke} from '@tauri-apps/api/core';
 import {task} from './taskBus';
 import LibraryCapacityPanel013 from './LibraryCapacityPanel013';
 import LibraryPortfolio013 from './LibraryPortfolio013';
-import {addLibraryPortfolioItem013} from './libraryPortfolio013';
+import {addLibraryPortfolioItem013} from './libraryPortfolioStore013';
 import {assessLibraryVariant013,largestFeasibleVariant013,type LibraryPolicy013} from './libraryResourcePolicy013';
 import './mega-library.css';
 
