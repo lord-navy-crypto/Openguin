@@ -42,14 +42,30 @@ jobs:
           python3 scripts/verify-desktop.py
           python3 scripts/verify-engineering011.py
           python3 scripts/verify-prepared-backend.py
+          python3 scripts/verify-legacy-hardening011.py
+          python3 scripts/verify-core-state011.py
 
-      - name: Audit build-time source mutation
+      - name: Enforce clean prepared UI source
         shell: bash
         run: |
-          echo 'Tracked-source changes produced by the legacy prepare layer:'
+          set -euo pipefail
+          echo '0.11 invariant: prepare may verify UI source but may not rewrite production UI composition.'
+          git diff --exit-code -- \
+            src/App07.tsx \
+            src/Observatory.tsx \
+            src/SmartLab.tsx \
+            src/FullLogs.tsx \
+            src/EngineeringControl011.tsx \
+            src/main.tsx
+          echo 'Prepared UI source is identical to the checked-in source.'
+
+      - name: Audit remaining build-time mutation
+        shell: bash
+        run: |
+          echo 'Remaining tracked-source changes produced by legacy preparation:'
           git status --short
-          git diff --stat -- src-tauri/src/lib.rs src/App07.tsx src/main.tsx || true
-          echo 'This audit is informational until issue #2 removes core-source mutation.'
+          git diff --stat -- src-tauri/src/lib.rs README.md NOTICE.md COPYRIGHT.md CONTRIBUTING.md SECURITY.md docs || true
+          echo 'Issue #2 now tracks the remaining Rust/docs mutation after UI static-composition cleanup.'
 
       - name: Install frontend dependencies
         run: npm install
