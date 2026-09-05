@@ -11,11 +11,11 @@ def require_any(text,tokens,msg):
     if not any(token in text for token in tokens): errors.append(msg)
 
 conf=json.loads((root/'src-tauri/tauri.conf.json').read_text())
-resources=conf.get('bundle',{}).get('resources',{})
+resources=conf.get('bundle',{}).get('resources',{}) or {}
 icons=conf.get('bundle',{}).get('icon',[])
 require(conf.get('productName')=='Openguin','Tauri productName must be Openguin')
 require(conf['app']['windows'][0].get('title')=='Openguin','Main window title must be Openguin')
-require(resources.get('resources/ollama-runtime/')=='ollama-runtime/','Complete Ollama runtime resource mapping missing')
+require('resources/ollama-runtime/' not in resources,'Private Ollama runtime must not be packaged into the default app bundle')
 require('externalBin' not in conf.get('bundle',{}),'Legacy CLI-only externalBin should not be used')
 require(conf['version']=='0.10.1','Tauri version mismatch')
 for icon_path in ['icons/32x32.png','icons/128x128.png','icons/128x128@2x.png','icons/icon.icns','icons/icon.png']:
@@ -25,16 +25,17 @@ pkg=json.loads((root/'package.json').read_text())
 require(pkg['version']=='0.10.1','package version mismatch')
 require(pkg['name']=='openguin-preview','npm package must use Openguin branding')
 prepare=pkg['scripts'].get('desktop:prepare','')
-for step in ['ensure-app-icon.py','prepare-ollama-sidecar.sh']:
-    require(step in prepare,f'Missing desktop resource-preparation step: {step}')
+require('ensure-app-icon.py' in prepare,'desktop:prepare must generate deterministic app icons')
+require('prepare-ollama-sidecar.sh' not in prepare,'desktop:prepare must not download/install the private Ollama runtime')
+require('prepare:private-runtime:manual' in pkg['scripts'],'Manual private-runtime preparation utility must remain explicit')
 for legacy in ['apply-build-fixes.py','apply-full-logs.py','apply-observatory.py','apply-performance09.py','apply-task-center.py','apply-expansion010.py','apply-openguin-brand.py']:
     require(legacy not in prepare,f'Legacy source mutator must not run in desktop:prepare: {legacy}')
 verify_all=pkg['scripts'].get('verify:all','')
-for verifier in ['verify:desktop','verify:brand','verify:engineering','verify:prepared','verify:legacy','verify:core-state']:
+for verifier in ['verify:desktop','verify:brand','verify:engineering','verify:prepared','verify:legacy','verify:core-state','verify:runtime-consent']:
     require(verifier in verify_all,f'verify:all missing contract: {verifier}')
-require('npm run desktop:prepare' in pkg['scripts'].get('desktop:dev',''),'desktop:dev must prepare runtime/assets')
+require('npm run desktop:prepare' in pkg['scripts'].get('desktop:dev',''),'desktop:dev must prepare deterministic assets')
 require('npm run verify:all' in pkg['scripts'].get('desktop:dev',''),'desktop:dev must run the full contract suite')
-require('npm run desktop:prepare' in pkg['scripts'].get('desktop:build',''),'desktop:build must prepare runtime/assets')
+require('npm run desktop:prepare' in pkg['scripts'].get('desktop:build',''),'desktop:build must prepare deterministic assets')
 require('npm run verify:all' in pkg['scripts'].get('desktop:build',''),'desktop:build must run the full contract suite')
 
 cargo=(root/'src-tauri/Cargo.toml').read_text()
@@ -80,8 +81,8 @@ for token in ['GLOBAL MODEL INDEX','Ollama','Hugging Face','GitHub','universal_m
 require_any(mega,['Recommended for this Mac','Largest fully feasible'],'Missing Global Library hardware/capacity recommendation token')
 
 installer=(root/'src/RuntimeInstallerCard.tsx').read_text()
-for token in ['Download Ollama Now','Repair Ollama Runtime','repair_bundled_runtime','runtime-install-progress']:
-    require(token in installer,f'Missing runtime installer token: {token}')
+for token in ['Download Ollama (optional)','Repair Ollama Runtime','repair_bundled_runtime','runtime-install-progress','confirm(','never downloads or installs this private runtime on first launch']:
+    require(token in installer,f'Missing runtime-consent installer token: {token}')
 
 advanced=(root/'src/AdvancedSettings010.tsx').read_text()
 for token in ['Top K','Min P','Repeat penalty','Seed','Keep model loaded']:
@@ -99,7 +100,7 @@ require('openguin:task' in task_bus and 'CustomEvent' in task_bus and 'startTask
 main=(root/'src/main.tsx').read_text()
 require('TaskCenter' in main and '<TaskCenter/>' in main,'Global Task Center is not mounted')
 
-for file in ['src/taskBus.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','src/mega-library.css','src/developer010.css','src/runtime-installer.css','src/advanced-settings010.css','src/FullLogs.tsx','src/full-logs.css','scripts/verify-brand011.py','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
+for file in ['src/taskBus.ts','src/task-center.css','src/BrandMark.tsx','public/openguin.svg','src/observatory.css','src/performance09.css','src/mega-library.css','src/developer010.css','src/runtime-installer.css','src/advanced-settings010.css','src/FullLogs.tsx','src/full-logs.css','scripts/verify-brand011.py','scripts/prepare-ollama-sidecar.sh','LICENSE','NOTICE.md','THIRD_PARTY_NOTICES.md','COPYRIGHT.md','SECURITY.md','CONTRIBUTING.md','docs/ENGINE_BEHAVIOR.md','docs/MODEL_LICENSING.md']:
     require((root/file).exists(),f'Missing required file: {file}')
 require(not (root/'src/taskCenter.ts').exists(),'Legacy taskCenter.ts must be removed to avoid macOS case-insensitive collision with TaskCenter.tsx')
 
@@ -107,7 +108,7 @@ index=(root/'index.html').read_text()
 require('/openguin.svg' in index and '<title>Openguin</title>' in index,'Openguin document title/favicon not wired')
 prep=(root/'scripts/prepare-ollama-sidecar.sh').read_text()
 for token in ['https://ollama.com/download/Ollama-darwin.zip','Contents/Resources','llama-server','ditto "$SOURCE_DIR" "$RUNTIME_DIR"']:
-    require(token in prep,f'Complete runtime preparation missing token: {token}')
+    require(token in prep,f'Manual runtime preparation utility missing token: {token}')
 icon=(root/'scripts/ensure-app-icon.py').read_text()
 for token in ['Openguin','penguin','icon.icns','iconutil','32x32.png','128x128@2x.png']:
     require(token in icon,f'Complete Openguin icon generator missing token: {token}')
@@ -119,8 +120,10 @@ if errors:
     for e in errors: print(' -',e)
     sys.exit(1)
 
-print('Desktop verification OK — OpenPenguin 0.11 static source architecture')
-print(' - desktop:prepare is asset/runtime-only; legacy source mutators are forbidden')
+print('Desktop verification OK — OpenPenguin static source + opt-in runtime architecture')
+print(' - desktop:prepare is deterministic-asset-only; private runtime is not downloaded automatically')
+print(' - default app bundle contains no private Ollama runtime resource')
+print(' - private runtime download/repair requires explicit UI confirmation')
 print(' - static Rust command composition and static React composition verified')
 print(' - every Task Center row can be cancelled when supported or removed/dismissed')
 print(' - Global Model Index + runtime repair + advanced inference settings retained')
