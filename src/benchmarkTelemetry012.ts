@@ -109,7 +109,16 @@ export function benchmarkTailRatio012(row:BenchmarkSession012){
   return med!=null&&med>0&&p95!=null?p95/med:null;
 }
 
-function comparable012(a:BenchmarkSession012,b:BenchmarkSession012){return a.id!==b.id&&a.mode===b.mode&&a.context===b.context}
+export function benchmarkEnvironmentKey012(row:BenchmarkSession012){
+  const e=row.environment;
+  if(!e||!e.chip||!e.arch||!e.memoryBytes||!e.runtimeVersion)return'unknown';
+  return`${e.arch}|${e.chip}|${e.memoryBytes}|${e.runtimeVersion}`;
+}
+
+function comparable012(a:BenchmarkSession012,b:BenchmarkSession012){
+  const ak=benchmarkEnvironmentKey012(a),bk=benchmarkEnvironmentKey012(b);
+  return a.id!==b.id&&a.mode===b.mode&&a.context===b.context&&ak!=='unknown'&&ak===bk;
+}
 function dominates012(a:BenchmarkSession012,b:BenchmarkSession012){
   const aT=a.summary.ttftMedianMs,bT=b.summary.ttftMedianMs,aD=a.summary.decodeTokSMedian,bD=b.summary.decodeTokSMedian,aC=a.summary.decodeTokSCvPct,bC=b.summary.decodeTokSCvPct,aR=a.resource?.runtimeBytes,bR=b.resource?.runtimeBytes;
   if([aT,bT,aD,bD,aC,bC,aR,bR].some(v=>v==null))return false;
@@ -120,20 +129,20 @@ function dominates012(a:BenchmarkSession012,b:BenchmarkSession012){
 
 export function benchmarkParetoStatus012(row:BenchmarkSession012,rows:BenchmarkSession012[]):'pareto'|'dominated'|'insufficient'{
   const required=[row.summary.ttftMedianMs,row.summary.decodeTokSMedian,row.summary.decodeTokSCvPct,row.resource?.runtimeBytes];
-  if(required.some(v=>v==null))return'insufficient';
+  if(required.some(v=>v==null)||benchmarkEnvironmentKey012(row)==='unknown')return'insufficient';
   const peers=rows.filter(v=>comparable012(row,v));
   if(!peers.length)return'pareto';
   return peers.some(v=>dominates012(v,row))?'dominated':'pareto';
 }
 
 export function benchmarkSessionsCsv012(rows:BenchmarkSession012[]){
-  const head=['session_id','at','mode','model','context','sample','observed_ttft_ms','total_ms','load_ms','prompt_ms','decode_ms','prompt_tokens','output_tokens','prompt_tok_s','decode_tok_s','done_reason','runtime_bytes','model_bytes','residency_factor','loaded_models','measured_context','decode_tok_s_per_runtime_gb','ttft_tail_ratio','chip','arch','system_memory_bytes','logical_cores','free_storage_bytes','runtime_version','model_family','parameter_size','quantization','calibration_point_id','calibration_confidence','calibration_age_seconds','calibration_context_match','calibration_model_bytes_delta_pct','calibration_runtime_bytes_delta_pct','session_ttft_median_ms','session_ttft_p95_ms','session_decode_tok_s_median','session_decode_tok_s_cv_pct','pareto_status'];
+  const head=['session_id','at','mode','model','context','sample','observed_ttft_ms','total_ms','load_ms','prompt_ms','decode_ms','prompt_tokens','output_tokens','prompt_tok_s','decode_tok_s','done_reason','runtime_bytes','model_bytes','residency_factor','loaded_models','measured_context','decode_tok_s_per_runtime_gb','ttft_tail_ratio','chip','arch','system_memory_bytes','logical_cores','free_storage_bytes','runtime_version','model_family','parameter_size','quantization','environment_key','calibration_point_id','calibration_confidence','calibration_age_seconds','calibration_context_match','calibration_model_bytes_delta_pct','calibration_runtime_bytes_delta_pct','session_ttft_median_ms','session_ttft_p95_ms','session_decode_tok_s_median','session_decode_tok_s_cv_pct','pareto_status'];
   const out=[head.join(',')];
   for(const row of rows){
     const efficiency=benchmarkMemoryEfficiency012(row),tail=benchmarkTailRatio012(row),pareto=benchmarkParetoStatus012(row,rows),e=row.environment,c=row.calibrationLink;
     for(const s of row.samples){
       out.push([
-        row.id,row.at,row.mode,row.model,row.context,s.index,s.observedTtftMs,s.totalMs,s.loadMs,s.promptMs,s.decodeMs,s.promptTokens,s.outputTokens,s.promptTokS,s.decodeTokS,s.doneReason,row.resource?.runtimeBytes,row.resource?.modelBytes,row.resource?.residencyFactor,row.resource?.loadedModels,row.resource?.measuredContext,efficiency,tail,e?.chip,e?.arch,e?.memoryBytes,e?.logicalCores,e?.freeStorageBytes,e?.runtimeVersion,e?.modelFamily,e?.parameterSize,e?.quantization,c?.calibrationPointId,c?.confidence,c?.ageSeconds,c?.contextMatch,c?.modelBytesDeltaPct,c?.runtimeBytesDeltaPct,row.summary.ttftMedianMs,row.summary.ttftP95Ms,row.summary.decodeTokSMedian,row.summary.decodeTokSCvPct,pareto,
+        row.id,row.at,row.mode,row.model,row.context,s.index,s.observedTtftMs,s.totalMs,s.loadMs,s.promptMs,s.decodeMs,s.promptTokens,s.outputTokens,s.promptTokS,s.decodeTokS,s.doneReason,row.resource?.runtimeBytes,row.resource?.modelBytes,row.resource?.residencyFactor,row.resource?.loadedModels,row.resource?.measuredContext,efficiency,tail,e?.chip,e?.arch,e?.memoryBytes,e?.logicalCores,e?.freeStorageBytes,e?.runtimeVersion,e?.modelFamily,e?.parameterSize,e?.quantization,benchmarkEnvironmentKey012(row),c?.calibrationPointId,c?.confidence,c?.ageSeconds,c?.contextMatch,c?.modelBytesDeltaPct,c?.runtimeBytesDeltaPct,row.summary.ttftMedianMs,row.summary.ttftP95Ms,row.summary.decodeTokSMedian,row.summary.decodeTokSCvPct,pareto,
       ].map(esc).join(','));
     }
   }
