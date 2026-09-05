@@ -3,6 +3,7 @@ import { invoke } from '@tauri-apps/api/core';
 import './observatory.css';
 import RuntimeControl09 from './RuntimeControl09';
 import CompareBench09 from './CompareBench09';
+import {saveEngineeringCalibration} from './engineeringTelemetry011';
 
 // OPENGUIN_011_STATIC_OBSERVATORY
 
@@ -19,8 +20,22 @@ function variation(values:number[]){if(values.length<2)return 0;const mean=value
 export default function Observatory({mode,memoryBytes,installedCount,online}:Props){
  const [active,setActive]=useState<ActiveModel[]>([]),[error,setError]=useState(''),[updated,setUpdated]=useState<Date|null>(null),[live,setLive]=useState(true),[benchTick,setBenchTick]=useState(0);
  const bench=useMemo(()=>readBench(),[benchTick]);
- async function refresh(){try{const r=await invoke<any>('ollama_json',{mode,method:'GET',path:'/api/ps',body:null});setActive(r.models??[]);setError('');setUpdated(new Date());setBenchTick(x=>x+1)}catch(e){setActive([]);setError(String(e));}}
- useEffect(()=>{refresh();if(!live)return;const id=setInterval(refresh,2000);return()=>clearInterval(id)},[mode,live]);
+ async function refresh(){
+  try{
+   const r=await invoke<any>('ollama_json',{mode,method:'GET',path:'/api/ps',body:null});
+   const rows=(r.models??[]) as ActiveModel[];
+   setActive(rows);setError('');setUpdated(new Date());setBenchTick(x=>x+1);
+   const runtimeBytes=rows.reduce((s,m)=>s+(m.size_vram??0),0),modelBytes=rows.reduce((s,m)=>s+(m.size??0),0);
+   if(rows.length&&runtimeBytes>0&&modelBytes>0&&memoryBytes>0){
+    saveEngineeringCalibration({
+     at:new Date().toISOString(),mode,loadedModels:rows.length,modelBytes,runtimeBytes,
+     residencyFactor:runtimeBytes/modelBytes,memoryPressurePct:pct(runtimeBytes,memoryBytes),
+     contexts:rows.map(m=>m.context_length??0).filter(n=>n>0),
+    });
+   }
+  }catch(e){setActive([]);setError(String(e));}
+ }
+ useEffect(()=>{refresh();if(!live)return;const id=setInterval(refresh,2000);return()=>clearInterval(id)},[mode,live,memoryBytes]);
  const totalVram=active.reduce((s,m)=>s+(m.size_vram??0),0),baseSize=active.reduce((s,m)=>s+(m.size??0),0),latest=bench[0],recent=[...bench].slice(0,20).reverse();
  const avg=bench.length?bench.reduce((s,b)=>s+(b.tokS||0),0)/bench.length:0,pressure=pct(totalVram,memoryBytes),residencyFactor=baseSize?totalVram/baseSize:0;
  const recentSpeeds=bench.slice(0,10).map(b=>b.tokS).filter(v=>v>0),cv=variation(recentSpeeds);
@@ -33,7 +48,7 @@ export default function Observatory({mode,memoryBytes,installedCount,online}:Pro
   {error&&<div className="obs-error">Runtime telemetry unavailable: {error}</div>}
   <div className="obs-two">
    <section className="obs-card"><div className="obs-head"><div><h3>Loaded models</h3><p>Backed by Ollama <code>/api/ps</code>.</p></div><div className="obs-actions"><button onClick={()=>setLive(v=>!v)}>{live?'Pause':'Resume'}</button><button onClick={refresh}>Refresh</button></div></div>{active.length?active.map(m=><Active key={m.name} m={m} memory={memoryBytes}/>):<div className="obs-empty">No model is currently resident in memory. Run a prompt in Model Lab to load one.</div>}</section>
-   <section className="obs-card"><h3>Runtime memory map</h3><p className="obs-muted">Loaded model memory compared with unified/system memory.</p><div className="memory-donut" style={{'--p':`${pressure}%`} as React.CSSProperties}><div><b>{pressure.toFixed(0)}%</b><span>allocated</span></div></div><div className="memory-legend"><span><i/>Models <b>{fmt(totalVram)}</b></span><span><i/>Available headroom <b>{fmt(Math.max(0,memoryBytes-totalVram))}</b></span></div><p className="obs-note">On Apple Silicon, CPU and GPU share unified memory. Residency factor is therefore measured against Ollama's allocation instead of pretending there is separate VRAM; it can later calibrate the Engineering operating-envelope estimator.</p></section>
+   <section className="obs-card"><h3>Runtime memory map</h3><p className="obs-muted">Loaded model memory compared with unified/system memory.</p><div className="memory-donut" style={{'--p':`${pressure}%`} as React.CSSProperties}><div><b>{pressure.toFixed(0)}%</b><span>allocated</span></div></div><div className="memory-legend"><span><i/>Models <b>{fmt(totalVram)}</b></span><span><i/>Available headroom <b>{fmt(Math.max(0,memoryBytes-totalVram))}</b></span></div><p className="obs-note">On Apple Silicon, CPU and GPU share unified memory. Residency factor is therefore measured against Ollama's allocation instead of pretending there is separate VRAM; the latest valid snapshot is persisted locally for Engineering Plan-vs-Measured calibration.</p></section>
   </div>
   <div className="obs-two">
    <section className="obs-card"><h3>Decode performance trend</h3><p className="obs-muted">Measured output-token throughput from recent Model Lab runs. Variation above ~20% is flagged as a stability signal, not automatically treated as a fault.</p><Spark rows={recent}/><div className="trend-footer"><span>slowest <b>{bench.length?Math.min(...bench.map(b=>b.tokS)).toFixed(1):'—'}</b></span><span>average <b>{avg?avg.toFixed(1):'—'}</b></span><span>fastest <b>{bench.length?Math.max(...bench.map(b=>b.tokS)).toFixed(1):'—'}</b> tok/s</span></div></section>
