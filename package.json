@@ -9,9 +9,10 @@
     "preview": "vite preview",
     "verify:engineering": "python3 scripts/verify-engineering011.py",
     "verify:prepared": "python3 scripts/verify-prepared-backend.py",
+    "verify:legacy": "python3 scripts/verify-legacy-hardening011.py",
     "desktop:prepare": "python3 scripts/apply-build-fixes.py && python3 scripts/apply-full-logs.py && python3 scripts/apply-observatory.py && python3 scripts/apply-performance09.py && python3 scripts/apply-task-center.py && python3 scripts/apply-expansion010.py && python3 scripts/apply-openguin-brand.py && python3 scripts/ensure-app-icon.py && bash scripts/prepare-ollama-sidecar.sh",
-    "desktop:dev": "npm run desktop:prepare && npm run verify:engineering && npm run verify:prepared && tauri dev",
-    "desktop:build": "npm run desktop:prepare && npm run verify:engineering && npm run verify:prepared && tauri build"
+    "desktop:dev": "npm run desktop:prepare && npm run verify:engineering && npm run verify:prepared && npm run verify:legacy && tauri dev",
+    "desktop:build": "npm run desktop:prepare && npm run verify:engineering && npm run verify:prepared && npm run verify:legacy && tauri build"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
