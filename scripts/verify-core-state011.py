@@ -41,6 +41,8 @@ require("src/App07.tsx", "import BrandMark from './BrandMark';", "static OpenPen
 require("src/SmartLab.tsx", "invoke('chat_stream'", "Tauri streaming path")
 require("src/SmartLab.tsx", "listen<StreamEvent>('modeldock://chat-stream'", "stream event ownership")
 require("src/SmartLab.tsx", "activeGenerationRef=useRef('')", "Smart Lab generation lock")
+require("src/SmartLab.tsx", "installingRef=useRef('')", "Smart Lab install ownership ref")
+require("src/SmartLab.tsx", "const p=e.payload,current=installingRef.current", "race-free install progress ownership")
 require("src/SmartLab.tsx", "inspectSeq=useRef(0)", "Smart Lab stale inspection guard")
 require("src/SmartLab.tsx", "official_ollama_catalog", "shared official catalog backend")
 require("src/SmartLab.tsx", "modeldock://pull-progress", "shared install progress event")
@@ -50,6 +52,8 @@ if "fetch(`http://127.0.0.1" in smart:
     errors.append("src/SmartLab.tsx: direct localhost streaming path returned")
 if "for(let i=0;i<120" in smart:
     errors.append("src/SmartLab.tsx: legacy 120-second install polling returned")
+if "[open,installing]" in smart:
+    errors.append("src/SmartLab.tsx: install listener must not rebind on installing state")
 
 if errors:
     print("OpenPenguin 0.11 core state verification FAILED")
@@ -64,3 +68,4 @@ print(" - Generation ownership is locked to one request")
 print(" - Model selection survives compatible refreshes")
 print(" - External-switch failure leaves the current runtime intact")
 print(" - Smart Lab shares validated streaming/catalog/install paths")
+print(" - Smart Lab install listener has stable ownership without rebind gaps")
