@@ -5,6 +5,19 @@ root=Path(__file__).resolve().parents[1]
 p=root/'src'/'App07.tsx'
 t=p.read_text()
 
+if 'OPENGUIN_011_STATIC_COMPOSITION' in t:
+    required=[
+        "import Observatory from './Observatory';",
+        "type Tab='overview'|'observatory'",
+        'loadDuration?:number', 'promptEvalDuration?:number', 'loadMs?:number',
+        'loadMs:p.loadDuration', "observatory:'Observatory'", "<Observatory mode={mode}"
+    ]
+    missing=[x for x in required if x not in t]
+    if missing:
+        raise SystemExit('apply-observatory: static 0.11 Observatory composition incomplete: '+', '.join(missing))
+    print('Observatory patch skipped: 0.11 navigation and generation telemetry are already static and verified.')
+    raise SystemExit(0)
+
 if "import Observatory from './Observatory';" not in t:
     t=t.replace("import './app07.css';", "import './app07.css';\nimport Observatory from './Observatory';")
 
@@ -27,9 +40,7 @@ if "loadMs:p.loadDuration" not in t:
     replaced=False
     for old,new in bench_rewrites.items():
         if old in t:
-            t=t.replace(old,new,1)
-            replaced=True
-            break
+            t=t.replace(old,new,1);replaced=True;break
     if not replaced:
         raise SystemExit('apply-observatory: benchmark construction anchor not found; refusing to lose generation pipeline telemetry')
 
@@ -41,6 +52,5 @@ if insert.strip() not in t and anchor in t:
 for required in ["observatory:'Observatory'","loadDuration?:number","loadMs?:number","loadMs:p.loadDuration","<Observatory mode={mode}"]:
     if required not in t:
         raise SystemExit(f'apply-observatory: required integration missing after patch: {required}')
-
 p.write_text(t)
-print('Applied Openguin Observatory with request-snapshot-compatible generation pipeline telemetry.')
+print('Applied legacy Observatory integration.')
