@@ -35,7 +35,7 @@ export default function MegaLibrary({mode,memoryBytes}:{mode:Mode;memoryBytes:nu
    else{setNotice(String(e));task({id:'global-index',title:'Search global model index',source:'Library',detail:String(e),state:'failed',percent:100,progressKind:'stage'})}
   }finally{if(seq===searchSeq.current)setLoading(false)}
  }
- useEffect(()=>{search('',source)},[source]);
+ useEffect(()=>{search(q,source)},[source]);
  async function open(m:Indexed){
   const seq=++variantSeq.current;setSelected(m);setVars([]);setNotice('');if(m.source==='GitHub')return;setVloading(true);
   try{const next=await invoke<V[]>('universal_model_variants',{source:m.source,id:m.id});if(seq===variantSeq.current)setVars(next)}catch(e){if(seq===variantSeq.current)setNotice(String(e))}finally{if(seq===variantSeq.current)setVloading(false)}
