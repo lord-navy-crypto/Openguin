@@ -75,8 +75,9 @@ for token in ['MODEL COMPARATOR','COLD / WARM BENCHMARK','MEMORY HISTORY','openg
     require(token in cmp,f'Missing comparison/benchmark token: {token}')
 
 mega=(root/'src/MegaLibrary.tsx').read_text()
-for token in ['GLOBAL MODEL INDEX','Ollama','Hugging Face','GitHub','universal_model_search','universal_model_variants','Recommended for this Mac','Download variants','Review first']:
+for token in ['GLOBAL MODEL INDEX','Ollama','Hugging Face','GitHub','universal_model_search','universal_model_variants','Download variants','Review first']:
     require(token in mega,f'Missing Global Library token: {token}')
+require_any(mega,['Recommended for this Mac','Largest fully feasible'],'Missing Global Library hardware/capacity recommendation token')
 
 installer=(root/'src/RuntimeInstallerCard.tsx').read_text()
 for token in ['Download Ollama Now','Repair Ollama Runtime','repair_bundled_runtime','runtime-install-progress']:
