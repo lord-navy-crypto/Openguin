@@ -4,7 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    branches: [main, feature/0.11-adaptive-runtime-engineering, ci/0.12-stack-base]
   workflow_dispatch:
 
 permissions:
@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          echo '0.11 invariant: preparation may create ignored runtime resources, but it may not modify any tracked source, docs, config, or assets.'
+          echo 'Static-source invariant: preparation may create ignored runtime resources, but it may not modify tracked source, docs, config, or assets.'
           if ! git diff --quiet; then
             echo 'Tracked files changed during desktop:prepare:'
             git status --short --untracked-files=no
@@ -77,7 +77,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.11-Engineering-Universal2-${{ github.sha }}
+          name: Openguin-0.12-Observatory-Ultra-${{ github.sha }}
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
