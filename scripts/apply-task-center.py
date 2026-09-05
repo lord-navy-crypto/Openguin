@@ -6,8 +6,16 @@ root=Path(__file__).resolve().parents[1]
 p=root/'src'/'App07.tsx'
 t=p.read_text()
 
-# macOS default filesystems are case-insensitive, so the event bus must not be
-# named taskCenter.ts next to the TaskCenter.tsx component.
+# 0.11 owns async request state directly in App07. The global TaskCenter already
+# listens to backend pull/import progress events, while dedicated 0.9/0.10
+# components emit taskBus events themselves. Rewriting the new App07 would
+# destroy stale-response guards and duplicate-operation protection, so the old
+# text patch intentionally becomes a no-op once the core state machine exists.
+if "modeTransitionRef=useRef(false)" in t and "activeGenerationRef=useRef('')" in t:
+    print('Task Center legacy App07 patch skipped: 0.11 core state machine owns request coordination; backend progress listeners remain active.')
+    raise SystemExit(0)
+
+# Legacy compatibility path for pre-0.11 App07 checkouts.
 t=t.replace("import {task} from './taskCenter';","import {task} from './taskBus';")
 if "import {task} from './taskBus';" not in t:
     t=t.replace("import './app07.css';", "import './app07.css';\nimport {task} from './taskBus';")
@@ -32,9 +40,7 @@ t=t.replace("async function searchHf(){setBusy(true);try{", "async function sear
 t=t.replace("setHf(await invoke('search_huggingface',{query:hfQuery,limit:30}))", "setHf(await invoke('search_huggingface',{query:hfQuery,limit:30}));task({id:taskId,title:'Search Hugging Face GGUF',source:'Library',detail:'Search complete',state:'done',percent:100,progressKind:'stage'})")
 t=t.replace("}catch(e){setNotice(String(e))}finally{setBusy(false)}}", "}catch(e){setNotice(String(e));task({id:taskId,title:'Search Hugging Face GGUF',source:'Library',detail:String(e),state:'failed',percent:100,progressKind:'stage'})}finally{setBusy(false)}}",1)
 
-# Canonicalize the whole HF import function on every run. This is intentionally
-# idempotent because desktop:prepare can execute more than once in the same CI
-# job. Restrict hfModel to this function so JSX elsewhere keeps hfSelected.
+# Canonicalize the legacy HF import function only on old App07 implementations.
 canonical_import = """async function importHf(v:Variant){if(!hfSelected)return;const hfModel=hfSelected;const model=`${hfModel.id.split('/').pop()}:${v.quantization.toLowerCase().replaceAll('_','-')}`,id=`${hfModel.id}:${v.filename}`;task({id:`import:${id}`,title:`Import ${model}`,source:'Hugging Face GGUF',detail:'Queued for verified import',state:'queued',percent:0,progressKind:'real',cancellable:true,cancelKind:'import',cancelTarget:id});invoke('import_hf_gguf',{mode:modeRef.current,repoId:hfModel.id,filename:v.filename,model,license:hfModel.cardData?.license??null,expectedSha256:v.sha256??null}).catch(e=>setNotice(String(e)));setImports(p=>({...p,[id]:{importId:id,repoId:hfModel.id,filename:v.filename,model,stage:'start',status:'Starting',done:false,cancelled:false}}));}"""
 pattern = r"async function importHf\(v:Variant\)\{.*?\}\n async function removeModel"
 m = re.search(pattern, t, flags=re.S)
@@ -42,9 +48,7 @@ if not m:
     raise SystemExit('Could not locate importHf function; refusing a partial Task Center patch.')
 t = t[:m.start()] + canonical_import + "\n async function removeModel" + t[m.end():]
 
-# React state narrowing is not retained inside the legacy variants.map callback.
-# The old Library is replaced by MegaLibrary in 0.10, but it still has to compile.
 t=t.replace("const id=`${hfSelected.id}:${v.filename}`", "const id=`${hfSelected?.id??''}:${v.filename}`")
 
 p.write_text(t)
-print('Applied Openguin floating Task Center instrumentation to main long-running actions (idempotent).')
+print('Applied Openguin floating Task Center instrumentation to legacy App07 actions.')
