@@ -1,125 +1,202 @@
-# OpenPenguin LabBridge v1
+# OpenPenguin Local AI Infrastructure v1
 
-OpenPenguin exposes a thin, local-only scientific advisory API for Engineering Lab while keeping its existing private Ollama runtime unchanged.
+OpenPenguin now exposes a thin, loopback-only advisory service for multiple products while keeping its private Ollama runtime unchanged.
+
+The first supported consumers are **Engineering Lab** and **Sentinel**. The old LabBridge endpoints remain as a compatibility surface for Engineering Lab.
 
 ## Port ownership
 
 ```text
-127.0.0.1:11435  OpenPenguin private Ollama runtime (existing compatibility surface)
-127.0.0.1:11436  OpenPenguin native LabBridge API
+127.0.0.1:11435  OpenPenguin private Ollama runtime
+127.0.0.1:11436  OpenPenguin application-level local AI infrastructure API
 ```
 
-The ports are intentionally separate. OpenPenguin does not replace or proxy Ollama's `/api/*` surface.
+These ports are intentionally separate. `11435` remains an Ollama-compatible runtime. Product integrations should prefer `11436` so OpenPenguin can enforce product-specific evidence and authority policies.
 
-## System roles
+## Product roles
 
 - **BetterBoard** — real-world ingress and measurement producer.
 - **Engineering Lab** — scientific computation and evidence core.
-- **OpenPenguin** — local AI advisory layer.
+- **Sentinel** — macOS system-evidence authority.
+- **OpenPenguin** — shared local model/runtime and advisory infrastructure.
 
-OpenPenguin may explain evidence and suggest falsifiable next experiments. It does not become an authoritative measurement source, solver, validation system, or automatic actuator.
+OpenPenguin reasons over bounded context. It does not become the authoritative source of measurements, scientific results, system observations, validation state, or executed actions.
 
-## Endpoints
+## Generic infrastructure API
 
-### `GET /labbridge/v1/health`
+### `GET /v1/health`
 
-Returns the local LabBridge service state.
+Returns local service state and confirms loopback/advisory-only operation.
 
-### `GET /labbridge/v1/capabilities`
+### `GET /v1/capabilities`
 
-Returns:
+Returns installed models, limits, capabilities and accepted context schemas.
+
+Current accepted schemas:
+
+```text
+labbridge.ai-context/v1
+sentinel.system-evidence-context/v1
+```
+
+Representative response:
 
 ```json
 {
-  "api_version": "labbridge-openguin-api/v1",
-  "service": "OpenPenguin LabBridge",
-  "service_version": "0.10.1",
+  "api_version": "openguin-local-api/v1",
+  "service": "OpenPenguin Local AI Infrastructure",
   "runtime_base": "http://127.0.0.1:11435",
   "models": ["installed-model"],
   "capabilities": [
     "text-advisory",
+    "bounded-structured-context",
+    "read-only-advisory",
     "labbridge.ai-context/v1",
-    "labbridge.ai-suggestion/v1",
-    "read-only-scientific-advisory"
+    "sentinel.system-evidence-context/v1"
   ],
-  "advisory_only": true
+  "accepted_context_schemas": [
+    "labbridge.ai-context/v1",
+    "sentinel.system-evidence-context/v1"
+  ],
+  "advisory_only": true,
+  "limits": {
+    "max_context_bytes": 1048576,
+    "max_question_chars": 20000,
+    "max_answer_chars": 200000,
+    "loopback_only": true
+  }
 }
 ```
 
-The model list is read from the existing private Ollama runtime.
+### `POST /v1/advisory`
 
-### `POST /labbridge/v1/advisory`
-
-Request:
+Generic request:
 
 ```json
 {
-  "api_version": "labbridge-openguin-api/v1",
+  "api_version": "openguin-local-api/v1",
   "context": {
-    "schema": "labbridge.ai-context/v1",
-    "packet_id": "ai-context-..."
+    "schema": "sentinel.system-evidence-context/v1"
   },
-  "question": "What is the strongest unresolved uncertainty?",
+  "question": "What changed and what should I inspect next?",
   "model": "installed-model",
-  "temperature": 0.2,
-  "requested_response_schema": "labbridge.ai-suggestion/v1"
+  "temperature": 0.18
 }
 ```
 
-OpenPenguin validates the API version, context schema, size limits, model name, question size, temperature and requested response schema before forwarding a bounded advisory prompt to its private Ollama runtime.
+OpenPenguin validates API version, context schema, request bounds, model name, question size and temperature. It then applies the policy associated with the context schema before forwarding inference to the private local runtime.
 
-Initial native response:
+Response:
 
 ```json
 {
-  "api_version": "labbridge-openguin-api/v1",
-  "schema": "openguin.labbridge-advisory-response/v1",
+  "api_version": "openguin-local-api/v1",
+  "schema": "openguin.local-advisory-response/v1",
+  "request_id": "opg-...",
   "answer": "...",
   "model": "installed-model",
   "runtime": "private-ollama-11435",
-  "context_packet_id": "ai-context-...",
+  "source_context_schema": "sentinel.system-evidence-context/v1",
+  "context_packet_id": null,
+  "elapsed_ms": 1234,
   "executed": false,
+  "advisory_only": true,
   "boundary": "Advisory only..."
 }
 ```
 
-Engineering Lab remains responsible for wrapping advisory text into the canonical content-addressed `labbridge.ai-suggestion/v1` packet. This deliberately avoids duplicate canonical-JSON/SHA implementations across Rust and Python.
+OpenPenguin does not generate the authoritative scientific/evidence packet identity for consuming products. The source product owns its evidence/provenance model.
 
-## Compatibility policy
+## Context-specific policy
 
-Engineering Lab should:
+### Engineering Lab
 
-1. Probe native LabBridge at `127.0.0.1:11436`.
-2. Prefer native advisory when the API version and required capabilities match.
-3. If native LabBridge is absent or temporarily fails, fall back locally to the existing OpenPenguin private Ollama `/api/chat` at `127.0.0.1:11435`.
-4. Preserve the native failure reason in advisory provenance when fallback occurs.
-5. Never send Engineering Lab scientific context to a cloud fallback automatically.
+For `labbridge.ai-context/v1`, OpenPenguin must not:
 
-This allows rolling upgrades where OpenPenguin and Engineering Lab may temporarily run different versions without breaking local AI support.
+- invent measurements, units, uncertainty or solver results;
+- claim scientific validation that is absent from the context;
+- relabel simulated data as measured data;
+- execute ActionProposal objects;
+- mutate Engineering Lab evidence.
 
-## Safety / authority boundary
+Engineering Lab remains responsible for canonical `labbridge.ai-suggestion/v1` packet identity and provenance.
 
-The native bridge is loopback-only and bounded. It must not:
+### Sentinel
 
-- execute an Engineering Lab ActionProposal;
-- mutate BetterBoard measurements;
-- mutate Engineering Lab datasets, solver results, uncertainty, validation or provenance;
-- execute code embedded in AI context;
-- relabel simulation as measurement;
-- invent missing units or calibration/validation status.
+For `sentinel.system-evidence-context/v1`, OpenPenguin must preserve Sentinel's core rule:
 
-The intended closed loop is:
+> Evidence is not a verdict.
+
+The advisory policy requires separation of:
 
 ```text
-BetterBoard measurement
-      ↓
-Engineering Lab evidence
-      ↓
-OpenPenguin advisory
-      ↓
-human approval
-      ↓
-new Engineering Lab experiment
+OBSERVED
+INTERPRETATION
+UNKNOWN
+NEXT STEP
 ```
 
-Human approval remains a separate, explicit provenance step.
+OpenPenguin must not convert Attention, Risk, Confidence, Drift, novelty, startup presence, public network access, or missing visibility into malware probability. It must not invent paths, PIDs, hashes, signatures, endpoints, timestamps, causes, intent or commands that were run. It has no shell or Sentinel Safe Change execution authority.
+
+## Sentinel transport architecture
+
+Sentinel's browser/WebView does **not** connect directly to port 11436.
+
+```text
+Sentinel UI
+   ↓ same-origin + X-Sentinel-Token
+Sentinel Go engine
+   ↓ fixed loopback proxy
+OpenPenguin 127.0.0.1:11436
+   ↓
+private Ollama 127.0.0.1:11435
+```
+
+This preserves Sentinel's existing session-token, Host, Origin, Fetch-Metadata and CSP boundaries. It also avoids adding arbitrary OpenPenguin URLs to the browser-facing attack surface.
+
+Sentinel's vendored WebLLM path remains an independent local fallback. OpenPenguin is optional shared infrastructure, not a mandatory dependency for Sentinel evidence collection.
+
+## Engineering Lab compatibility API
+
+The existing endpoints remain available:
+
+```text
+GET  /labbridge/v1/health
+GET  /labbridge/v1/capabilities
+POST /labbridge/v1/advisory
+```
+
+They continue to advertise `labbridge-openguin-api/v1` and accept only `labbridge.ai-context/v1`. This preserves compatibility with existing Engineering Lab adapters while the generic `/v1/*` API becomes the preferred infrastructure surface for new consumers.
+
+Engineering Lab may still fall back locally to `127.0.0.1:11435/api/chat` during rolling upgrades and records that downgrade in provenance. No cloud fallback is automatic.
+
+## Security / authority boundary
+
+The OpenPenguin infrastructure service is deliberately narrow:
+
+1. Bind to `127.0.0.1` only.
+2. Keep request/response sizes bounded.
+3. Accept only allow-listed structured context schemas.
+4. Do not expose arbitrary proxy destinations.
+5. Do not execute code, shell commands, Safe Change actions or scientific ActionProposals.
+6. Always return `executed: false` and `advisory_only: true`.
+7. Keep private Ollama on 11435 isolated from app-level product contracts.
+8. Let each source product remain authoritative over its own evidence and provenance.
+
+## Architecture direction
+
+OpenPenguin should evolve as reusable local AI infrastructure rather than accumulating product-specific business logic:
+
+```text
+BetterBoard / Engineering Lab / Sentinel / future product
+                     ↓
+            bounded product context
+                     ↓
+         OpenPenguin Local AI API :11436
+                     ↓
+       model/runtime management and inference
+                     ↓
+          private Ollama runtime :11435
+```
+
+Product-specific evidence collection, decisions, actions and provenance remain outside OpenPenguin.
