@@ -28,15 +28,37 @@ jobs:
       - name: Isolate backend compile from desktop packaging assets
         run: |
           python3 - <<'PY'
+          import binascii
           import json
+          import struct
+          import zlib
           from pathlib import Path
-          path = Path('src-tauri/tauri.conf.json')
-          config = json.loads(path.read_text(encoding='utf-8'))
+
+          config_path = Path('src-tauri/tauri.conf.json')
+          config = json.loads(config_path.read_text(encoding='utf-8'))
           bundle = config.setdefault('bundle', {})
           bundle['active'] = False
           bundle['icon'] = []
           bundle['resources'] = {}
-          path.write_text(json.dumps(config, indent=2), encoding='utf-8')
+          config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
+
+          # tauri::generate_context! still resolves its default development icon
+          # even when bundling is disabled. Provide a tiny CI-only RGBA PNG so
+          # this job checks Rust/LabBridge compilation without requiring release
+          # packaging assets to be committed to the feature branch.
+          def chunk(kind: bytes, data: bytes) -> bytes:
+              crc = binascii.crc32(kind + data) & 0xffffffff
+              return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', crc)
+
+          icon = (
+              b'\x89PNG\r\n\x1a\n'
+              + chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 6, 0, 0, 0))
+              + chunk(b'IDAT', zlib.compress(b'\x00\x00\x00\x00\x00'))
+              + chunk(b'IEND', b'')
+          )
+          icon_path = Path('src-tauri/icons/icon.png')
+          icon_path.parent.mkdir(parents=True, exist_ok=True)
+          icon_path.write_bytes(icon)
           PY
       - name: Check native LabBridge backend
         run: cargo check --manifest-path src-tauri/Cargo.toml
