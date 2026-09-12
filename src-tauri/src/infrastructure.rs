@@ -1,7 +1,8 @@
 use serde::Serialize;
+use std::collections::VecDeque;
 use std::sync::{
     atomic::{AtomicU64, Ordering},
-    Arc,
+    Arc, Mutex,
 };
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::{OwnedSemaphorePermit, Semaphore};
@@ -18,6 +19,7 @@ pub const MAX_ANSWER_CHARS: usize = 200_000;
 pub const MIN_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_TIMEOUT_MS: u64 = 600_000;
 pub const DEFAULT_TIMEOUT_MS: u64 = 600_000;
+pub const MAX_RECENT_REQUESTS: usize = 64;
 
 #[derive(Clone, Copy)]
 pub struct ContextPolicy {
@@ -96,6 +98,21 @@ pub struct InfrastructureSnapshot {
     pub requests_failed: u64,
     pub requests_rejected_busy: u64,
     pub last_request_unix_ms: u64,
+    pub recent_request_count: usize,
+}
+
+#[derive(Serialize, Clone)]
+pub struct RecentRequestMetadata {
+    pub request_id: String,
+    pub started_at_unix_ms: u64,
+    pub app_id: String,
+    pub context_schema: String,
+    pub policy_id: String,
+    pub model: String,
+    pub model_route: String,
+    pub elapsed_ms: u64,
+    pub success: bool,
+    pub outcome: String,
 }
 
 pub struct InfrastructureState {
@@ -108,6 +125,7 @@ pub struct InfrastructureState {
     requests_failed: AtomicU64,
     requests_rejected_busy: AtomicU64,
     last_request_unix_ms: AtomicU64,
+    recent_requests: Mutex<VecDeque<RecentRequestMetadata>>,
 }
 
 impl InfrastructureState {
@@ -122,6 +140,7 @@ impl InfrastructureState {
             requests_failed: AtomicU64::new(0),
             requests_rejected_busy: AtomicU64::new(0),
             last_request_unix_ms: AtomicU64::new(0),
+            recent_requests: Mutex::new(VecDeque::with_capacity(MAX_RECENT_REQUESTS)),
         }
     }
 
@@ -149,7 +168,23 @@ impl InfrastructureState {
         }
     }
 
+    pub fn record_request(&self, item: RecentRequestMetadata) {
+        let Ok(mut history) = self.recent_requests.lock() else { return };
+        if history.len() >= MAX_RECENT_REQUESTS {
+            history.pop_front();
+        }
+        history.push_back(item);
+    }
+
+    pub fn recent_requests(&self) -> Vec<RecentRequestMetadata> {
+        self.recent_requests
+            .lock()
+            .map(|items| items.iter().rev().cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub fn snapshot(&self) -> InfrastructureSnapshot {
+        let recent_request_count = self.recent_requests.lock().map(|items| items.len()).unwrap_or(0);
         InfrastructureSnapshot {
             uptime_ms: self.started.elapsed().as_millis().min(u64::MAX as u128) as u64,
             started_at_unix_ms: self.started_at_unix_ms,
@@ -161,11 +196,12 @@ impl InfrastructureState {
             requests_failed: self.requests_failed.load(Ordering::Relaxed),
             requests_rejected_busy: self.requests_rejected_busy.load(Ordering::Relaxed),
             last_request_unix_ms: self.last_request_unix_ms.load(Ordering::Relaxed),
+            recent_request_count,
         }
     }
 }
 
-fn unix_ms() -> u64 {
+pub fn unix_ms() -> u64 {
     SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
@@ -207,5 +243,31 @@ mod tests {
         assert_eq!(finished.requests_succeeded, 1);
         assert_eq!(finished.requests_failed, 1);
         assert_eq!(finished.available_advisory_slots, MAX_INFLIGHT_ADVISORIES);
+    }
+
+    #[test]
+    fn recent_history_is_bounded_and_contains_metadata_only() {
+        let state = InfrastructureState::new();
+        for i in 0..(MAX_RECENT_REQUESTS + 5) {
+            state.record_request(RecentRequestMetadata {
+                request_id: format!("req-{i}"),
+                started_at_unix_ms: i as u64,
+                app_id: "test-app".into(),
+                context_schema: ENGINEERING_CONTEXT.into(),
+                policy_id: "engineering-lab-evidence/v1".into(),
+                model: "fixture".into(),
+                model_route: "explicit".into(),
+                elapsed_ms: 1,
+                success: true,
+                outcome: "ok".into(),
+            });
+        }
+        let recent = state.recent_requests();
+        assert_eq!(recent.len(), MAX_RECENT_REQUESTS);
+        assert_eq!(recent.first().map(|r| r.request_id.as_str()), Some("req-68"));
+        let encoded = serde_json::to_string(&recent).expect("serialize recent requests");
+        assert!(!encoded.contains("question"));
+        assert!(!encoded.contains("context_body"));
+        assert!(!encoded.contains("answer"));
     }
 }
