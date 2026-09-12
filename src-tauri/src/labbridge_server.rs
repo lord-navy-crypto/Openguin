@@ -196,7 +196,7 @@ fn validate_request(req: &AdvisoryRequest, accepted_api_versions: &[&str]) -> Re
     Ok((schema, system, label))
 }
 
-async fn run_advisory(req: AdvisoryRequest, accepted_api_versions: &[&str]) -> Result<Json<AdvisoryResponse>, (StatusCode, Json<Value>)> {
+async fn run_advisory(req: AdvisoryRequest, accepted_api_versions: &[&str], response_api_version: &'static str) -> Result<Json<AdvisoryResponse>, (StatusCode, Json<Value>)> {
     let started = Instant::now();
     let (schema, system, label) = validate_request(&req, accepted_api_versions)?;
     let question = req.question.trim();
@@ -238,7 +238,7 @@ async fn run_advisory(req: AdvisoryRequest, accepted_api_versions: &[&str]) -> R
     let answer = answer.chars().take(MAX_ANSWER_CHARS).collect::<String>();
     let context_packet_id = req.context.get("packet_id").and_then(Value::as_str).map(str::to_owned);
     Ok(Json(AdvisoryResponse {
-        api_version: GENERIC_API_VERSION,
+        api_version: response_api_version,
         schema: "openguin.local-advisory-response/v1",
         request_id: request_id(),
         answer,
@@ -254,7 +254,7 @@ async fn run_advisory(req: AdvisoryRequest, accepted_api_versions: &[&str]) -> R
 }
 
 async fn generic_advisory(Json(req): Json<AdvisoryRequest>) -> Result<Json<AdvisoryResponse>, (StatusCode, Json<Value>)> {
-    run_advisory(req, &[GENERIC_API_VERSION]).await
+    run_advisory(req, &[GENERIC_API_VERSION], GENERIC_API_VERSION).await
 }
 
 async fn labbridge_advisory(Json(mut req): Json<AdvisoryRequest>) -> Result<Json<AdvisoryResponse>, (StatusCode, Json<Value>)> {
@@ -267,7 +267,7 @@ async fn labbridge_advisory(Json(mut req): Json<AdvisoryRequest>) -> Result<Json
     if req.api_version.is_empty() {
         req.api_version = LABBRIDGE_API_VERSION.to_string();
     }
-    run_advisory(req, &[LABBRIDGE_API_VERSION]).await
+    run_advisory(req, &[LABBRIDGE_API_VERSION], LABBRIDGE_API_VERSION).await
 }
 
 async fn generic_health() -> Json<Value> {
