@@ -25,9 +25,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - name: Prepare packaged runtime directory
-        run: mkdir -p src-tauri/resources/ollama-runtime
       - name: Check native LabBridge backend
+        env:
+          TAURI_CONFIG: '{"bundle":{"active":false,"icon":[],"resources":{}}}'
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Verify port and route separation
         run: |
