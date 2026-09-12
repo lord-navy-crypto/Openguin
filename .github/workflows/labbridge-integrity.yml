@@ -1,0 +1,28 @@
+name: OpenPenguin LabBridge Integrity
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'src-tauri/Cargo.toml'
+      - 'src-tauri/src/main.rs'
+      - 'src-tauri/src/labbridge_server.rs'
+      - 'docs/LABBRIDGE_V1.md'
+      - '.github/workflows/labbridge-integrity.yml'
+
+jobs:
+  validate:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Check native LabBridge backend
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+      - name: Verify port and route separation
+        run: |
+          grep -q '127.0.0.1:11436' src-tauri/src/labbridge_server.rs
+          grep -q '127.0.0.1:11435' src-tauri/src/labbridge_server.rs
+          grep -q '/labbridge/v1/health' src-tauri/src/labbridge_server.rs
+          grep -q '/labbridge/v1/capabilities' src-tauri/src/labbridge_server.rs
+          grep -q '/labbridge/v1/advisory' src-tauri/src/labbridge_server.rs
+          grep -q 'executed: false' src-tauri/src/labbridge_server.rs
