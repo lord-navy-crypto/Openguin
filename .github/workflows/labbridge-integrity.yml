@@ -6,6 +6,7 @@ on:
     branches:
       - main
       - feature/shared-ai-infrastructure-v2
+      - feature/shared-ai-infrastructure-v3
     paths:
       - 'src-tauri/Cargo.toml'
       - 'src-tauri/src/main.rs'
@@ -13,6 +14,7 @@ on:
       - 'src-tauri/src/labbridge_server.rs'
       - 'docs/LABBRIDGE_V1.md'
       - 'docs/OPENPENGUIN_INFRASTRUCTURE_V2.md'
+      - 'docs/OPENPENGUIN_INFRASTRUCTURE_V3.md'
       - '.github/workflows/labbridge-integrity.yml'
   pull_request:
     paths:
@@ -22,6 +24,7 @@ on:
       - 'src-tauri/src/labbridge_server.rs'
       - 'docs/LABBRIDGE_V1.md'
       - 'docs/OPENPENGUIN_INFRASTRUCTURE_V2.md'
+      - 'docs/OPENPENGUIN_INFRASTRUCTURE_V3.md'
       - '.github/workflows/labbridge-integrity.yml'
 
 jobs:
@@ -65,7 +68,7 @@ jobs:
         run: cargo check --manifest-path src-tauri/Cargo.toml
       - name: Run infrastructure unit tests
         run: cargo test --manifest-path src-tauri/Cargo.toml --bin openguin infrastructure::tests
-      - name: Verify transport, policy, and authority contracts
+      - name: Verify transport, policy, authority, and privacy contracts
         run: |
           grep -q '127.0.0.1:11436' src-tauri/src/labbridge_server.rs
           grep -q '127.0.0.1:11435' src-tauri/src/labbridge_server.rs
@@ -74,9 +77,11 @@ jobs:
           grep -q 'sentinel.system-evidence-context/v1' src-tauri/src/infrastructure.rs
           grep -q 'labbridge.ai-context/v1' src-tauri/src/infrastructure.rs
           grep -q 'MAX_INFLIGHT_ADVISORIES: usize = 2' src-tauri/src/infrastructure.rs
+          grep -q 'MAX_RECENT_REQUESTS: usize = 64' src-tauri/src/infrastructure.rs
           grep -q '/v1/health' src-tauri/src/labbridge_server.rs
           grep -q '/v1/status' src-tauri/src/labbridge_server.rs
           grep -q '/v1/policies' src-tauri/src/labbridge_server.rs
+          grep -q '/v1/requests/recent' src-tauri/src/labbridge_server.rs
           grep -q '/v1/capabilities' src-tauri/src/labbridge_server.rs
           grep -q '/v1/advisory' src-tauri/src/labbridge_server.rs
           grep -q '/labbridge/v1/health' src-tauri/src/labbridge_server.rs
@@ -85,3 +90,6 @@ jobs:
           grep -q 'mutation_authority: false' src-tauri/src/labbridge_server.rs
           grep -q 'executed: false' src-tauri/src/labbridge_server.rs
           grep -q 'Safe Change execution authority' src-tauri/src/infrastructure.rs
+          grep -q '"stores_question": false' src-tauri/src/labbridge_server.rs
+          grep -q '"stores_context": false' src-tauri/src/labbridge_server.rs
+          grep -q '"stores_answer": false' src-tauri/src/labbridge_server.rs
