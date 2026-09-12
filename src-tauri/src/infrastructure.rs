@@ -172,3 +172,40 @@ fn unix_ms() -> u64 {
         .as_millis()
         .min(u64::MAX as u128) as u64
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn policies_are_separate_and_authoritative_sources_remain_external() {
+        let engineering = context_policy(ENGINEERING_CONTEXT).expect("engineering policy");
+        let sentinel = context_policy(SENTINEL_CONTEXT).expect("sentinel policy");
+        assert_ne!(engineering.id, sentinel.id);
+        assert_eq!(engineering.suggested_app_id, "engineering-lab");
+        assert_eq!(sentinel.suggested_app_id, "sentinel-macos");
+        assert!(engineering.authority.contains("Engineering Lab"));
+        assert!(sentinel.authority.contains("Sentinel"));
+        assert!(context_policy("unknown.context/v1").is_none());
+    }
+
+    #[test]
+    fn advisory_capacity_is_bounded_and_observable() {
+        let state = InfrastructureState::new();
+        let first = state.try_begin().expect("first advisory slot");
+        let second = state.try_begin().expect("second advisory slot");
+        assert!(state.try_begin().is_none(), "third advisory must be rejected while both slots are held");
+        let busy = state.snapshot();
+        assert_eq!(busy.requests_active, 2);
+        assert_eq!(busy.requests_rejected_busy, 1);
+        state.finish(true);
+        drop(first);
+        state.finish(false);
+        drop(second);
+        let finished = state.snapshot();
+        assert_eq!(finished.requests_active, 0);
+        assert_eq!(finished.requests_succeeded, 1);
+        assert_eq!(finished.requests_failed, 1);
+        assert_eq!(finished.available_advisory_slots, MAX_INFLIGHT_ADVISORIES);
+    }
+}
