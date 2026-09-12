@@ -1,4 +1,4 @@
-name: OpenPenguin LabBridge Integrity
+name: OpenPenguin Local AI Infrastructure Integrity
 
 on:
   workflow_dispatch:
@@ -42,10 +42,6 @@ jobs:
           bundle['resources'] = {}
           config_path.write_text(json.dumps(config, indent=2), encoding='utf-8')
 
-          # tauri::generate_context! still resolves its default development icon
-          # even when bundling is disabled. Provide a tiny CI-only RGBA PNG so
-          # this job checks Rust/LabBridge compilation without requiring release
-          # packaging assets to be committed to the feature branch.
           def chunk(kind: bytes, data: bytes) -> bytes:
               crc = binascii.crc32(kind + data) & 0xffffffff
               return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', crc)
@@ -60,13 +56,22 @@ jobs:
           icon_path.parent.mkdir(parents=True, exist_ok=True)
           icon_path.write_bytes(icon)
           PY
-      - name: Check native LabBridge backend
+      - name: Check local AI infrastructure backend
         run: cargo check --manifest-path src-tauri/Cargo.toml
-      - name: Verify port and route separation
+      - name: Verify transport and authority contracts
         run: |
           grep -q '127.0.0.1:11436' src-tauri/src/labbridge_server.rs
           grep -q '127.0.0.1:11435' src-tauri/src/labbridge_server.rs
+          grep -q 'openguin-local-api/v1' src-tauri/src/labbridge_server.rs
+          grep -q 'labbridge-openguin-api/v1' src-tauri/src/labbridge_server.rs
+          grep -q 'sentinel.system-evidence-context/v1' src-tauri/src/labbridge_server.rs
+          grep -q 'labbridge.ai-context/v1' src-tauri/src/labbridge_server.rs
+          grep -q '/v1/health' src-tauri/src/labbridge_server.rs
+          grep -q '/v1/capabilities' src-tauri/src/labbridge_server.rs
+          grep -q '/v1/advisory' src-tauri/src/labbridge_server.rs
           grep -q '/labbridge/v1/health' src-tauri/src/labbridge_server.rs
           grep -q '/labbridge/v1/capabilities' src-tauri/src/labbridge_server.rs
           grep -q '/labbridge/v1/advisory' src-tauri/src/labbridge_server.rs
           grep -q 'executed: false' src-tauri/src/labbridge_server.rs
+          grep -q 'advisory_only: true' src-tauri/src/labbridge_server.rs
+          grep -q 'no shell or Safe Change execution authority' src-tauri/src/labbridge_server.rs
