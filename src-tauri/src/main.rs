@@ -1,14 +1,15 @@
+mod infrastructure;
 mod labbridge_server;
 
 fn main() {
     std::thread::Builder::new()
-        .name("openguin-labbridge".into())
+        .name("openguin-infrastructure".into())
         .spawn(|| {
             let runtime = tokio::runtime::Runtime::new()
-                .expect("create OpenPenguin LabBridge runtime");
+                .expect("create OpenPenguin infrastructure runtime");
             runtime.block_on(labbridge_server::serve());
         })
-        .expect("start OpenPenguin LabBridge thread");
+        .expect("start OpenPenguin infrastructure thread");
 
     openguin_lib::run();
 }
