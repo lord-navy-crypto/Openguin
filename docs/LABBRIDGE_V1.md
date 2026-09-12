@@ -1,5 +1,7 @@
 # OpenPenguin Local AI Infrastructure v1
 
+> **Current shared-infrastructure contract:** see `docs/OPENPENGUIN_INFRASTRUCTURE_V2.md` for client identity, policy registry, runtime status, bounded concurrency, model routing, request tracing, and timeout governance. This v1 document remains the compatibility reference for existing LabBridge consumers.
+
 OpenPenguin now exposes a thin, loopback-only advisory service for multiple products while keeping its private Ollama runtime unchanged.
 
 The first supported consumers are **Engineering Lab** and **Sentinel**. The old LabBridge endpoints remain as a compatibility surface for Engineering Lab.
