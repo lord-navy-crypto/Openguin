@@ -2,6 +2,15 @@ name: OpenPenguin LabBridge Integrity
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - feature/labbridge-v1
+    paths:
+      - 'src-tauri/Cargo.toml'
+      - 'src-tauri/src/main.rs'
+      - 'src-tauri/src/labbridge_server.rs'
+      - 'docs/LABBRIDGE_V1.md'
+      - '.github/workflows/labbridge-integrity.yml'
   pull_request:
     paths:
       - 'src-tauri/Cargo.toml'
