@@ -82,7 +82,7 @@ Current work includes:
 - **Shared persistent browser runtime** — one Chromium profile for authenticated sessions to avoid concurrent profile access.
 - **Runtime diagnostics** — persisted lifecycle state and event journals for crash and recovery visibility.
 
-The migrated implementation lives in `modules/ai-cowork/` on the `feature/ai-cowork-integration` branch. It is **not yet part of the stable OpenPenguin 0.10 application runtime**.
+The migrated implementation lives in `modules/ai-cowork/` on the `ai-cowork-integration` branch. It is **not yet part of the stable OpenPenguin 0.10 application runtime**.
 
 See `docs/AI_COWORK.md` for the integration boundary, current limitations, and migration provenance.
 
