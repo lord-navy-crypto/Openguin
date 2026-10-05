@@ -3,7 +3,7 @@ name: ai-cowork-module
 on:
   push:
     branches:
-      - "feature/ai-cowork-integration"
+      - "ai-cowork-integration"
     paths:
       - "modules/ai-cowork/**"
       - ".github/workflows/ai-cowork-test.yml"
