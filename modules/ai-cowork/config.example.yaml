@@ -1,0 +1,17 @@
+stable_output_seconds: 4
+poll_interval_seconds: 1
+
+chatgpt:
+  app_name: ChatGPT
+  read_strategy: webarea
+  # Try Accessibility-only sending first so AI-cowork can stay in the background.
+  background_preferred: true
+  # If the current ChatGPT build does not expose a writable AX composer,
+  # temporarily use the old foreground paste fallback.
+  allow_foreground_fallback: true
+
+supervisor:
+  idle_confirm_seconds: 3
+  continue_prompt: >-
+    Continue doing the current task. Keep working from where you stopped.
+    Do not restart or summarize unless necessary; continue the actual work.

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Experimental AI CoWork integration
+- Imported the current AI-cowork source snapshot into `modules/ai-cowork/` on the dedicated `feature/ai-cowork-integration` branch.
+- Added OpenPenguin documentation for the ChatGPT Web Supervisor, Cursor Web Supervisor, and GitHub-native cooperation protocol.
+- Added a dedicated macOS CI workflow for the nested Python module.
+- Kept AI CoWork isolated from the stable OpenPenguin 0.10 runtime while the integration contract is still under development.
+
 ## 0.10.0
 
 ### Global Model Index

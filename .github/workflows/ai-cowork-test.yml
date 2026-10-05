@@ -1,0 +1,30 @@
+name: ai-cowork-module
+
+on:
+  push:
+    branches:
+      - "feature/ai-cowork-integration"
+    paths:
+      - "modules/ai-cowork/**"
+      - ".github/workflows/ai-cowork-test.yml"
+      - "docs/AI_COWORK.md"
+  pull_request:
+    paths:
+      - "modules/ai-cowork/**"
+      - ".github/workflows/ai-cowork-test.yml"
+      - "docs/AI_COWORK.md"
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    defaults:
+      run:
+        working-directory: modules/ai-cowork
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: python -m compileall -q .
+      - run: python -m unittest discover -s tests -v

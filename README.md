@@ -69,6 +69,23 @@ The old standalone JavaScript example has been removed. Developer Studio now exp
 - verified Hugging Face GGUF SHA/provenance workflow
 - complete Openguin penguin icon / `.icns` branding chain
 
+
+## Experimental AI CoWork module
+
+AI CoWork is an **in-development multi-agent coordination module** being integrated into OpenPenguin. It is intentionally isolated from the stable 0.10 runtime while the architecture is validated.
+
+Current work includes:
+
+- **ChatGPT Web Supervisor** — monitors a dedicated ChatGPT web session and only continues after a confirmed idle state.
+- **Cursor Web Supervisor** — classifies Cursor Agent state without treating an unknown UI state as permission to act.
+- **ChatGPT ↔ Cursor Cooperation** — GitHub-native coordination using agent-owned branches, append-only coordination messages, and fail-closed protocol gates.
+- **Shared persistent browser runtime** — one Chromium profile for authenticated sessions to avoid concurrent profile access.
+- **Runtime diagnostics** — persisted lifecycle state and event journals for crash and recovery visibility.
+
+The migrated implementation lives in `modules/ai-cowork/` on the `feature/ai-cowork-integration` branch. It is **not yet part of the stable OpenPenguin 0.10 application runtime**.
+
+See `docs/AI_COWORK.md` for the integration boundary, current limitations, and migration provenance.
+
 ## Architecture
 
 ```text
