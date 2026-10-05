@@ -6,7 +6,7 @@ This directory contains a source snapshot migrated from **lord-navy-crypto/AI-co
 - Source commit: `66692023621412a0887581842ff173ec818bbd73`
 - Source archive branch: `archive/ai-cowork-2026-10-05`
 - Destination repository: `lord-navy-crypto/Openguin`
-- Destination branch: `feature/ai-cowork-integration`
+- Destination branch: `ai-cowork-integration`
 - Destination path: `modules/ai-cowork/`
 - Migration date: 2026-10-05
 
