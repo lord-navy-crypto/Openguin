@@ -2,3 +2,10 @@
 
 /* Alpha 0.6 */
 .runtime-card{margin:22px 0;padding:20px;border:1px solid var(--line,#2b3040);border-radius:18px;background:rgba(255,255,255,.025);display:grid;gap:18px}.runtime-card h3{margin:5px 0 4px}.runtime-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}.runtime-grid>div{padding:12px;border:1px solid var(--line,#2b3040);border-radius:12px;display:grid;gap:5px}.runtime-grid span{font-size:12px;opacity:.65}.runtime-grid b{font-size:13px;overflow:hidden;text-overflow:ellipsis}.runtime-actions{display:flex;gap:10px}.path-text{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px!important}.legal-mini{padding:12px 4px 2px;font-size:10px;line-height:1.5;opacity:.48}.memory-preview{margin-top:14px;padding:12px;border-radius:12px;background:rgba(255,255,255,.04);display:flex;justify-content:space-between;gap:12px;font-size:12px}.bench-history{margin-top:20px;border-top:1px solid var(--line,#2b3040);padding-top:14px}.bench-row{display:grid;grid-template-columns:1fr 90px 100px;gap:10px;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.055);font-size:12px}.bench-row b{text-align:right}.legal-box{margin-top:18px;padding:14px;border:1px solid var(--line,#2b3040);border-radius:12px;font-size:12px;line-height:1.7;opacity:.8}@media(max-width:1150px){.runtime-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Non-modal, keyboard-accessible review before deleting local model assets. */
+.model-delete-review{margin:16px 0 0;padding:16px;border:1px solid #b77d4b;
+ border-radius:14px;background:rgba(183,125,75,.1);}
+.model-delete-review h3{font-size:15px;margin:0 0 8px;}
+.model-delete-review p{font-size:12px;line-height:1.6;overflow-wrap:anywhere;}
+.model-delete-review .inspector-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:14px;}
