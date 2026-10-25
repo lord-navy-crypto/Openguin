@@ -177,7 +177,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <div><span>正文读取耗时中位数</span><strong>{metric(telemetry.medianBodyReadMs,"ms")}</strong></div>
           <div><span>响应后等待开始读取</span><strong>{metric(telemetry.maxHeadersToBodyReadMs,"ms")}</strong></div>
         </div>
-        <p className="browser-report-howto">P95 表示本次已记录响应中 95% 不超过的耗时，不是网络延迟保证值。响应耗时包含浏览器可观测的请求等待时间，不能单独分离服务器处理时间与网络传输时间。</p>
+        <p className="browser-report-howto">P95 表示本次已记录响应中 95% 不超过的耗时，不是网络延迟保证值。响应耗时包含浏览器可观测的请求等待时间，不能单独分离服务器处理时间与网络传输时间。正文读取耗时还可能包含 JSON 解析和页面消费速度，不等于纯网络传输耗时。</p>
       </div>}
       {requestLifecycles.length>0&&<div className="browser-request-lifecycles">
         <h4>逐请求生命周期 · 同一请求 ID 关联</h4>
