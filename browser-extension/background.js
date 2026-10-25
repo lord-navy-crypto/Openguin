@@ -5,7 +5,7 @@ const ALLOWED_KINDS = new Set([
   "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
   "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
-  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task"
+  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability"
 ]);
 
 function cleanHost(value) {
@@ -36,9 +36,10 @@ function sanitizeEvent(input) {
     errorType: /^[A-Za-z][A-Za-z0-9]{0,59}$/.test(errorType) ? errorType : "",
     tag: /^[a-z][a-z0-9-]{0,19}$/i.test(tag) ? tag : ""
   };
-  for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs"]) {
+  for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "bodyChildCount", "firstPaintMs", "firstContentfulPaintMs", "mutationCount"]) {
     if (Number.isFinite(event[key])) output[key] = Math.max(0, Math.min(Number(event[key]), 1e9));
   }
+  output.readyState = ["loading", "interactive", "complete"].includes(event.readyState) ? event.readyState : "";
   return output;
 }
 
