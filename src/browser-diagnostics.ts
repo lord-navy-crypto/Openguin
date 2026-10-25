@@ -431,6 +431,7 @@ export type BrowserRequestLifecycle = {
   status: number | null;
   stallEvents: number;
   streamPauseEvents: number;
+  bodyReadErrors: number;
   eventCount: number;
 };
 
@@ -446,7 +447,8 @@ export function summarizeBrowserRequests(report: BrowserReport): BrowserRequestL
   const requestKinds = new Set([
     "fetch-start","fetch-response","fetch-error","fetch-stall",
     "xhr-start","xhr-response","xhr-error","xhr-stall",
-    "stream-gap","stream-gap-resolved","stream-error","stream-end"
+    "stream-gap","stream-gap-resolved","stream-error","stream-end",
+    "body-read-complete","body-read-error"
   ]);
   for (const event of report.events) {
     if (!event.requestId || !RE_REQUEST_ID.test(event.requestId) || !requestKinds.has(event.kind)) continue;
@@ -455,7 +457,7 @@ export function summarizeBrowserRequests(report: BrowserReport): BrowserRequestL
       row = {
         requestId:event.requestId,host:event.host,path:event.path||"/",method:event.method||"—",
         startedAt:null,finishedAt:null,durationMs:null,outcome:"incomplete",status:null,
-        stallEvents:0,streamPauseEvents:0,eventCount:0,terminalPriority:0
+        stallEvents:0,streamPauseEvents:0,bodyReadErrors:0,eventCount:0,terminalPriority:0
       };
       groups.set(event.requestId,row);
     }
@@ -470,6 +472,7 @@ export function summarizeBrowserRequests(report: BrowserReport): BrowserRequestL
     if (event.kind === "stream-gap" || event.kind === "stream-gap-resolved" || event.kind === "stream-error") {
       row.streamPauseEvents++;
     }
+    if (event.kind === "body-read-error") row.bodyReadErrors++;
     const terminal = event.kind === "fetch-response" || event.kind === "xhr-response" ||
       event.kind === "fetch-error" || event.kind === "xhr-error";
     if (terminal) {
