@@ -48,40 +48,89 @@
   }
 
   function instrumentResponseBody(response, meta) {
-    try {
-      const body = response.body;
-      if (!body || body.__openguinNetWatchWrapped) return;
-      const originalGetReader = body.getReader.bind(body);
-      Object.defineProperty(body, "__openguinNetWatchWrapped", { value: true });
-      Object.defineProperty(body, "getReader", {
-        configurable: true,
-        value: function(...args) {
-          const reader = originalGetReader(...args);
-          const originalRead = reader.read.bind(reader);
-          reader.read = function(...readArgs) {
+    if (!response) return;
+    const responseReceivedAt = performance.now();
+    const body = response.body;
+    if (body && !body.__openguinNetWatchWrapped) {
+      try {
+        const originalGetReader = body.getReader.bind(body);
+        Object.defineProperty(body, "__openguinNetWatchWrapped", { value: true });
+        Object.defineProperty(body, "getReader", {
+          configurable: true,
+          value: function(...args) {
+            const reader = originalGetReader(...args);
+            const originalRead = reader.read.bind(reader);
+            reader.read = function(...readArgs) {
+              const started = performance.now();
+              let settled = false;
+              const timer = setTimeout(() => {
+                if (!settled) emit(Object.assign({ kind: "stream-gap", gapMs: 15000, method: meta.method }, meta));
+              }, 15000);
+              return originalRead(...readArgs).then((result) => {
+                settled = true;
+                clearTimeout(timer);
+                const gap = performance.now() - started;
+                if (gap > 1500) emit(Object.assign({ kind: "stream-gap-resolved", gapMs: Math.round(gap), method: meta.method }, meta));
+                if (result && result.done) emit(Object.assign({ kind: "stream-end", method: meta.method }, meta));
+                return result;
+              }, (error) => {
+                settled = true;
+                clearTimeout(timer);
+                emit(Object.assign({ kind: "stream-error", errorType: typeOfError(error), method: meta.method }, meta));
+                throw error;
+              });
+            };
+            return reader;
+          }
+        });
+      } catch { /* Some streams cannot be wrapped; other body telemetry may still work. */ }
+    }
+
+    // Some applications consume a Fetch body through response.json()/text()
+    // instead of calling body.getReader(). Observe only timing and error type;
+    // never inspect, stringify, clone, or store the returned body value.
+    for (const method of ["text", "json", "arrayBuffer", "blob", "formData"]) {
+      try {
+        const original = response[method];
+        if (typeof original !== "function" || response["__openguinNetWatchRead_" + method]) continue;
+        Object.defineProperty(response, "__openguinNetWatchRead_" + method, { value: true });
+        Object.defineProperty(response, method, {
+          configurable: true,
+          value: function(...args) {
             const started = performance.now();
-            let settled = false;
-            const timer = setTimeout(() => {
-              if (!settled) emit(Object.assign({ kind: "stream-gap", gapMs: 15000, method: meta.method }, meta));
-            }, 15000);
-            return originalRead(...readArgs).then((result) => {
-              settled = true;
-              clearTimeout(timer);
-              const gap = performance.now() - started;
-              if (gap > 1500) emit(Object.assign({ kind: "stream-gap-resolved", gapMs: Math.round(gap), method: meta.method }, meta));
-              if (result && result.done) emit(Object.assign({ kind: "stream-end", method: meta.method }, meta));
-              return result;
+            const common = Object.assign({
+              tag: method,
+              headersToBodyReadMs: Math.max(0, Math.round(started - responseReceivedAt))
+            }, meta);
+            let result;
+            try {
+              result = original.apply(this, args);
+            } catch (error) {
+              emit(Object.assign({
+                kind: "body-read-error",
+                bodyReadDurationMs: Math.max(0, Math.round(performance.now() - started)),
+                errorType: typeOfError(error)
+              }, common));
+              throw error;
+            }
+            return Promise.resolve(result).then((value) => {
+              emit(Object.assign({
+                kind: "body-read-complete",
+                bodyReadDurationMs: Math.max(0, Math.round(performance.now() - started))
+              }, common));
+              return value;
             }, (error) => {
-              settled = true;
-              clearTimeout(timer);
-              emit(Object.assign({ kind: "stream-error", errorType: typeOfError(error), method: meta.method }, meta));
+              emit(Object.assign({
+                kind: "body-read-error",
+                bodyReadDurationMs: Math.max(0, Math.round(performance.now() - started)),
+                errorType: typeOfError(error)
+              }, common));
               throw error;
             });
-          };
-          return reader;
-        }
-      });
-    } catch { /* Some streams cannot be wrapped; fetch telemetry still works. */ }
+          }
+        });
+      } catch { /* Host objects may reject own-method instrumentation. */ }
+    }
   }
 
   const wrappedFetch = function(input, init) {
