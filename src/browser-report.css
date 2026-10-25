@@ -10,6 +10,14 @@
 .browser-report-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:12px}
 .browser-telemetry{border:1px solid #ffffff16;border-radius:11px;padding:13px;display:grid;gap:8px}
 .browser-telemetry>p{margin:0}
+.browser-request-lifecycles{border:1px solid #ffffff16;border-radius:11px;padding:13px;display:grid;gap:8px}
+.browser-request-lifecycles>p{margin:0}
+.browser-request-row{background:#0b1823;border:1px solid #ffffff12;border-left:3px solid #5f8ca7;border-radius:8px;padding:10px;min-width:0}
+.browser-request-row.http-error{border-left-color:#d9bc79}
+.browser-request-row.transport-error,.browser-request-row.stalled{border-left-color:#ed8c82}
+.browser-request-row.incomplete{border-left-color:#8c98a8}
+.browser-request-row p,.browser-request-row small{display:block;font-size:10px;line-height:1.6;color:#a6bdcd;margin:5px 0 0;overflow-wrap:anywhere}
+.browser-request-row small{color:#b0d6cb}
 .browser-endpoints{border:1px solid #ffffff16;border-radius:11px;padding:13px;display:grid;gap:8px}
 .browser-endpoints>p{margin:0}
 .browser-endpoint-row{background:#0b1823;border:1px solid #ffffff12;border-radius:8px;padding:10px;min-width:0}
