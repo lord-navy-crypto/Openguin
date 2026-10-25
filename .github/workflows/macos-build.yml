@@ -1,5 +1,9 @@
 name: Openguin macOS Universal2 Build
 
+concurrency:
+  group: openguin-universal2-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -39,10 +43,31 @@ jobs:
           python3 scripts/apply-expansion010.py
           python3 scripts/apply-openguin-brand.py
           python3 scripts/ensure-app-icon.py
+          python3 scripts/apply-network-observatory.py
           python3 scripts/verify-desktop.py
 
       - name: Install frontend dependencies
         run: npm install
+
+      - name: Test browser network monitor and report parser
+        run: |
+          node --check browser-extension/background.js
+          node --check browser-extension/monitor-main.js
+          node --check browser-extension/monitor-bridge.js
+          node --check browser-extension/popup.js
+          node scripts/test-network-observatory.mjs
+
+      - name: Verify network classifier and browser correlation before packaging
+        run: |
+          mkdir -p .network-test
+          ./node_modules/.bin/esbuild src/browser-diagnostics.ts --bundle --platform=node --format=esm --outfile=.network-test/browser-diagnostics.mjs
+          ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
+          ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
+          node --test tests/network-observatory.test.mjs tests/network-one-click.test.mjs tests/network-correlation.test.mjs
+          ./node_modules/.bin/esbuild src/network-history.ts --bundle --platform=node --format=esm --outfile=.network-test/network-history.mjs
+          node --test tests/network-history.test.mjs
+          ./node_modules/.bin/esbuild src/network-retest.ts --bundle --platform=node --format=esm --outfile=.network-test/network-retest.mjs
+          node --test tests/network-retest.test.mjs
 
       - name: Build Universal2 app and DMG
         run: npm run desktop:build -- --target universal-apple-darwin
@@ -61,13 +86,65 @@ jobs:
           echo " $ARCHS " | grep -q " x86_64 "
           find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f -print -quit | grep -q .
 
-      - name: Upload Universal2 bundles
+      - name: Package Network Watch extension and installation guide
+        run: |
+          # Vite/Tauri already use dist/ for the frontend, so keep downloadable
+          # release files in a separate directory.
+          mkdir -p release-artifacts
+          ditto -c -k --sequesterRsrc --keepParent browser-extension release-artifacts/Openguin-Network-Watch.zip
+          cp LICENSE release-artifacts/LICENSE.txt
+          cp THIRD_PARTY_NOTICES.md release-artifacts/THIRD_PARTY_NOTICES.md
+          cat > release-artifacts/INSTALL-NETWORK-OBSERVATORY.txt <<'EOF'
+          Openguin Network Observatory — macOS Universal2 installation
+
+          Quick start — no Terminal commands and no Ollama required:
+          1. Open the DMG on your Mac and drag Openguin to Applications.
+          2. Open Openguin: the Network Doctor panel is the default screen.
+          3. Select the main "Start full check" button for DNS, HTTPS, latency,
+             VPN/proxy configuration signals, and bounded speed measurements.
+          4. Inspect the per-website results, evidence and suggested next steps.
+          5. If problems come and go, select "Three quick retests" for up to
+             three lightweight DNS/HTTPS passes (no bulk upload/download).
+          6. Expand "Advanced network and browser diagnosis" only when needed
+             for raw DNS/HTTPS results, optional browser reports, and a manual
+             VPN on/off comparison. The application never changes network settings.
+
+          If your Mac warns about the app: this CI build is unsigned and
+          unnotarized. Review the source and SHA256 manifest before using it,
+          and use macOS System Settings to review the security prompt only
+          if you trust this build. Do not disable Gatekeeper globally.
+
+          Browser monitoring:
+          1. Extract Openguin-Network-Watch.zip.
+          2. In Chrome/Chromium, open Extensions and enable Developer mode.
+          3. Choose Load unpacked and select the extracted browser-extension folder.
+          4. Open the page to diagnose and click Start this tab in the extension.
+          5. Optional ChatGPT reload monitoring needs separate host permission.
+             Optional file-download monitoring needs downloads and alarms permissions.
+             It records host/progress/bytes/stalls, not filenames or full URLs.
+
+          Troubleshooting:
+          - DNS failure: reconnect the active network/VPN, then repeat the check.
+          - DNS succeeds but HTTPS fails: inspect routing, VPN, proxy/TLS filtering,
+            firewall, or endpoint reachability.
+          - HTTP 401/403/429 means the server responded; it is not a timeout.
+          - A stream gap is a symptom, not proof of a particular cause.
+          - Compare repeated VPN-on/off tests and change one setting at a time.
+
+          This is an unsigned/unnotarized developer build. macOS may show a security
+          warning. Only run it if you trust the source.
+          EOF
+          shasum -a 256 release-artifacts/* > release-artifacts/SHA256SUMS.txt
+          ls -lh release-artifacts
+
+      - name: Upload Universal2 DMG, app, extension, and guide
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.10.1-Universal2-${{ github.sha }}
+          name: Openguin-Network-Observatory-Universal2-${{ github.sha }}
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            release-artifacts/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30

@@ -44,9 +44,10 @@ ditto "$SOURCE_DIR" "$RUNTIME_DIR"
 chmod +x "$RUNTIME_DIR/ollama"
 [ ! -f "$RUNTIME_DIR/llama-server" ] || chmod +x "$RUNTIME_DIR/llama-server"
 
-if [ ! -x "$RUNTIME_DIR/llama-server" ]; then
-  echo "Prepared runtime is incomplete: llama-server is missing." >&2
-  echo "ModelDock intentionally refuses CLI-only Ollama bundles because recent Ollama versions require companion runners." >&2
+RUNNER_PATH="$(find "$RUNTIME_DIR" -type f -name 'llama-server' -print -quit)"
+if [ -z "$RUNNER_PATH" ] || [ ! -x "$RUNNER_PATH" ]; then
+  echo "Prepared runtime is incomplete: no executable llama-server runner was found." >&2
+  echo "Openguin refuses CLI-only bundles because supported Ollama versions require companion runners." >&2
   exit 3
 fi
 
@@ -54,7 +55,7 @@ echo "Prepared complete bundled Ollama runtime:"
 echo "  source: $SOURCE_DIR"
 echo "  target: $RUNTIME_DIR"
 echo "  ollama: $($RUNTIME_DIR/ollama --version 2>&1 | head -n 1 || true)"
-echo "  runner: $RUNTIME_DIR/llama-server"
+echo "  runner: $RUNNER_PATH"
 echo "  files: $(find "$RUNTIME_DIR" -maxdepth 1 -type f | wc -l | tr -d ' ')"
 
 echo

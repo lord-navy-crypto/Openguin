@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import BrowserReportPanel from './BrowserReportPanel';
+import OneClickNetworkPanel from './OneClickNetworkPanel';
+import { diagnoseOneClick, type OneClickResult } from './network-one-click';
+import { appendNetworkHistory, sanitizeHistory, type NetworkHistoryEntry } from './network-history';
+import { runLightRetest } from './network-retest';
+import { diagnosticBundleToCsv, downloadDiagnosticText } from './diagnostic-export';
 import './app07.css';
 
 type Mode='bundled'|'external';
@@ -17,6 +23,12 @@ type ImportEvent={importId:string;repoId:string;filename:string;model:string;sta
 type StreamEvent={requestId:string;thinking:string;content:string;done:boolean;evalCount?:number;evalDuration?:number;error?:string};
 type Bench={at:string;model:string;ctx:number;temperature:number;tokS:number;tokens:number;mode:Mode;thinking:boolean};
 type Log={at:string;level:'info'|'warn'|'error';message:string};
+type DnsCheck={host:string;resolved:boolean;elapsedMs:number;addressCount:number;error?:string|null};
+type EndpointCheck={name:string;host:string;reachable:boolean;status?:number|null;elapsedMs?:number|null;error?:string|null};
+type NetworkSnapshot={capturedAtMs:number;os:string;dns:DnsCheck[];endpoints:EndpointCheck[];proxy:{environmentConfigured:boolean;systemConfigured:boolean};route:{defaultInterface?:string|null;vpnInterfaces:string[];vpnLikely:boolean};hints:string[]};
+type SpeedTestResult={capturedAtMs:number;provider:string;latencyMs?:number|null;jitterMs?:number|null;probeFailures:number;probeCount:number;probeSamples?:Array<{elapsedMs:number;status?:number|null;success:boolean;failureKind?:string|null}>;downloadBytes:number;uploadBytes:number;downloadMbps?:number|null;uploadMbps?:number|null;downloadMs?:number|null;uploadMs?:number|null;downloadError?:string|null;uploadError?:string|null};
+type VpnLabel='unknown'|'on'|'off';
+type VpnSample={id:string;label:'on'|'off';at:string;reachable:number;avgResponseMs:number|null;latencyMs:number|null;jitterMs:number|null;probeFailures:number|null;probeCount:number|null;downloadMbps:number|null;uploadMbps:number|null;vpnLikely:boolean;defaultInterface:string|null;proxyConfigured:boolean};
 
 const GB=1024**3;
 const fmt=(n=0)=>n?`${(n/GB).toFixed(n>=10*GB?1:2)} GB`:'—';
@@ -45,13 +57,25 @@ function load<T>(key:string,fallback:T):T{try{return JSON.parse(localStorage.get
 function save(key:string,value:unknown){localStorage.setItem(key,JSON.stringify(value));}
 
 export default function App07(){
- const [tab,setTab]=useState<Tab>('overview'),modeRef=useRef<Mode>('bundled');
+ const [tab,setTab]=useState<Tab>('diagnostics'),modeRef=useRef<Mode>('bundled');
  const [mode,setMode]=useState<Mode>('bundled'),[profile,setProfile]=useState<Profile|null>(null),[runtime,setRuntime]=useState<Runtime|null>(null);
  const [online,setOnline]=useState(false),[version,setVersion]=useState(''),[models,setModels]=useState<Model[]>([]),[selected,setSelected]=useState(''),[show,setShow]=useState<Show|null>(null);
  const [notice,setNotice]=useState(''),[busy,setBusy]=useState(false);
  const [ctx,setCtx]=useState(8192),[temp,setTemp]=useState(.7),[topP,setTopP]=useState(.9),[maxOut,setMaxOut]=useState(512),[prompt,setPrompt]=useState('Explain why local inference is useful.'),[system,setSystem]=useState('You are a concise, accurate local assistant.');
  const [thinking,setThinking]=useState(false),[thinkLevel,setThinkLevel]=useState<'low'|'medium'|'high'>('medium'),[answer,setAnswer]=useState(''),[trace,setTrace]=useState(''),[generation,setGeneration]=useState({running:false,phase:'Idle',progress:0,tokens:0,speed:0});
  const [bench,setBench]=useState<Bench[]>(()=>load('modeldock-benchmarks',[])),[logs,setLogs]=useState<Log[]>(()=>load('modeldock-logs',[]));
+  const [networkBusy,setNetworkBusy]=useState(false),[speedTestBusy,setSpeedTestBusy]=useState(false),[networkSnapshot,setNetworkSnapshot]=useState<NetworkSnapshot|null>(null),[speedTest,setSpeedTest]=useState<SpeedTestResult|null>(null);
+  const [vpnLabel,setVpnLabel]=useState<VpnLabel>('unknown'),[vpnSamples,setVpnSamples]=useState<VpnSample[]>(()=>load('network-vpn-samples',[]));
+  const [oneClickBusy,setOneClickBusy]=useState(false);
+  const [oneClickStage,setOneClickStage]=useState<'idle'|'connecting'|'speed'|'completed'>('idle');
+  const [oneClickReport,setOneClickReport]=useState<OneClickResult|null>(null);
+  const [networkHistory,setNetworkHistory]=useState<NetworkHistoryEntry[]>(()=>
+    sanitizeHistory(load<unknown>('network-scan-history-v1',[])));
+  const oneClickRef=useRef(false);
+  const repeatStopRef=useRef(false);
+  const [repeatBusy,setRepeatBusy]=useState(false);
+  const [repeatProgress,setRepeatProgress]=useState(0);
+  const latestVpnOn=vpnSamples.find(sample=>sample.label==='on'),latestVpnOff=vpnSamples.find(sample=>sample.label==='off');
  const [catalog,setCatalog]=useState<Catalog[]>(()=>load('modeldock-catalog',FALLBACK)),[catalogQuery,setCatalogQuery]=useState(''),[catalogSort,setCatalogSort]=useState('popular'),[catalogLoading,setCatalogLoading]=useState(false),[variantChoice,setVariantChoice]=useState<Record<string,string>>({});
  const [pulls,setPulls]=useState<Record<string,PullEvent>>({});
  const [hfQuery,setHfQuery]=useState('qwen gguf'),[hf,setHf]=useState<HfModel[]>([]),[hfSelected,setHfSelected]=useState<HfModel|null>(null),[variants,setVariants]=useState<Variant[]>([]),[imports,setImports]=useState<Record<string,ImportEvent>>({});
@@ -63,7 +87,211 @@ export default function App07(){
  async function refresh(which=modeRef.current){try{const [v,t]=await Promise.all([api(which,'GET','/api/version'),api(which,'GET','/api/tags')]);setOnline(true);setVersion(v.version??'');setModels(t.models??[]);if(!selected&&t.models?.[0])setSelected(t.models[0].name);return true}catch(e){setOnline(false);setVersion('');setModels([]);setShow(null);setNotice(`Ollama runtime is not connected. Device discovery remains available. ${e}`);log('warn',`${which} refresh failed: ${e}`);return false}}
  async function switchMode(next:Mode){modeRef.current=next;setMode(next);setNotice('');if(next==='bundled'){try{await invoke('start_bundled_ollama');await refresh('bundled');log('info','Bundled Ollama started by explicit user request and passed readiness check.')}catch(e){setOnline(false);setNotice(`Bundled Ollama could not start. Openguin remains usable without it. ${e}`);log('error',`Bundled startup failed: ${e}`)}}else{try{await invoke('stop_bundled_ollama')}catch{}const ok=await refresh('external');if(ok)log('info','Connected to external Ollama by explicit user request.')}await discover();}
  async function refreshEnvironment(){try{setProfile(await invoke<Profile>('system_profile'))}catch(e){log('error',`Hardware detection failed: ${e}`)}await discover();if(online)await refresh();}
- function requireRuntime(action:string){if(online)return true;setNotice(`${action} requires an Ollama runtime. Hardware/device discovery and non-runtime views do not.`);return false;}
+ async function runOneClickDiagnosis(){
+    if(oneClickRef.current || networkBusy || speedTestBusy) return;
+    oneClickRef.current=true;
+    setOneClickBusy(true);
+    setOneClickStage('connecting');
+    setOneClickReport(null);
+    setNetworkSnapshot(null);
+    setSpeedTest(null);
+    const notes:string[]=[];
+    let snapshot:NetworkSnapshot|null=null;
+    let measured:SpeedTestResult|null=null;
+    try {
+      try {
+        snapshot=await invoke<NetworkSnapshot>('run_network_diagnostics');
+        setNetworkSnapshot(snapshot);
+      } catch {
+        notes.push('本轮 DNS/HTTPS 检查失败，尚不能确定是哪一层网络故障。');
+        log('warn','One-click network check did not return a diagnosis.');
+      }
+      // Skip the bounded ~13 MB transfer when every sampled HTTPS endpoint failed.
+      // This avoids needless delay and transfer attempts during an apparent outage.
+      if(snapshot && snapshot.endpoints.some(endpoint=>endpoint.reachable)) {
+        setOneClickStage('speed');
+        try {
+          measured=await invoke<SpeedTestResult>('run_network_speed_test');
+          setSpeedTest(measured);
+        } catch {
+          notes.push('有界测速无法完成，不将未知下载/上传速率当作零。');
+          log('warn','One-click throughput check did not complete.');
+        }
+      } else {
+        notes.push('全部采样 HTTPS 端点不可达或连接诊断失败，已跳过大流量测速。');
+      }
+      const report=diagnoseOneClick(snapshot,measured,notes);
+      setOneClickReport(report);
+      const updatedHistory=appendNetworkHistory(networkHistory,report);
+      setNetworkHistory(updatedHistory);
+      try { save('network-scan-history-v1',updatedHistory); }
+      catch { log('warn','Could not persist local network scan summary; the result is still visible.'); }
+      log(report.issues.some(issue=>issue.severity==='critical')?'warn':'info',
+        'One-click network diagnosis: '+report.verdict+'; '+report.issues.length+' evidence item(s).');
+    } finally {
+      setOneClickStage('completed');
+      setOneClickBusy(false);
+      oneClickRef.current=false;
+    }
+  }
+  async function runThreeLightChecks(){
+    if(oneClickRef.current||networkBusy||speedTestBusy)return;
+    oneClickRef.current=true;
+    repeatStopRef.current=false;
+    setRepeatBusy(true);setRepeatProgress(0);
+    setOneClickBusy(true);setOneClickStage('connecting');
+    setOneClickReport(null);setSpeedTest(null);setNetworkSnapshot(null);
+    let updatedHistory=networkHistory;
+    try {
+      const summary=await runLightRetest(
+        async()=>{
+          const snapshot=await invoke<NetworkSnapshot>('run_network_diagnostics');
+          setNetworkSnapshot(snapshot);
+          return snapshot;
+        },
+        (report,round)=>{
+          setRepeatProgress(round);setOneClickReport(report);
+          updatedHistory=appendNetworkHistory(updatedHistory,report);
+          setNetworkHistory(updatedHistory);
+          try{save('network-scan-history-v1',updatedHistory)}
+          catch{log('warn','Could not store local network trend summary.')}
+        },
+        ()=>repeatStopRef.current
+      );
+      setNotice('轻量复测完成：'+summary.attempts+' 次检测，'+summary.successes+' 次获得有效连接结果。'+
+        (summary.cancelled?'已按要求停止后续测试。':'未运行大流量测速。'));
+    }catch{
+      setNotice('轻量复测被中断；已获得的诊断结果仍然保留。');
+    }finally{
+      setRepeatBusy(false);setOneClickBusy(false);
+      setOneClickStage('completed');oneClickRef.current=false;
+      repeatStopRef.current=false;
+    }
+  }
+  function stopThreeLightChecks(){repeatStopRef.current=true;}
+  function clearNetworkScanHistory(){
+    setNetworkHistory([]);
+    try { localStorage.removeItem('network-scan-history-v1'); }
+    catch { log('warn','Unable to remove stored network history.'); }
+  }
+  async function copyOneClickDiagnosis(){
+    if(!oneClickReport) return;
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(oneClickReport,null,2));
+      setNotice('已复制一键网络诊断总结（不含网页文本或聊天记录）。');
+    } catch {
+      setNotice('复制失败，请检查剪贴板权限。');
+    }
+  }
+
+ async function diagnoseNetwork(){
+    setNetworkBusy(true);
+    try{
+      const result=await invoke<NetworkSnapshot>('run_network_diagnostics');
+      setNetworkSnapshot(result);
+      const responded=result.endpoints.filter(endpoint=>endpoint.reachable).length;
+      log('info','Network diagnosis complete: '+responded+'/'+result.endpoints.length+' HTTPS endpoints responded.');
+    }catch(error){
+      const message=String(error);
+      setNotice('Network diagnosis failed: '+message);
+      log('error','Network diagnosis failed: '+message);
+    }finally{setNetworkBusy(false)}
+  }
+  async function runNetworkSpeedTest(){
+    setSpeedTestBusy(true);
+    try{
+      const result=await invoke<SpeedTestResult>('run_network_speed_test');
+      setSpeedTest(result);
+      log(result.downloadError||result.uploadError?'warn':'info','Network speed test: download '+(result.downloadMbps?.toFixed(1)??'—')+' Mbps, upload '+(result.uploadMbps?.toFixed(1)??'—')+' Mbps.');
+    }catch(error){
+      const message=String(error);
+      setNotice('Speed test failed: '+message);
+      log('error','Speed test failed: '+message);
+    }finally{setSpeedTestBusy(false)}
+  }
+
+  function buildDiagnosticBundle(){
+    return {
+      schema:{name:'Openguin Network Doctor desktop diagnostic bundle',formatVersion:1},
+      generatedAt:new Date().toISOString(),
+      app:{name:'Openguin Network Doctor',version:'0.10.1'},
+      device:profile?{
+        os:profile.os,architecture:profile.arch,chip:profile.chip,
+        memoryBytes:profile.memoryBytes,logicalCores:profile.logicalCores,
+        freeStorageBytes:profile.freeStorageBytes
+      }:null,
+      oneClickDiagnosis:oneClickReport,
+      networkSnapshot,
+      speedTest,
+      vpnComparisonSamples:vpnSamples.slice(0,10),
+      networkHistory:networkHistory.slice(0,12),
+      browserExtensionReportImported:false,
+      privacy:{
+        localOnly:true,
+        includes:['DNS lookup outcomes and durations','HTTPS response status and durations','HTTP speed-test samples','VPN/proxy indicator flags and route interface name','VPN on/off comparison samples','one-click diagnosis and local summary history','basic device performance metadata'],
+        excludes:['page text','prompts and model answers','cookies and headers','request or response bodies','proxy addresses and credentials','full URLs and query strings','download filenames','user name and local file paths'],
+        browserExtension:'Import the extension report in Browser incident report to include page-level events in its combined export.'
+      },
+      limitations:[
+        'HTTP 401/403/429 are server responses, not proof of a network outage.',
+        'VPN interface indicators do not prove that a particular request used the tunnel.',
+        'HTTP request timing is not ICMP ping or a packet-loss measurement.',
+        'Collected evidence suggests possible causes and does not guarantee a root cause.'
+      ]
+    };
+  }
+  async function copyNetworkReport(){
+    const report=buildDiagnosticBundle();
+    try{
+      await navigator.clipboard.writeText(JSON.stringify(report,null,2));
+      setNotice('Desktop diagnostic bundle copied. Review it for privacy before pasting into a support conversation.');
+      log('info','Copied a full local network diagnostic bundle.');
+    }catch(error){
+      setNotice('Could not copy the report. '+String(error));
+      log('warn','Full diagnostic report copy failed.');
+    }
+  }
+  function downloadNetworkReport(format:'json'|'csv'){
+    try{
+      const report=buildDiagnosticBundle();
+      const stamp=new Date().toISOString().replace(/[:.]/g,'-');
+      if(format==='json'){
+        downloadDiagnosticText(JSON.stringify(report,null,2),'openguin-diagnostic-'+stamp+'.json','application/json;charset=utf-8');
+      }else{
+        downloadDiagnosticText('\uFEFF'+diagnosticBundleToCsv(report),'openguin-diagnostic-'+stamp+'.csv','text/csv;charset=utf-8');
+      }
+      setNotice(format==='json'?'Diagnostic JSON export requested. Check your Downloads folder.':'Diagnostic CSV table export requested. Open it in Numbers, Excel, or a text editor.');
+    }catch(error){
+      setNotice('Could not export diagnostic report. '+String(error));
+    }
+  }
+  function saveVpnSample(){
+    if(vpnLabel==='unknown'){setNotice('Choose VPN on or VPN off before saving a comparison sample.');return}
+    if(!networkSnapshot&&!speedTest){setNotice('Run a connection diagnosis or speed test before saving a sample.');return}
+    const times=(networkSnapshot?.endpoints??[]).filter(endpoint=>endpoint.reachable&&typeof endpoint.elapsedMs==='number').map(endpoint=>endpoint.elapsedMs as number);
+    const sample:VpnSample={
+      id:Date.now().toString(36)+Math.random().toString(36).slice(2,7),
+      label:vpnLabel,
+      at:new Date().toISOString(),
+      reachable:networkSnapshot?.endpoints.filter(endpoint=>endpoint.reachable).length??0,
+      avgResponseMs:times.length?Math.round(times.reduce((sum,value)=>sum+value,0)/times.length):null,
+      latencyMs:speedTest?.latencyMs??null,
+      jitterMs:speedTest?.jitterMs??null,
+      probeFailures:speedTest?.probeFailures??null,
+      probeCount:speedTest?.probeCount??null,
+      downloadMbps:speedTest?.downloadMbps??null,
+      uploadMbps:speedTest?.uploadMbps??null,
+      vpnLikely:networkSnapshot?.route.vpnLikely??false,
+      defaultInterface:networkSnapshot?.route.defaultInterface??null,
+      proxyConfigured:Boolean(networkSnapshot?.proxy.environmentConfigured||networkSnapshot?.proxy.systemConfigured)
+    };
+    const next=[sample,...vpnSamples].slice(0,10);
+    setVpnSamples(next);
+    save('network-vpn-samples',next);
+    log('info','Saved VPN '+(vpnLabel==='on'?'ON':'OFF')+' comparison sample.');
+  }
+  function clearVpnSamples(){setVpnSamples([]);save('network-vpn-samples',[])}
+  function requireRuntime(action:string){if(online)return true;setNotice(`${action} requires an Ollama runtime. Hardware/device discovery and non-runtime views do not.`);return false;}
  async function inspectModel(name=selected){if(!name||!online){setShow(null);return}try{const d=await api(modeRef.current,'POST','/api/show',{model:name}) as Show;setShow(d);const max=contextMax(d.model_info);setCtx(v=>Math.min(v,max));if(!(d.capabilities??[]).includes('thinking'))setThinking(false);log('info',`Inspected ${name}: ${(d.capabilities??[]).join(', ')||'no capabilities reported'}`)}catch(e){setShow(null);log('warn',`Model inspect failed: ${e}`)}}
  async function initialize(){try{setProfile(await invoke<Profile>('system_profile'));log('info','Hardware/device profile detected independently of Ollama.')}catch(e){log('error',`Hardware detection failed: ${e}`)}await discover();setOnline(false);setVersion('');setModels([]);setSelected('');setShow(null);log('info','Ollama is optional: no runtime was started during application initialization.');loadCatalog();}
  useEffect(()=>{initialize();const unsubs:Promise<()=>void>[]=[];unsubs.push(listen<PullEvent>('modeldock://pull-progress',e=>{setPulls(p=>({...p,[e.payload.model]:e.payload}));if(e.payload.done){log(e.payload.error?'error':'info',`Pull ${e.payload.model}: ${e.payload.error||e.payload.status}`);refresh()}}));unsubs.push(listen<ImportEvent>('modeldock://import-progress',e=>{setImports(p=>({...p,[e.payload.importId]:e.payload}));if(e.payload.done){log(e.payload.error?'error':'info',`HF import ${e.payload.model}: ${e.payload.error||e.payload.status}`);refresh()}}));return()=>{unsubs.forEach(x=>x.then(f=>f()))}},[]);
@@ -79,10 +307,10 @@ export default function App07(){
  async function removeModel(name:string){if(!requireRuntime('Model deletion')||!confirm(`Delete ${name}?`))return;try{await api(modeRef.current,'DELETE','/api/delete',{model:name});log('info',`Deleted ${name}`);await refresh()}catch(e){setNotice(String(e))}}
 
  return <div className="v07-shell">
-  <aside className="v07-side"><div className="v07-brand"><span>M</span><div>ModelDock<small>Desktop Alpha 0.7</small></div></div>{(['overview','models','lab','library','diagnostics','developer'] as Tab[]).map(t=><button className={tab===t?'active':''} key={t} onClick={()=>setTab(t)}>{({overview:'Overview',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)[t]}</button>)}<div className="v07-spacer"/><div className="v07-runtime"><div><i className={online?'green':'red'}/>{online?`Ollama ${version}`:'Runtime optional'}</div><small>{online?(mode==='bundled'?'Private bundled :11435':'Existing Ollama :11434'):'Device ready · choose runtime only when needed'}</small><div className="v07-segment"><button className={online&&mode==='bundled'?'active':''} onClick={()=>switchMode('bundled')}>Start Bundled</button><button className={online&&mode==='external'?'active':''} onClick={()=>switchMode('external')}>Use External</button></div></div></aside>
-  <main className="v07-main"><header><div><h1>{({overview:'Control Center',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)[tab]}</h1><p>{profile?.chip||'Detecting hardware'} · {fmt(memory)} memory · {fmt(profile?.freeStorageBytes)} free</p></div><button onClick={refreshEnvironment}>Refresh environment</button></header>{notice&&<div className="v07-notice" onClick={()=>setNotice('')}>{notice}</div>}
+  <aside className="v07-side"><div className="v07-brand"><span>M</span><div>ModelDock<small>Desktop Alpha 0.7</small></div></div>{(['diagnostics','overview','models','lab','library','developer'] as Tab[]).map(t=><button className={tab===t?'active':''} key={t} onClick={()=>setTab(t)}>{({overview:'概览 Overview',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'网络体检 · 一键检测',developer:'Developer'} as Record<Tab,string>)[t]}</button>)}<div className="v07-spacer"/><div className="v07-runtime"><div><i className={online?'green':'red'}/>{online?`Ollama ${version}`:'Runtime optional'}</div><small>{online?(mode==='bundled'?'Private bundled :11435':'Existing Ollama :11434'):'Device ready · choose runtime only when needed'}</small><div className="v07-segment"><button className={online&&mode==='bundled'?'active':''} onClick={()=>switchMode('bundled')}>Start Bundled</button><button className={online&&mode==='external'?'active':''} onClick={()=>switchMode('external')}>Use External</button></div></div></aside>
+  <main className={"v07-main"+(tab==='diagnostics'?" diagnostics-mode":"")}><header><div><h1>{({overview:'Control Center',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'电脑网络体检',developer:'Developer Studio'} as Record<Tab,string>)[tab]}</h1><p>{profile?.chip||'正在检测电脑硬件'} · {fmt(memory)} 内存 · {fmt(profile?.freeStorageBytes)} 可用空间</p></div><div className="v07-header-actions">{tab==='diagnostics'&&<span className="diag-header-local">本机检测 · 不需要 AI 模型</span>}<button onClick={refreshEnvironment}>刷新电脑环境</button></div></header>{notice&&<div className="v07-notice" onClick={()=>setNotice('')}>{notice}</div>}
 
-  {tab==='overview'&&<div className="v07-page"><section className="v07-hero"><div><span className="eyebrow">LOCAL-FIRST · HARDWARE-AWARE · PROVENANCE-AWARE</span><h2>One desktop home for local models.</h2><p>Openguin detects hardware independently. Ollama is an optional execution backend: start the private runtime or connect an existing service only when you need inference, installs, or runtime-managed models.</p></div><div className="hero-score"><small>Best installed fit</small><b>{best?.m.name||'Connect a runtime to inspect models'}</b><strong>{best?.f.score??'—'}</strong></div></section><div className="v07-grid4"><Stat label="Device" value={profile?'Ready':'Detecting'}/><Stat label="Bundled" value={runtime?.bundledRunning?'Running':runtime?.bundledAvailable?'Available':'Unavailable'}/><Stat label="Existing Ollama" value={runtime?.externalRunning?'Running':runtime?.externalInstalled?'Installed':'Not detected'}/><Stat label="Bench runs" value={String(bench.length)}/></div><section className="v07-card"><h3>Runtime health</h3><p>{runtime?.reason||'Detecting runtimes…'}</p><p className="fine">Runtime state does not determine device readiness. Hardware profiling, cached/catalog browsing, diagnostics, and non-execution views remain available without Ollama.</p><div className="runtime-detail"><span>Bundled sidecar <b>{runtime?.bundledAvailable?'available':'missing'}</b></span><span>External version <b>{runtime?.externalVersion||'—'}</b></span><span>External path <b>{runtime?.externalPath||'—'}</b></span></div></section></div>}
+  {tab==='overview'&&<div className="v07-page"><section className="network-overview-launch"><div><span>OPENGUIN · NETWORK DOCTOR</span><h2>电脑网络有问题？现在直接检测。</h2><p>检测 DNS、HTTPS、代理与 VPN 线索，给出故障原因提示。无需启动 Ollama，无需浏览器扩展。</p></div><div className="network-overview-actions"><button className="network-overview-start" disabled={oneClickBusy} onClick={()=>{setTab('diagnostics');void runOneClickDiagnosis()}}>{oneClickBusy?'正在检测…':'立即一键体检'}</button><button onClick={()=>setTab('diagnostics')}>打开网络诊断面板</button></div></section><section className="v07-hero"><div><span className="eyebrow">LOCAL-FIRST · HARDWARE-AWARE · PROVENANCE-AWARE</span><h2>One desktop home for local models.</h2><p>Openguin detects hardware independently. Ollama is an optional execution backend: start the private runtime or connect an existing service only when you need inference, installs, or runtime-managed models.</p></div><div className="hero-score"><small>Best installed fit</small><b>{best?.m.name||'Connect a runtime to inspect models'}</b><strong>{best?.f.score??'—'}</strong></div></section><div className="v07-grid4"><Stat label="Device" value={profile?'Ready':'Detecting'}/><Stat label="Bundled" value={runtime?.bundledRunning?'Running':runtime?.bundledAvailable?'Available':'Unavailable'}/><Stat label="Existing Ollama" value={runtime?.externalRunning?'Running':runtime?.externalInstalled?'Installed':'Not detected'}/><Stat label="Bench runs" value={String(bench.length)}/></div><section className="v07-card"><h3>Runtime health</h3><p>{runtime?.reason||'Detecting runtimes…'}</p><p className="fine">Runtime state does not determine device readiness. Hardware profiling, cached/catalog browsing, diagnostics, and non-execution views remain available without Ollama.</p><div className="runtime-detail"><span>Bundled sidecar <b>{runtime?.bundledAvailable?'available':'missing'}</b></span><span>External version <b>{runtime?.externalVersion||'—'}</b></span><span>External path <b>{runtime?.externalPath||'—'}</b></span></div></section></div>}
 
   {tab==='models'&&<div className="v07-page two"><section className="v07-card list">{models.map(m=><button key={m.name} className={selected===m.name?'selected':''} onClick={()=>setSelected(m.name)}><div><b>{m.name}</b><small>{fmt(m.size)} · {m.details?.parameter_size||'?' } · {m.details?.quantization_level||'?'}</small></div><span>{fit(m,memory,8192).score}</span></button>)}{!models.length&&<Empty text={online?'No models installed in this runtime.':'No runtime connected. Device discovery is still ready; choose a runtime only when you want model operations.'}/>}</section><section className="v07-card passport">{selectedModel?<><div className="passport-head"><div><span className="eyebrow">MODEL PASSPORT</span><h2>{selectedModel.name}</h2></div><strong>{hardware.score}</strong></div><div className="cap-row">{caps.map(c=><span key={c}>{c}</span>)}{!caps.length&&<span>capabilities not reported</span>}</div><div className="v07-grid4"><Stat label="Disk" value={fmt(selectedModel.size)}/><Stat label="Est. runtime" value={fmt(hardware.estimate)}/><Stat label="Max context" value={maxCtx.toLocaleString()}/><Stat label="Fit confidence" value={hardware.confidence}/></div><p className="fine">Hardware Fit 3 combines weight size, model parameter metadata when available, context/KV allowance and OS headroom. It is an estimate, not a benchmark.</p><div className="actions"><button onClick={()=>setTab('lab')}>Open in Lab</button><button className="danger" onClick={()=>removeModel(selectedModel.name)}>Delete</button></div></>:<Empty text={online?'Select a model to inspect it.':'Connect an Ollama runtime only when you want to inspect runtime-managed models.'}/>}</section></div>}
 
@@ -90,7 +318,7 @@ export default function App07(){
 
   {tab==='library'&&<div className="v07-page"><div className="library-toolbar"><div className="seg"><button className={catalogSort==='popular'?'active':''} onClick={()=>setCatalogSort('popular')}>Popular</button><button className={catalogSort==='newest'?'active':''} onClick={()=>setCatalogSort('newest')}>Newest</button><button className={catalogSort==='featured'?'active':''} onClick={()=>setCatalogSort('featured')}>Featured</button></div><input value={catalogQuery} onChange={e=>setCatalogQuery(e.target.value)} placeholder="Search official Ollama Library"/><button onClick={loadCatalog}>{catalogLoading?'Loading…':'Sync official'}</button></div><section className="catalog-grid">{catalog.map(m=><article className="catalog-card" key={m.name}><div className="catalog-top"><div><b>{m.name}</b><small>Official Ollama Library</small></div><span>{m.capabilities.includes('thinking')?'thinking':''}</span></div><p>{m.description||'Official Ollama model.'}</p><div className="cap-row">{m.capabilities.map(c=><span key={c}>{c}</span>)}</div>{m.sizes.length>0&&<select value={variantChoice[m.name]||''} onChange={e=>setVariantChoice(v=>({...v,[m.name]:e.target.value}))}><option value="">default/latest</option>{m.sizes.slice(0,12).map(s=><option key={s}>{s}</option>)}</select>}<button className="primary" onClick={()=>installCatalog(m)}>{online?'Install':'Connect runtime to install'}{online&&variantChoice[m.name]?` ${variantChoice[m.name]}`:''}</button>{Object.values(pulls).filter(p=>p.model===m.name||p.model.startsWith(`${m.name}:`)).slice(0,1).map(p=><div className="mini-progress" key={p.model}><span>{p.error||p.status}</span><i><em style={{width:`${p.percent??0}%`}}/></i></div>)}</article>)}</section><section className="v07-card hf"><div className="hf-head"><div><span className="eyebrow">HUGGING FACE GGUF</span><h3>Verified community import</h3></div><div><input value={hfQuery} onChange={e=>setHfQuery(e.target.value)}/><button onClick={searchHf} disabled={busy}>Search</button></div></div><div className="hf-columns"><div>{hf.map(m=><button className={hfSelected?.id===m.id?'selected':''} key={m.id} onClick={()=>inspectHf(m)}><b>{m.id}</b><small>{m.cardData?.license||'license unspecified'} · {(m.downloads??0).toLocaleString()} downloads</small></button>)}</div><div>{hfSelected?variants.map(v=>{const id=`${hfSelected.id}:${v.filename}`,job=imports[id];return <div className="variant" key={v.filename}><div><b>{v.quantization}</b><small>{fmt(v.size)} · SHA {v.sha256?'available':'not exposed'}</small><small>{v.filename}</small>{job&&<small>{job.error||job.status} {job.percent!==undefined?`${job.percent.toFixed(0)}%`:''}</small>}</div><button onClick={()=>importHf(v)}>{online?'Import':'Connect runtime'}</button></div>}):<Empty text="Select a Hugging Face repository to inspect GGUF variants."/>}</div></div></section></div>}
 
-  {tab==='diagnostics'&&<div className="v07-page"><div className="v07-grid4"><Stat label="Device" value={profile?'Ready':'Unavailable'}/><Stat label="Sessions" value={String(load<number>('modeldock-sessions',1))}/><Stat label="Bench runs" value={String(bench.length)}/><Stat label="Avg speed" value={bench.length?`${(bench.reduce((s,b)=>s+b.tokS,0)/bench.length).toFixed(1)} tok/s`:'—'}/></div><section className="v07-card"><div className="diag-head"><div><h3>Local background log</h3><p>No prompts or model answers are stored here.</p></div><div><button onClick={()=>navigator.clipboard.writeText(logs.map(l=>`${l.at} [${l.level}] ${l.message}`).join('\n'))}>Copy logs</button><button onClick={()=>{setLogs([]);save('modeldock-logs',[])}}>Clear</button></div></div><div className="log-list">{logs.map((l,i)=><div key={`${l.at}-${i}`} className={l.level}><time>{new Date(l.at).toLocaleTimeString()}</time><b>{l.level}</b><span>{l.message}</span></div>)}</div></section><section className="v07-card"><h3>Benchmark history</h3>{bench.map((b,i)=><div className="bench" key={`${b.at}-${i}`}><span>{b.model}</span><span>{b.ctx/1024}K ctx · {b.mode}</span><b>{b.tokS.toFixed(1)} tok/s</b></div>)}</section></div>}
+  {tab==='diagnostics'&&<div className="v07-page"><OneClickNetworkPanel result={oneClickReport} busy={oneClickBusy} stage={oneClickStage} speedTest={speedTest} history={networkHistory} repeatBusy={repeatBusy} repeatProgress={repeatProgress} onRepeat={()=>void runThreeLightChecks()} onStopRepeat={stopThreeLightChecks} onClearHistory={clearNetworkScanHistory} onRun={()=>void runOneClickDiagnosis()} onCopy={()=>void copyOneClickDiagnosis()}/><details className="doctor-advanced"><summary className="doctor-advanced-summary"><div><b>高级网络与浏览器诊断</b><small>DNS/HTTPS 原始结果、VPN 对比、浏览器异常及本地日志</small></div><span>展开技术明细</span></summary><div className="doctor-advanced-body"><div className="v07-grid4"><Stat label="Device" value={profile?'Ready':'Unavailable'}/><Stat label="Sessions" value={String(load<number>('modeldock-sessions',1))}/><Stat label="Bench runs" value={String(bench.length)}/><Stat label="Avg speed" value={bench.length?`${(bench.reduce((s,b)=>s+b.tokS,0)/bench.length).toFixed(1)} tok/s`:'—'}/></div><section className="v07-card network-observatory"><div className="diag-head"><div><h3>Network observatory</h3><p>DNS, HTTPS reachability, routing, and VPN/proxy signals.</p></div><div className="network-actions"><button disabled={networkBusy||oneClickBusy} onClick={()=>void diagnoseNetwork()}>{networkBusy?'Checking…':'Diagnose connection'}</button><button disabled={speedTestBusy||oneClickBusy} onClick={()=>void runNetworkSpeedTest()}>{speedTestBusy?'Testing…':'Run speed test'}</button><button disabled={!networkSnapshot&&!speedTest&&!oneClickReport&&!vpnSamples.length&&!networkHistory.length} onClick={()=>void copyNetworkReport()}>Copy desktop diagnostic bundle</button><button disabled={!networkSnapshot&&!speedTest&&!oneClickReport&&!vpnSamples.length&&!networkHistory.length} onClick={()=>downloadNetworkReport('json')}>Download desktop JSON</button><button disabled={!networkSnapshot&&!speedTest&&!oneClickReport&&!vpnSamples.length&&!networkHistory.length} onClick={()=>downloadNetworkReport('csv')}>Download desktop CSV table</button></div></div><p className="network-privacy">Runs only when requested. Results stay on this device. No page content, prompts, request bodies, proxy addresses, or credentials are collected. VPN settings are never changed automatically.</p><div className="vpn-compare-controls"><label>VPN state for next sample<select value={vpnLabel} onChange={event=>{setVpnLabel(event.target.value as VpnLabel);setNetworkSnapshot(null);setSpeedTest(null)}}><option value="unknown">Select state…</option><option value="on">VPN on</option><option value="off">VPN off</option></select></label><button disabled={vpnLabel==='unknown'||(!networkSnapshot&&!speedTest)} onClick={saveVpnSample}>Save comparison sample</button></div>{networkSnapshot&&<><div className="v07-grid4 network-stats"><Stat label="Default route" value={networkSnapshot.route.defaultInterface||'Unknown'}/><Stat label="VPN signal" value={networkSnapshot.route.vpnLikely?'Possible tunnel':'Not detected'}/><Stat label="Proxy signal" value={networkSnapshot.proxy.environmentConfigured||networkSnapshot.proxy.systemConfigured?'Configured':'Not detected'}/><Stat label="HTTPS checks" value={networkSnapshot.endpoints.filter(x=>x.reachable).length+'/'+networkSnapshot.endpoints.length+' responded'}/></div><div className="network-columns"><div className="network-table"><h4>DNS resolution</h4>{networkSnapshot.dns.map(d=><div className={'network-row '+(d.resolved?'ok':'error')} key={d.host}><div><b>{d.host}</b><small>{d.error||String(d.addressCount)+' address(es)'}</small></div><span>{d.resolved?String(d.elapsedMs)+' ms':'Failed'}</span></div>)}</div><div className="network-table"><h4>HTTPS reachability</h4>{networkSnapshot.endpoints.map(e=><div className={'network-row '+(e.reachable?'ok':'error')} key={e.host}><div><b>{e.name}</b><small>{e.error||(e.status!==null&&e.status!==undefined?'HTTP '+e.status:'No response')}</small></div><span>{e.elapsedMs!==null&&e.elapsedMs!==undefined?String(e.elapsedMs)+' ms':'—'}</span></div>)}</div></div><div className="network-hints"><b>Diagnosis &amp; safe next steps</b><ul>{networkSnapshot.hints.map((hint,i)=><li key={i}>{hint}</li>)}</ul></div><small className="network-timestamp">Last checked {new Date(networkSnapshot.capturedAtMs).toLocaleString()} · VPN detection is indicative, not definitive.</small></>}{speedTest&&<div className="speed-results"><div className="v07-grid4 speed-summary"><Stat label="HTTP probe latency" value={speedTest.latencyMs!==null&&speedTest.latencyMs!==undefined?speedTest.latencyMs.toFixed(1)+' ms':'—'}/><Stat label="HTTP probe jitter" value={speedTest.jitterMs!==null&&speedTest.jitterMs!==undefined?speedTest.jitterMs.toFixed(1)+' ms':'—'}/><Stat label="Probe failures" value={speedTest.probeCount?speedTest.probeFailures+'/'+speedTest.probeCount:'—'}/><Stat label="Provider" value="Cloudflare"/></div><div className="network-columns"><div className="speed-metric"><span>Download</span><strong>{speedTest.downloadMbps!==null&&speedTest.downloadMbps!==undefined?speedTest.downloadMbps.toFixed(1)+' Mbps':'—'}</strong><small>{speedTest.downloadError||((speedTest.downloadBytes/1e6).toFixed(1)+' MB · '+(speedTest.downloadMs??'—')+' ms')}</small></div><div className="speed-metric"><span>Upload</span><strong>{speedTest.uploadMbps!==null&&speedTest.uploadMbps!==undefined?speedTest.uploadMbps.toFixed(1)+' Mbps':'—'}</strong><small>{speedTest.uploadError||((speedTest.uploadBytes/1e6).toFixed(1)+' MB · '+(speedTest.uploadMs??'—')+' ms')}</small></div></div><small>Provider: {speedTest.provider}. HTTP probe failures are not ICMP packet loss. Repeat with VPN on and off to compare.</small></div>}</section><div className="vpn-history"><div className="diag-head"><div><h4>VPN on/off comparison</h4><p>Choose the state before each run, then save a sample. This does not toggle your VPN.</p></div><button disabled={!vpnSamples.length} onClick={clearVpnSamples}>Clear samples</button></div>{latestVpnOn&&latestVpnOff?<div className="vpn-diff"><div><span>Average HTTPS response time</span><b>{latestVpnOn.avgResponseMs!==null&&latestVpnOff.avgResponseMs!==null?((latestVpnOn.avgResponseMs-latestVpnOff.avgResponseMs>0?'+':'')+String(latestVpnOn.avgResponseMs-latestVpnOff.avgResponseMs)+' ms (on − off)'):'—'}</b></div><div><span>HTTP probe latency</span><b>{latestVpnOn.latencyMs!==null&&latestVpnOff.latencyMs!==null?((latestVpnOn.latencyMs-latestVpnOff.latencyMs>0?'+':'')+(latestVpnOn.latencyMs-latestVpnOff.latencyMs).toFixed(1)+' ms (on − off)'):'—'}</b></div><div><span>HTTP probe jitter</span><b>{latestVpnOn.jitterMs!==null&&latestVpnOff.jitterMs!==null?((latestVpnOn.jitterMs-latestVpnOff.jitterMs>0?'+':'')+(latestVpnOn.jitterMs-latestVpnOff.jitterMs).toFixed(1)+' ms (on − off)'):'—'}</b></div><div><span>Probe failures</span><b>{latestVpnOn.probeFailures!==null&&latestVpnOff.probeFailures!==null?String(latestVpnOn.probeFailures)+' vs '+String(latestVpnOff.probeFailures)+' failed':'—'}</b></div><div><span>Download speed</span><b>{latestVpnOn.downloadMbps!==null&&latestVpnOff.downloadMbps!==null?((latestVpnOn.downloadMbps-latestVpnOff.downloadMbps>0?'+':'')+(latestVpnOn.downloadMbps-latestVpnOff.downloadMbps).toFixed(1)+' Mbps (on − off)'):'—'}</b></div><div><span>Upload speed</span><b>{latestVpnOn.uploadMbps!==null&&latestVpnOff.uploadMbps!==null?((latestVpnOn.uploadMbps-latestVpnOff.uploadMbps>0?'+':'')+(latestVpnOn.uploadMbps-latestVpnOff.uploadMbps).toFixed(1)+' Mbps (on − off)'):'—'}</b></div></div>:<p className="network-privacy">Save at least one VPN-on sample and one VPN-off sample to see the difference. Use the same tests for both runs; one result can be noisy.</p>}{vpnSamples.slice(0,5).map(sample=><div className="vpn-sample" key={sample.id}><b>{sample.label==='on'?'VPN ON':'VPN OFF'}</b><span>{new Date(sample.at).toLocaleString()}</span><span>{sample.avgResponseMs===null?'—':sample.avgResponseMs+' ms avg'}</span><span>{sample.downloadMbps===null?'—':sample.downloadMbps.toFixed(1)+' Mbps down'}</span><small>{sample.defaultInterface||'Route unknown'} · {sample.vpnLikely?'tunnel signal':'no tunnel signal'} · {sample.reachable} HTTPS responses</small></div>)}</div><BrowserReportPanel networkSnapshot={networkSnapshot} speedTest={speedTest} vpnSamples={vpnSamples} oneClickReport={oneClickReport} networkHistory={networkHistory} deviceProfile={profile}/><section className="v07-card"><div className="diag-head"><div><h3>Local background log</h3><p>No prompts or model answers are stored here.</p></div><div><button onClick={()=>navigator.clipboard.writeText(logs.map(l=>`${l.at} [${l.level}] ${l.message}`).join('\n'))}>Copy logs</button><button onClick={()=>{setLogs([]);save('modeldock-logs',[])}}>Clear</button></div></div><div className="log-list">{logs.map((l,i)=><div key={`${l.at}-${i}`} className={l.level}><time>{new Date(l.at).toLocaleTimeString()}</time><b>{l.level}</b><span>{l.message}</span></div>)}</div></section><section className="v07-card"><h3>Benchmark history</h3>{bench.map((b,i)=><div className="bench" key={`${b.at}-${i}`}><span>{b.model}</span><span>{b.ctx/1024}K ctx · {b.mode}</span><b>{b.tokS.toFixed(1)} tok/s</b></div>)}</section></div></details></div>}
 
   {tab==='developer'&&<div className="v07-page two"><section className="v07-card"><span className="eyebrow">LOCAL API</span><h2>Runtime is explicit.</h2><p>Openguin can operate its hardware/device and non-execution surfaces without Ollama. Start the bundled runtime only for private local inference, or choose External when you explicitly want to use an existing Ollama service.</p><div className="runtime-detail"><span>Device <b>{profile?'ready':'unavailable'}</b></span><span>Runtime <b>{online?mode:'not connected'}</b></span><span>Active model <b>{selected||'none'}</b></span><span>Capabilities <b>{caps.join(', ')||'—'}</b></span></div></section><section className="v07-card code"><pre>{online&&mode==='external'?`fetch('http://127.0.0.1:11434/api/chat', {\n  method: 'POST',\n  headers: {'Content-Type':'application/json'},\n  body: JSON.stringify({model:'${selected||'your-model'}',messages:[{role:'user',content:'Hello'}],stream:false})\n})`:online?`// Bundled Openguin runtime is intentionally private.\n// Switch to External mode for direct third-party localhost API access.`:`// No Ollama runtime is connected.\n// Device discovery remains independent and available.`}</pre></section></div>}
   </main>
