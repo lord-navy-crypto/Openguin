@@ -3,6 +3,7 @@ const status = document.getElementById("status");
 const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
 const permissionButton = document.getElementById("chatgptPermission");
+const downloadPermissionButton = document.getElementById("downloadPermission");
 const clearButton = document.getElementById("clear");
 const eventsNode = document.getElementById("events");
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
@@ -73,6 +74,20 @@ async function enableChatGPTReloadMonitoring() {
   }
 }
 
+async function enableDownloadMonitoring() {
+  try {
+    const granted = await chrome.permissions.request({ permissions: ["downloads"] });
+    if (!granted) {
+      status.textContent = "Download monitoring permission was not granted. Page monitoring still works.";
+      return;
+    }
+    status.textContent = "Browser download monitoring enabled. It records metadata for downloads across this browser, not filenames or full URLs.";
+  } catch (error) {
+    status.textContent = "Could not enable download monitoring: " + String(error).slice(0, 160);
+  }
+  await render();
+}
+
 async function stopMonitoring() {
   const stored = await chrome.storage.local.get({ activeTabId: null });
   if (Number.isInteger(stored.activeTabId)) {
@@ -97,6 +112,10 @@ function eventText(event) {
     case "navigation": return "Navigation timing · DOM " + (event.domContentLoadedMs ?? "—") + " ms · load " + (event.loadMs ?? "—") + " ms";
     case "render-summary": return "Render snapshot · ready " + (event.readyState || "unknown") + " · body elements " + (event.bodyChildCount ?? "—") + " · first contentful paint " + (event.firstContentfulPaintMs === null || event.firstContentfulPaintMs === undefined ? "not recorded" : event.firstContentfulPaintMs + " ms");
     case "render-stability": return "DOM activity in first 5 seconds · " + (event.mutationCount ?? "—") + " mutation batches (content not captured)";
+    case "download-start": return "Browser download started · " + (event.host || "unknown host") + " · " + (event.totalBytes ? (event.totalBytes / 1048576).toFixed(1) + " MB" : "size unknown");
+    case "download-progress": return "Browser download progress · " + (event.host || "unknown host") + " · " + (event.progressPercent ?? "—") + "% · " + (event.bytesReceived ? (event.bytesReceived / 1048576).toFixed(1) + " MB received" : "bytes unknown");
+    case "download-complete": return "Browser download completed · " + (event.host || "unknown host") + " · " + (event.durationMs ?? "—") + " ms · " + (event.bytesReceived ? (event.bytesReceived / 1048576).toFixed(1) + " MB" : "size unknown");
+    case "download-failed": return "Browser download failed/interrupted · " + (event.errorType || "unknown error") + " · " + (event.host || "unknown host") + " · " + (event.durationMs ?? "—") + " ms";
     case "fetch-start": return "Fetch started · " + (event.method || "GET") + " " + location;
     case "fetch-response": return "Fetch response · HTTP " + event.status + " · " + location + duration;
     case "fetch-error": return "Fetch failed (" + (event.errorType || "network error") + ") · " + location + duration;
@@ -119,9 +138,10 @@ function eventText(event) {
 }
 
 async function render() {
-  const [tab, stored] = await Promise.all([
+  const [tab, stored, downloadPermission] = await Promise.all([
     activeTab(),
-    chrome.storage.local.get({ events: [], monitoring: false, activeTabId: null, activeHost: "" })
+    chrome.storage.local.get({ events: [], monitoring: false, activeTabId: null, activeHost: "" }),
+    chrome.permissions.contains({ permissions: ["downloads"] }).catch(() => false)
   ]);
   let host = "";
   try { host = tab && tab.url ? new URL(tab.url).hostname : ""; } catch {}
@@ -129,6 +149,8 @@ async function render() {
   startButton.disabled = Boolean(stored.monitoring);
   stopButton.disabled = !stored.monitoring;
   permissionButton.hidden = !isChatGPT(host);
+  downloadPermissionButton.disabled = downloadPermission;
+  downloadPermissionButton.textContent = downloadPermission ? "File download monitoring enabled" : "Enable file download monitoring";
   if (stored.monitoring && stored.activeTabId === (tab && tab.id)) {
     status.textContent = "Monitoring this tab. Events are stored locally.";
   } else if (stored.monitoring) {
@@ -158,6 +180,7 @@ async function render() {
 startButton.addEventListener("click", () => { void startMonitoring(); });
 stopButton.addEventListener("click", () => { void stopMonitoring(); });
 permissionButton.addEventListener("click", () => { void enableChatGPTReloadMonitoring(); });
+downloadPermissionButton.addEventListener("click", () => { void enableDownloadMonitoring(); });
 clearButton.addEventListener("click", async () => {
   await chrome.storage.local.set({ events: [] });
   await render();
