@@ -23,8 +23,9 @@ function permissionPattern(host) {
 }
 
 async function inject(tabId) {
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-main.js"], world: "MAIN" });
+  // Install the isolated bridge first so early page events are not dropped.
   await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-bridge.js"], world: "ISOLATED" });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-main.js"], world: "MAIN" });
 }
 
 async function startMonitoring() {
@@ -36,13 +37,13 @@ async function startMonitoring() {
   const host = new URL(tab.url).hostname;
   const persistent = isChatGPT(host) && await chrome.permissions.contains({ origins: [permissionPattern(host)] });
   try {
-    await inject(tab.id);
     await chrome.storage.local.set({
       monitoring: true,
       activeTabId: tab.id,
       activeHost: host,
       monitorMode: persistent ? "chatgpt-persistent" : "active-tab"
     });
+    await inject(tab.id);
     status.textContent = persistent
       ? "Monitoring this ChatGPT tab; approved permission allows re-attachment after reload."
       : "Monitoring this tab until it navigates away. No page text or request bodies are stored.";
