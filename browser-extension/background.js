@@ -16,7 +16,7 @@ function cleanPath(value) {
   if (typeof value !== "string") return "";
   const path = value.split("?")[0].split("#")[0];
   return path.split("/").map((part) => {
-    if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part) || /^\d{7,}$/.test(part) || part.length > 64) return ":id";
+    if (part.includes("@") || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part) || /^\d{7,}$/.test(part) || /^[A-Za-z0-9_-]{24,}$/.test(part) || part.length > 64) return ":id";
     return part;
   }).join("/").slice(0, 160);
 }
