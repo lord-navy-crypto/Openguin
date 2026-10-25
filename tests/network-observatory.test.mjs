@@ -174,6 +174,24 @@ test("distinguishes explicit timeout and cancellation from transport failure", (
   assert.equal(requests.find(item=>item.requestId==="rnet-1").outcome,"transport-error");
 });
 
+test("summarizes body consumption timing separately from response-header timing", () => {
+  const parsed = parseBrowserReport(report([
+    {kind:"fetch-response",requestId:"rbody-1",status:200,durationMs:800},
+    {kind:"body-read-complete",requestId:"rbody-1",tag:"json",bodyReadDurationMs:3200,headersToBodyReadMs:450},
+    {kind:"body-read-error",requestId:"rbody-2",tag:"json",bodyReadDurationMs:70,headersToBodyReadMs:25,errorType:"SyntaxError"}
+  ]));
+  const summary = summarizeBrowserTelemetry(parsed);
+  assert.equal(summary.bodyReadCount,1);
+  assert.equal(summary.bodyReadErrors,1);
+  assert.equal(summary.medianBodyReadMs,3200);
+  assert.equal(summary.maxHeadersToBodyReadMs,450);
+  const findings = new Map(analyzeBrowserReport(parsed).map(item=>[item.id,item.count]));
+  assert.equal(findings.get("slow-body-read"),1);
+  assert.equal(findings.get("body-read-error"),1);
+  const lifecycle = summarizeBrowserRequests(parsed).find(item=>item.requestId==="rbody-2");
+  assert.equal(lifecycle.bodyReadErrors,1);
+});
+
 test("distinguishes HTTP access denial from transport failure", () => {
   const parsed = parseBrowserReport(report([
     {kind: "fetch-response", status: 401},
