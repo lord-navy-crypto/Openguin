@@ -15,7 +15,7 @@ A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the ac
 - Fetch/XHR start, response status, errors, and long waits for response headers.
 - Long gaps between readable response-stream chunks when the page uses ReadableStream.getReader().
 - Resource load errors, slow resource timing entries, JavaScript error categories, unhandled promise rejections, long main-thread tasks, navigation/paint timing, and early DOM-mutation activity.
-- Optional browser download monitoring after a separate user-granted `downloads` permission: start, coarse progress, completion, and interrupted/failure categories. It does not store filenames or full download URLs.
+- Optional browser download monitoring after separate user-granted `downloads` and `alarms` permissions: start, coarse progress, completion, interrupted/failure categories, and a no-progress warning after 60 seconds. It does not store filenames or full download URLs.
 
 Only metadata is recorded: event kind, sanitized host/path, HTTP status, timing, and coarse error category. Query strings, page text, prompts, model answers, cookies, headers, and request/response bodies are not recorded. Events are stored in chrome.storage.local and are not uploaded.
 
@@ -23,7 +23,7 @@ Only metadata is recorded: event kind, sanitized host/path, HTTP status, timing,
 
 - activeTab + scripting: monitoring starts only after the user explicitly clicks the extension and starts it.
 - Optional host permission: only chatgpt.com or chat.openai.com, requested by a separate button, to re-attach after reloads on that host.
-- Optional `downloads` permission is separately requested by a button. If granted, it observes download metadata across the browser, not only the active tab; it never stores filenames or full URLs.
+- Optional `downloads` and `alarms` permissions are separately requested by a button. If granted, the extension observes download metadata across the browser, not only the active tab, and checks for a 60-second stall. It never stores filenames or full URLs.
 - No webRequest, debugger, all-sites host permission, or remote telemetry.
 
 ## Limitations
