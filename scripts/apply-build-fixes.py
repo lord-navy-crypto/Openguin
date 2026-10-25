@@ -23,8 +23,17 @@ runtime_helpers = '''fn runtime_dir(app:&AppHandle)->Result<PathBuf,String>{
 fn runtime_bin(app:&AppHandle)->Result<PathBuf,String>{let p=runtime_dir(app)?.join("ollama");if p.is_file(){Ok(p)}else{Err(format!("Bundled Ollama runtime is missing: {}",p.display()))}}
 fn find_runner(root:&Path)->Option<PathBuf>{
     let direct=root.join("llama-server");if direct.is_file(){return Some(direct)}
-    for sub in ["lib","bin","mlx_metal_v4"]{let p=root.join(sub).join("llama-server");if p.is_file(){return Some(p)}}
-    None
+    for rel in ["lib/llama-server","bin/llama-server","mlx_metal_v4/llama-server","lib/ollama/runners/cpu/llama-server","lib/ollama/runners/metal/llama-server"]{let p=root.join(rel);if p.is_file(){return Some(p)}}
+    fn scan(dir:&Path,depth:u8)->Option<PathBuf>{
+        if depth>5{return None}
+        for entry in fs::read_dir(dir).ok()?.flatten(){
+            let path=entry.path();
+            if path.file_name().is_some_and(|name|name=="llama-server")&&path.is_file(){return Some(path)}
+            if path.is_dir(){if let Some(found)=scan(&path,depth+1){return Some(found)}}
+        }
+        None
+    }
+    scan(&root.join("lib/ollama/runners"),0).or_else(||scan(&root.join("lib/ollama"),0))
 }
 fn runtime_complete(app:&AppHandle)->bool{runtime_dir(app).map(|p|p.join("ollama").is_file()&&find_runner(&p).is_some()).unwrap_or(false)}
 fn runtime_log(app:&AppHandle)->Result<PathBuf,String>{let p=data_dir(app)?.join("logs");fs::create_dir_all(&p).map_err(|e|e.to_string())?;Ok(p.join("bundled-ollama.log"))}
