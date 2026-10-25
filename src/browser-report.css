@@ -10,6 +10,14 @@
 .browser-report-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:12px}
 .browser-telemetry{border:1px solid #ffffff16;border-radius:11px;padding:13px;display:grid;gap:8px}
 .browser-telemetry>p{margin:0}
+.browser-endpoints{border:1px solid #ffffff16;border-radius:11px;padding:13px;display:grid;gap:8px}
+.browser-endpoints>p{margin:0}
+.browser-endpoint-row{background:#0b1823;border:1px solid #ffffff12;border-radius:8px;padding:10px;min-width:0}
+.browser-endpoint-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+.browser-endpoint-head b{font:600 10px/1.5 ui-monospace,SFMono-Regular,monospace;overflow-wrap:anywhere}
+.browser-endpoint-head span{font-size:10px;color:#a6c6d8;white-space:nowrap}
+.browser-endpoint-row p,.browser-endpoint-row small{display:block;font-size:10px;line-height:1.6;color:#a6bdcd;margin:5px 0 0;overflow-wrap:anywhere}
+.browser-endpoint-row small{color:#b0d6cb}
 .browser-findings,.browser-events,.browser-timeline{border:1px solid #ffffff16;padding:13px;border-radius:11px;min-width:0}
 .browser-report-panel h4{margin:0 0 9px;font-size:12px}
 .browser-findings>p{font-size:11px;color:#8ba6bb}
