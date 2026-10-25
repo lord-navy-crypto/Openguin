@@ -26,7 +26,8 @@ type Sample={
   latencyMs?:number|null;jitterMs?:number|null;probeFailures?:number|null;probeCount?:number|null;
   downloadMbps:number|null;uploadMbps:number|null;vpnLikely?:boolean;defaultInterface?:string|null;proxyConfigured?:boolean;
 };
-type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Sample[];oneClickReport:OneClickResult|null;networkHistory:NetworkHistoryEntry[]};
+type DeviceProfile={os:string;arch:string;chip:string;memoryBytes:number;logicalCores:number;freeStorageBytes:number};
+type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Sample[];oneClickReport:OneClickResult|null;networkHistory:NetworkHistoryEntry[];deviceProfile:DeviceProfile|null};
 const labels:Record<string,string>={
   "fetch-response":"请求响应","fetch-error":"请求失败","fetch-stall":"等待响应超时",
   "xhr-error":"XHR 请求失败","xhr-stall":"XHR 等待超时","stream-gap":"响应流卡顿",
@@ -38,7 +39,7 @@ const labels:Record<string,string>={
 function metric(value:number|null|undefined,unit:string):string{
   return value===null||value===undefined?"—":value.toFixed(1)+" "+unit;
 }
-export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples,oneClickReport,networkHistory}:Props){
+export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples,oneClickReport,networkHistory,deviceProfile}:Props){
   const [raw,setRaw]=useState("");
   const [report,setReport]=useState<BrowserReport|null>(null);
   const [error,setError]=useState("");
@@ -65,6 +66,11 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
     return {
       schema:{name:"Openguin Network Doctor combined diagnostic bundle",formatVersion:1},
       generatedAt:new Date().toISOString(),
+      device:deviceProfile?{
+        os:deviceProfile.os,architecture:deviceProfile.arch,chip:deviceProfile.chip,
+        memoryBytes:deviceProfile.memoryBytes,logicalCores:deviceProfile.logicalCores,
+        freeStorageBytes:deviceProfile.freeStorageBytes
+      }:null,
       oneClickDiagnosis:oneClickReport,
       networkSnapshot,
       speedTest,
