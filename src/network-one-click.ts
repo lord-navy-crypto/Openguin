@@ -199,7 +199,7 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
       add(issues,"throughput-incomplete","warning","上传或下载测速失败",
         [speed.downloadError?"下载测速失败":"",speed.uploadError?"上传测速失败":""].filter(Boolean).join("；")+"；可能是测速服务或某个网络阶段失败。",
         "检查 Cloudflare 测速服务可达性，避免依据失败测试推断实际带宽为零。");
-    if(typeof speed.latencyMs==="number" && speed.latencyMs>800)
+    if(typeof speed.latencyMs==="number" && speed.latencyMs>450)
       add(issues,"high-http-latency","warning","HTTP 探测延迟较高",
         "采样均值 "+Math.round(speed.latencyMs)+"ms，包含 HTTP 请求开销，不是 ICMP Ping。",
         "使用相同测速服务复测，比较不同网络/VPN 状态以及浏览器页面的请求时间。");
