@@ -13,10 +13,32 @@ export type BasicSnapshot = {
   proxy:{environmentConfigured:boolean;systemConfigured:boolean};
   hints:string[];
 };
+export type HttpProbeSample = {
+  elapsedMs:number;status?:number|null;success:boolean;failureKind?:string|null;
+};
+export type ProbeStability = {
+  total:number;passed:number;httpRejected:number;transportFailed:number;
+  minMs:number|null;medianMs:number|null;maxMs:number|null;spreadMs:number|null;
+};
+export function summarizeHttpProbes(samples:HttpProbeSample[]|undefined):ProbeStability|null {
+  if(!samples?.length) return null;
+  const finite=samples.slice(0,20).filter(s=>Number.isFinite(s.elapsedMs)&&s.elapsedMs>=0);
+  if(!finite.length) return null;
+  const good=finite.filter(s=>s.success).map(s=>s.elapsedMs).sort((a,b)=>a-b);
+  const count=good.length;
+  const median=count?good[Math.floor((count-1)/2)]*(count%2?1:.5)+(count%2?0:good[Math.floor(count/2)]*.5):null;
+  return {
+    total:finite.length,passed:count,
+    httpRejected:finite.filter(s=>!s.success&&typeof s.status==="number").length,
+    transportFailed:finite.filter(s=>!s.success&&s.status==null).length,
+    minMs:count?good[0]:null,medianMs:median,maxMs:count?good[count-1]:null,
+    spreadMs:count?good[count-1]-good[0]:null
+  };
+}
 export type BasicSpeed = {
   capturedAtMs:number;provider:string;
   latencyMs?:number|null;jitterMs?:number|null;
-  probeFailures:number;probeCount:number;
+  probeFailures:number;probeCount:number;probeSamples?:HttpProbeSample[];
   downloadMbps?:number|null;uploadMbps?:number|null;
   downloadError?:string|null;uploadError?:string|null;
 };
@@ -34,6 +56,7 @@ export type OneClickResult = {
   issues:DiagnosticIssue[];
   checked:{dns:number;dnsPassed:number;https:number;httpsResponded:number;httpFailures:number;speedAttempted:boolean};
   context:{vpnInterfaceSignal:boolean;proxySignal:boolean};
+  stability:ProbeStability|null;
   notes:string[];
 };
 const add = (issues:DiagnosticIssue[],code:string,severity:DiagnosticIssue["severity"],title:string,evidence:string,action:string)=>{
@@ -48,6 +71,7 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
   const serverErrors=endpoints.filter(e=>e.reachable && (e.status??0)>=500);
   const slow=endpoints.filter(e=>e.reachable && typeof e.elapsedMs==="number" && e.elapsedMs>=2000);
   const issues:DiagnosticIssue[]=[];
+  const stability=summarizeHttpProbes(speed?.probeSamples);
   if (!snapshot) {
     add(issues,"connection-unavailable","critical","连接诊断未完成",
       "没有有效的 DNS/HTTPS 诊断结果；不能仅凭测速推断原因。",
@@ -91,6 +115,24 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
         "要判断 VPN 是否影响问题，手动切换状态并使用相同测试目标复测。");
   }
   if (speed) {
+    if(stability?.httpRejected) {
+      add(issues,"probe-http-status","warning","HTTP 测速服务返回非成功状态",
+        stability.httpRejected+"/"+stability.total+" 次测速探测收到 HTTP 非 2xx 状态，这不是断网或丢包的证据。",
+        "检查测速提供方的响应状态。若其他网站正常，优先排查该服务而非整个网络。");
+    }
+    if(stability?.transportFailed) {
+      add(issues,"probe-transport","warning","测速服务部分探测未得到 HTTP 响应",
+        stability.transportFailed+"/"+stability.total+" 次探测遇到超时或传输失败；无法仅凭该指标判断物理链路丢包。",
+        "与 DNS 和其他 HTTPS 网站结果比较；不要把 HTTP 失败率直接称作 Ping 丢包率。");
+    }
+    if(stability && stability.passed>=3 && stability.spreadMs!==null &&
+        stability.medianMs!==null && stability.spreadMs>=400 &&
+        stability.maxMs!==null && stability.maxMs>=3*Math.max(1,stability.medianMs)) {
+      add(issues,"probe-spread","warning","多次 HTTP 探测耗时差异明显",
+        "成功的 "+stability.passed+" 次请求中位数 "+Math.round(stability.medianMs)+
+        "ms，最快 "+Math.round(stability.minMs??0)+"ms，最慢 "+Math.round(stability.maxMs)+"ms。",
+        "检查是否有后台下载、VPN 路由波动或测速端点拥塞；建议在同一条件下再次运行。");
+    }
     if(speed.probeCount>0 && speed.probeFailures>=speed.probeCount)
       add(issues,"speed-probes-failed","warning","测速服务 HTTP 探测全部失败",
         speed.probeFailures+"/"+speed.probeCount+" 次 HTTP 探测未成功；不等于真实 ICMP 丢包率。",
@@ -138,6 +180,7 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
     checked:{dns:dns.length,dnsPassed,https:endpoints.length,httpsResponded:responded,httpFailures:blocked.length+serverErrors.length,speedAttempted:speed!==null},
     context:{vpnInterfaceSignal:!!snapshot?.route.vpnLikely,
       proxySignal:!!(snapshot?.proxy.environmentConfigured||snapshot?.proxy.systemConfigured)},
+    stability,
     notes:[...notes,
       "检测结果是当前采样的证据，不能识别所有浏览器、VPN 或远程服务故障。",
       "网页渲染、响应流以及浏览器下载故障需要结合可选扩展进行页面级监测。"]
