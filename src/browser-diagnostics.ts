@@ -4,6 +4,8 @@ export const BROWSER_REPORT_SOURCE = "openguin-network-watch" as const;
 
 export type BrowserEvent = {
   at: number;
+  sourceAt?: number;
+  bridgeDelayMs?: number;
   kind: string;
   host: string;
   status?: number;
@@ -30,6 +32,16 @@ export type BrowserReport = {
   source: typeof BROWSER_REPORT_SOURCE;
   formatVersion: 1;
   generatedAt: string;
+  quality?: {
+    storedEventCount: number;
+    exportedEventCount: number;
+    duplicateEventsSuppressed: number;
+    droppedEvents: number;
+    eventCapReached: boolean;
+    firstEventAt: number | null;
+    lastEventAt: number | null;
+    eventCounts: Record<string, number>;
+  };
   events: BrowserEvent[];
 };
 export type DiagnosticFinding = {
@@ -88,6 +100,10 @@ export function parseBrowserReport(raw: string): BrowserReport {
     const at = typeof entry.at === "number" && Number.isFinite(entry.at) ? entry.at : undefined;
     if (at === undefined || at < 1_000_000_000_000 || at > 9_000_000_000_000) continue;
     const event: BrowserEvent = { at, kind: entry.kind, host: entry.host.toLowerCase() };
+    const sourceAt = bounded(entry.sourceAt);
+    const bridgeDelayMs = bounded(entry.bridgeDelayMs);
+    if (sourceAt !== undefined && sourceAt >= 1_000_000_000_000 && sourceAt <= 9_000_000_000_000) event.sourceAt = sourceAt;
+    if (bridgeDelayMs !== undefined && bridgeDelayMs <= 300_000) event.bridgeDelayMs = bridgeDelayMs;
     if (typeof entry.method === "string" && RE_METHOD.test(entry.method)) event.method = entry.method;
     const path = sanitizedPath(entry.path);
     if (path) event.path = path;
@@ -105,7 +121,30 @@ export function parseBrowserReport(raw: string): BrowserReport {
     }
     events.push(event);
   }
-  return { source: BROWSER_REPORT_SOURCE, formatVersion: 1, generatedAt: input.generatedAt, events: events.sort((a,b) => a.at-b.at) };
+  const rawQuality = input.quality && typeof input.quality === "object" && !Array.isArray(input.quality)
+    ? input.quality as Record<string, unknown> : undefined;
+  let quality: BrowserReport["quality"];
+  if (rawQuality) {
+    const eventCounts: Record<string, number> = {};
+    if (rawQuality.eventCounts && typeof rawQuality.eventCounts === "object" && !Array.isArray(rawQuality.eventCounts)) {
+      for (const [kind, count] of Object.entries(rawQuality.eventCounts as Record<string, unknown>)) {
+        if (VALID_KINDS.has(kind) && typeof count === "number" && Number.isFinite(count)) eventCounts[kind] = Math.max(0, Math.min(1e9, Math.floor(count)));
+      }
+    }
+    const timestamp = (value: unknown): number | null =>
+      typeof value === "number" && Number.isFinite(value) && value >= 1_000_000_000_000 && value <= 9_000_000_000_000 ? value : null;
+    quality = {
+      storedEventCount: Math.max(0, Math.min(1e9, Math.floor(bounded(rawQuality.storedEventCount) ?? events.length))),
+      exportedEventCount: Math.max(0, Math.min(1e9, Math.floor(bounded(rawQuality.exportedEventCount) ?? events.length))),
+      duplicateEventsSuppressed: Math.max(0, Math.floor(bounded(rawQuality.duplicateEventsSuppressed) ?? 0)),
+      droppedEvents: Math.max(0, Math.floor(bounded(rawQuality.droppedEvents) ?? 0)),
+      eventCapReached: rawQuality.eventCapReached === true,
+      firstEventAt: timestamp(rawQuality.firstEventAt),
+      lastEventAt: timestamp(rawQuality.lastEventAt),
+      eventCounts
+    };
+  }
+  return { source: BROWSER_REPORT_SOURCE, formatVersion: 1, generatedAt: input.generatedAt, ...(quality ? { quality } : {}), events: events.sort((a,b) => a.at-b.at) };
 }
 
 export function analyzeBrowserReport(report: BrowserReport): DiagnosticFinding[] {
