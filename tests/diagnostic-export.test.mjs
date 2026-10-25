@@ -20,8 +20,13 @@ test("CSV export correctly quotes commas, quotes, and line breaks",()=>{
   assert(csv.includes('"HTTP ""403"", access restricted\ntry later"'));
 });
 
-test("CSV export preserves empty and null values without serializing secrets or executable formulas",()=>{
-  const csv=diagnosticBundleToCsv({network:{error:null},browser:{events:[]}});
+test("CSV export preserves empty and null values and neutralizes formula-leading text",()=>{
+  const csv=diagnosticBundleToCsv({
+    network:{error:null},
+    browser:{events:[]},
+    untrusted:{host:"=HYPERLINK(\\\"https://example.invalid\\\")"}
+  });
   assert(csv.includes("network,network.error,"));
   assert(csv.includes("browser,browser.events,[]"));
+  assert(csv.includes("'=HYPERLINK"));
 });
