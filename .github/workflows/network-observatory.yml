@@ -79,3 +79,17 @@ jobs:
           node --check browser-extension/monitor-main.js
           node --check browser-extension/popup.js
           python3 -m json.tool browser-extension/manifest.json > /dev/null
+
+      - name: Package browser extension
+        run: |
+          mkdir -p release-artifacts
+          cd browser-extension
+          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js background.js monitor-bridge.js monitor-main.js README.md
+
+      - name: Upload browser extension package
+        uses: actions/upload-artifact@v4
+        with:
+          name: Openguin-Network-Watch
+          path: release-artifacts/Openguin-Network-Watch.zip
+          if-no-files-found: error
+          retention-days: 30
