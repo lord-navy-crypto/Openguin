@@ -183,6 +183,7 @@ test("summarizes body consumption timing separately from response-header timing"
   const summary = summarizeBrowserTelemetry(parsed);
   assert.equal(summary.bodyReadCount,1);
   assert.equal(summary.bodyReadErrors,1);
+  assert.equal(parsed.events.find(event=>event.kind==="body-read-complete").tag,"json");
   assert.equal(summary.medianBodyReadMs,3200);
   assert.equal(summary.maxHeadersToBodyReadMs,450);
   const findings = new Map(analyzeBrowserReport(parsed).map(item=>[item.id,item.count]));
