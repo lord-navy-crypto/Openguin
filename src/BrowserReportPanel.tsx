@@ -220,7 +220,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       <div className="browser-timeline"><h4>最近 12 条事件</h4>
         {report.events.slice(-12).reverse().map((e,i)=><div key={e.at+"-"+i}>
           <time>{new Date(e.at).toLocaleTimeString()}{e.sourceAt&&e.sourceAt!==e.at?" · page event "+new Date(e.sourceAt).toLocaleTimeString():""}</time><b>{labels[e.kind]||e.kind}</b>
-          <span>{e.host}{e.path||""}{e.method?" · "+e.method:""}</span><small>{e.status?"HTTP "+e.status:e.errorType||metric(e.durationMs,"ms")}{e.bridgeDelayMs!==undefined?" · capture delay "+metric(e.bridgeDelayMs,"ms"):""}</small>
+          <span>{e.host}{e.path||""}{e.method?" · "+e.method:""}{e.requestId?" · req "+e.requestId:""}</span><small>{e.status?"HTTP "+e.status:e.errorType||metric(e.durationMs,"ms")}{e.bridgeDelayMs!==undefined?" · capture delay "+metric(e.bridgeDelayMs,"ms"):""}</small>
         </div>)}
       </div>
       <p className="browser-report-note">隐私与可信度：导出包含事件类别、时间、域名、脱敏路径/方法、HTTP 状态、耗时和粗粒度下载/渲染指标；不含提示词、回答正文、Cookie、请求/响应正文、完整网址、查询参数或文件名。网页注入得到的事件可能不完整或被网页脚本影响，不能独立证明某个服务器或 VPN 出错。分享前请检查报告内容。</p>
