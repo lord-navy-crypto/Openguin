@@ -180,6 +180,39 @@
     });
   }
 
+  const paintEntries = performance.getEntriesByType("paint");
+  const paintTime = (name) => {
+    const entry = paintEntries.find((item) => item.name === name);
+    return entry ? Math.round(entry.startTime) : null;
+  };
+  emit({
+    kind: "render-summary",
+    host: location.hostname,
+    path: location.pathname.slice(0, 100),
+    readyState: document.readyState,
+    bodyChildCount: document.body ? document.body.childElementCount : 0,
+    firstPaintMs: paintTime("first-paint"),
+    firstContentfulPaintMs: paintTime("first-contentful-paint")
+  });
+
+  let mutationCount = 0;
+  if (document.body && typeof MutationObserver !== "undefined") {
+    const renderObserver = new MutationObserver((records) => {
+      mutationCount = Math.min(1000000, mutationCount + records.length);
+    });
+    renderObserver.observe(document.body, { childList: true, subtree: true });
+    state.renderObserver = renderObserver;
+    state.renderTimer = setTimeout(() => {
+      renderObserver.disconnect();
+      emit({
+        kind: "render-stability",
+        host: location.hostname,
+        path: location.pathname.slice(0, 100),
+        mutationCount
+      });
+    }, 5000);
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window || !event.data || event.data.source !== "openguin-netwatch-control" || event.data.action !== "stop") return;
     state.active = false;
@@ -188,6 +221,8 @@
     if (XMLHttpRequest.prototype.send !== state.originalXhrSend) XMLHttpRequest.prototype.send = state.originalXhrSend;
     if (state.resourceObserver) state.resourceObserver.disconnect();
     if (state.longTaskObserver) state.longTaskObserver.disconnect();
+    if (state.renderObserver) state.renderObserver.disconnect();
+    if (state.renderTimer) clearTimeout(state.renderTimer);
   });
 
   emit({ kind: "monitor-started", host: location.hostname, path: location.pathname.slice(0, 100) });
