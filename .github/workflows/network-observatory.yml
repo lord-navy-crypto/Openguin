@@ -1,0 +1,53 @@
+name: Network Observatory checks
+
+on:
+  push:
+    branches:
+      - feature/browser-network-diagnostics
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  desktop-and-extension:
+    runs-on: macos-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Apply desktop source patches without downloading the model runtime
+        run: |
+          python3 scripts/apply-build-fixes.py
+          python3 scripts/apply-full-logs.py
+          python3 scripts/apply-observatory.py
+          python3 scripts/apply-performance09.py
+          python3 scripts/apply-task-center.py
+          python3 scripts/apply-expansion010.py
+          python3 scripts/apply-openguin-brand.py
+          python3 scripts/apply-network-observatory.py
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Check native Rust commands
+        run: cargo check --manifest-path src-tauri/Cargo.toml
+
+      - name: Validate extension JavaScript
+        run: |
+          node --check browser-extension/background.js
+          node --check browser-extension/monitor-bridge.js
+          node --check browser-extension/monitor-main.js
+          node --check browser-extension/popup.js
+          python3 -m json.tool browser-extension/manifest.json > /dev/null
