@@ -179,17 +179,23 @@ async function sampleDownloads() {
       events.push(["download-stall", item, { gapMs: now - track.lastProgressAt }]);
     }
   }
-  // Old nonactive tracks can linger if their completion event occurred while
-  // the service worker was stopped; clean them up without fabricating outcomes.
+  // Completion/interruption updates may arrive after one alarm sample.
+  // Keep nonactive state briefly to preserve its original start timestamp.
+  // Then expire it silently rather than inventing a completion/failure.
   for (const id of Object.keys(tracks)) {
-    if (!activeIds.has(id)) delete tracks[id];
+    if (!activeIds.has(id) && now - tracks[id].lastProgressAt > 5 * 60_000) delete tracks[id];
   }
   await setTracks(tracks);
   for (const [kind, item, extra] of events) await emitDownload(kind, item, extra);
 }
 
-if (chrome.downloads) {
-  // Event listeners register synchronously at worker load, per MV3 rules.
+let downloadListenersRegistered = false;
+function registerDownloadListeners() {
+  if (!chrome.downloads || downloadListenersRegistered) return;
+  downloadListenersRegistered = true;
+  // Register synchronously at service-worker startup when the API is already
+  // available. Also register after the user grants the optional permission:
+  // on a running worker, chrome.downloads may not exist until then.
   chrome.downloads.onCreated.addListener((item) => { void beginTrack(item); });
   chrome.downloads.onChanged.addListener((delta) => {
     if (!delta.state) return; // Chrome does NOT emit byte-only progress events.
@@ -206,6 +212,7 @@ if (chrome.downloads) {
     }).catch(() => {});
   });
 }
+registerDownloadListeners();
 if (chrome.alarms) {
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name === "openguin-download-stall-watch") void sampleDownloads().catch(() => {});
@@ -215,6 +222,7 @@ async function configureDownloadAlarm() {
   if (!chrome.permissions || !chrome.alarms) return;
   const granted = await chrome.permissions.contains({ permissions: ["downloads", "alarms"] });
   if (granted) {
+    registerDownloadListeners();
     chrome.alarms.create("openguin-download-stall-watch", { periodInMinutes: 0.5 });
   } else {
     chrome.alarms.clear("openguin-download-stall-watch");
