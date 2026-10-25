@@ -78,8 +78,9 @@ jobs:
           3. Choose Load unpacked and select the extracted browser-extension folder.
           4. Open the page to diagnose and click Start this tab in the extension.
           5. Optional ChatGPT reload monitoring requires separate host permission.
-             Optional file-download monitoring requires the separate downloads
-             permission and records download metadata without filenames or full URLs.
+             Optional file-download monitoring requires separate downloads and alarms
+             permissions and records download metadata without filenames or full URLs.
+             It can warn after 60 seconds with no observed byte progress.
 
           Troubleshooting:
           - A failed DNS lookup suggests a DNS/network path issue.
