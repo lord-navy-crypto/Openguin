@@ -1,5 +1,9 @@
 name: Openguin macOS Universal2 Build
 
+concurrency:
+  group: openguin-universal2-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches: [main]
@@ -39,6 +43,7 @@ jobs:
           python3 scripts/apply-expansion010.py
           python3 scripts/apply-openguin-brand.py
           python3 scripts/ensure-app-icon.py
+          python3 scripts/apply-network-observatory.py
           python3 scripts/verify-desktop.py
 
       - name: Install frontend dependencies
@@ -61,13 +66,53 @@ jobs:
           echo " $ARCHS " | grep -q " x86_64 "
           find src-tauri/target/universal-apple-darwin/release/bundle/dmg -maxdepth 1 -name '*.dmg' -type f -print -quit | grep -q .
 
-      - name: Upload Universal2 bundles
+      - name: Package Network Watch extension and installation guide
+        run: |
+          mkdir -p dist
+          ditto -c -k --sequesterRsrc --keepParent browser-extension dist/Openguin-Network-Watch.zip
+          cp LICENSE dist/LICENSE.txt
+          cp THIRD_PARTY_NOTICES.md dist/THIRD_PARTY_NOTICES.md
+          cat > dist/INSTALL-NETWORK-OBSERVATORY.txt <<'EOF'
+          Openguin Network Observatory — macOS Universal2 installation
+
+          1. Open the DMG and drag Openguin to Applications.
+          2. Open Openguin and select Diagnostics / Network Observatory.
+          3. Run Diagnose connection for DNS and HTTPS checks.
+          4. Run Speed test for bounded download/upload and latency/jitter probes.
+          5. Change VPN state manually, select the correct state, repeat tests,
+             and save a sample. Openguin never changes VPN or DNS settings for you.
+
+          Browser monitoring:
+          1. Extract Openguin-Network-Watch.zip.
+          2. In Chrome/Chromium, open Extensions and enable Developer mode.
+          3. Choose Load unpacked and select the extracted browser-extension folder.
+          4. Open the page to diagnose and click Start this tab in the extension.
+          5. Optional ChatGPT reload monitoring needs separate host permission.
+             Optional file-download monitoring needs downloads and alarms permissions.
+             It records host/progress/bytes/stalls, not filenames or full URLs.
+
+          Troubleshooting:
+          - DNS failure: reconnect the active network/VPN, then repeat the check.
+          - DNS succeeds but HTTPS fails: inspect routing, VPN, proxy/TLS filtering,
+            firewall, or endpoint reachability.
+          - HTTP 401/403/429 means the server responded; it is not a timeout.
+          - A stream gap is a symptom, not proof of a particular cause.
+          - Compare repeated VPN-on/off tests and change one setting at a time.
+
+          This is an unsigned/unnotarized developer build. macOS may show a security
+          warning. Only run it if you trust the source.
+          EOF
+          shasum -a 256 dist/* > dist/SHA256SUMS.txt
+          ls -lh dist
+
+      - name: Upload Universal2 DMG, app, extension, and guide
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: Openguin-0.10.1-Universal2-${{ github.sha }}
+          name: Openguin-Network-Observatory-Universal2-${{ github.sha }}
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            dist/*
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 30
