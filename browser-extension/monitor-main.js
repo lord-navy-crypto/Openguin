@@ -77,7 +77,7 @@
     } catch { /* Some streams cannot be wrapped; fetch telemetry still works. */ }
   }
 
-  window.fetch = function(input, init) {
+  const wrappedFetch = function(input, init) {
     const rawUrl = typeof input === "string" ? input : (input && input.url) || "";
     const method = String((init && init.method) || (input && input.method) || "GET").toUpperCase().slice(0, 12);
     const meta = Object.assign({ method }, safeUrl(rawUrl));
@@ -107,12 +107,17 @@
       throw error;
     }
   };
+  state.fetchWrapper = wrappedFetch;
+  window.fetch = wrappedFetch;
 
-  XMLHttpRequest.prototype.open = function(method, url) {
+  const wrappedXhrOpen = function(method, url) {
     this.__openguinNetWatchMeta = Object.assign({ method: String(method || "GET").toUpperCase().slice(0, 12) }, safeUrl(url));
     return state.originalXhrOpen.apply(this, arguments);
   };
-  XMLHttpRequest.prototype.send = function() {
+  state.xhrOpenWrapper = wrappedXhrOpen;
+  XMLHttpRequest.prototype.open = wrappedXhrOpen;
+
+  const wrappedXhrSend = function() {
     const xhr = this;
     const meta = xhr.__openguinNetWatchMeta || safeUrl(location.href);
     const started = performance.now();
@@ -128,6 +133,8 @@
     }, { once: true });
     return state.originalXhrSend.apply(this, arguments);
   };
+  state.xhrSendWrapper = wrappedXhrSend;
+  XMLHttpRequest.prototype.send = wrappedXhrSend;
 
   window.addEventListener("error", (event) => {
     if (event.target && event.target !== window) {
@@ -216,9 +223,9 @@
   window.addEventListener("message", (event) => {
     if (event.source !== window || !event.data || event.data.source !== "openguin-netwatch-control" || event.data.action !== "stop") return;
     state.active = false;
-    if (window.fetch !== state.originalFetch) window.fetch = state.originalFetch;
-    if (XMLHttpRequest.prototype.open !== state.originalXhrOpen) XMLHttpRequest.prototype.open = state.originalXhrOpen;
-    if (XMLHttpRequest.prototype.send !== state.originalXhrSend) XMLHttpRequest.prototype.send = state.originalXhrSend;
+    if (window.fetch === state.fetchWrapper) window.fetch = state.originalFetch;
+    if (XMLHttpRequest.prototype.open === state.xhrOpenWrapper) XMLHttpRequest.prototype.open = state.originalXhrOpen;
+    if (XMLHttpRequest.prototype.send === state.xhrSendWrapper) XMLHttpRequest.prototype.send = state.originalXhrSend;
     if (state.resourceObserver) state.resourceObserver.disconnect();
     if (state.longTaskObserver) state.longTaskObserver.disconnect();
     if (state.renderObserver) state.renderObserver.disconnect();
