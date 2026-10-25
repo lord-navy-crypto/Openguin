@@ -1,11 +1,13 @@
 import {useMemo,useState} from "react";
 import {analyzeBrowserReport,eventCounts,parseBrowserReport,type BrowserReport} from "./browser-diagnostics";
+import {correlateBrowserWithOneClick} from "./network-correlation";
+import type {OneClickResult} from "./network-one-click";
 import "./browser-report.css";
 
 type Connection={dns:Array<{resolved:boolean}>;endpoints:Array<{reachable:boolean}>;hints:string[]};
 type Speed={downloadMbps?:number|null;uploadMbps?:number|null;latencyMs?:number|null;jitterMs?:number|null;probeFailures:number;probeCount:number};
 type Sample={label:"on"|"off";avgResponseMs:number|null;downloadMbps:number|null};
-type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Sample[]};
+type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Sample[];oneClickReport:OneClickResult|null};
 const labels:Record<string,string>={
   "fetch-response":"请求响应","fetch-error":"请求失败","fetch-stall":"等待响应超时",
   "xhr-error":"XHR 请求失败","xhr-stall":"XHR 等待超时","stream-gap":"响应流卡顿",
@@ -17,13 +19,14 @@ const labels:Record<string,string>={
 function metric(value:number|null|undefined,unit:string):string{
   return value===null||value===undefined?"—":value.toFixed(1)+" "+unit;
 }
-export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples}:Props){
+export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples,oneClickReport}:Props){
   const [raw,setRaw]=useState("");
   const [report,setReport]=useState<BrowserReport|null>(null);
   const [error,setError]=useState("");
   const [copied,setCopied]=useState(false);
   const findings=useMemo(()=>report?analyzeBrowserReport(report):[],[report]);
   const counts=useMemo(()=>report?eventCounts(report):[],[report]);
+  const correlation=useMemo(()=>report?correlateBrowserWithOneClick(report,oneClickReport):null,[report,oneClickReport]);
   const dnsFailed=networkSnapshot?.dns.filter(x=>!x.resolved).length??0;
   const httpsFailed=networkSnapshot?.endpoints.filter(x=>!x.reachable).length??0;
   const vpnOn=vpnSamples.find(x=>x.label==="on");
@@ -32,12 +35,24 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
     try{setReport(parseBrowserReport(raw));setRaw("");setError("");setCopied(false)}
     catch(e){setError(e instanceof Error?e.message:"无法读取报告")}
   }
+  async function importFromClipboard(){
+    try {
+      const content=await navigator.clipboard.readText();
+      if(!content) throw new Error("剪贴板为空，请先从扩展复制诊断报告。");
+      setReport(parseBrowserReport(content));setRaw("");setError("");setCopied(false);
+    }catch(e){setError(e instanceof Error?e.message:"读取剪贴板失败，请手动粘贴报告。")}
+  }
   async function copyCombined(){
     if(!report)return;
     const result={
       name:"Openguin Network Observatory — combined diagnosis",
       createdAt:new Date().toISOString(),
       browser:{at:report.generatedAt,eventCount:report.events.length,findings,events:report.events},
+      crossLayer:correlation,
+      oneClick:oneClickReport?{
+        at:oneClickReport.at,verdict:oneClickReport.verdict,
+        issues:oneClickReport.issues,checked:oneClickReport.checked
+      }:null,
       network:networkSnapshot?{
         dnsFailed,httpsFailed,dnsCount:networkSnapshot.dns.length,
         httpsCount:networkSnapshot.endpoints.length,
@@ -59,17 +74,30 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       <h3>Browser incident report · 浏览器故障诊断</h3>
       <p>关联网页加载、请求/响应、下载故障与 DNS、测速、VPN 结果。每条判断都附带证据和建议。</p>
     </div><span className="browser-report-pill">{report?report.events.length+" events":"Awaiting report"}</span></div>
-    <p className="browser-report-howto">浏览器扩展点击「Copy diagnostic report」→ 在下方粘贴 → 点击「分析报告」。无上传或后台共享。</p>
+    <p className="browser-report-howto">先在扩展点击「Copy diagnostic report」，然后使用「从剪贴板分析」即可自动导入。也可以手动粘贴 JSON。不会上传或后台共享。</p>
     <label htmlFor="browser-report-import">浏览器诊断报告 JSON</label>
     <textarea id="browser-report-import" value={raw} onChange={e=>setRaw(e.target.value)}
       placeholder="在这里粘贴浏览器扩展复制的诊断报告…" rows={3} maxLength={300000}/>
     <div className="network-actions">
-      <button disabled={!raw.trim()} onClick={importReport}>分析报告</button>
+      <button onClick={()=>void importFromClipboard()}>从剪贴板分析</button>
+      <button disabled={!raw.trim()} onClick={importReport}>分析粘贴报告</button>
       <button disabled={!report} onClick={()=>void copyCombined()}>{copied?"已复制综合报告":"复制综合报告"}</button>
       <button disabled={!report} onClick={()=>{setReport(null);setCopied(false);setError("")}}>清除</button>
     </div>
     {error&&<p className="browser-report-error" role="alert">{error}</p>}
     {report&&<>
+      {correlation&&<div className="browser-correlation">
+        <div className="browser-correlation-head">
+          <h4>跨层故障定位 · 自动关联浏览器与一键检测</h4>
+          <span>{correlation.timing==="aligned"?"时间匹配":correlation.timing==="outdated"?"数据不同期":correlation.timing==="browser-only"?"仅浏览器证据":"无浏览器事件"}</span>
+        </div>
+        <p>{correlation.summary}</p>
+        {correlation.findings.map(item=><article key={item.code} className={"browser-correlation-row "+item.priority}>
+          <strong>{item.title}</strong>
+          <p><b>依据：</b>{item.why}</p>
+          <p><b>建议：</b>{item.nextStep}</p>
+        </article>)}
+      </div>}
       <div className="browser-report-stats">
         <div><span>事件数量</span><strong>{report.events.length}</strong></div>
         <div><span>发现的故障类别</span><strong>{findings.length}</strong></div>
