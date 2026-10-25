@@ -291,3 +291,74 @@ export function summarizeBrowserTelemetry(report: BrowserReport): BrowserTelemet
     eventCapReached: report.quality?.eventCapReached ?? false
   };
 }
+
+
+export type BrowserEndpointSummary = {
+  host: string;
+  path: string;
+  method: string;
+  requestStarts: number;
+  responseCount: number;
+  errorCount: number;
+  stallCount: number;
+  http4xx: number;
+  http5xx: number;
+  slowResponses: number;
+  medianResponseMs: number | null;
+  p95ResponseMs: number | null;
+  maxResponseMs: number | null;
+};
+
+export function summarizeBrowserEndpoints(report: BrowserReport): BrowserEndpointSummary[] {
+  type Mutable = {
+    host:string; path:string; method:string; requestStarts:number; responseCount:number;
+    errorCount:number; stallCount:number; http4xx:number; http5xx:number;
+    slowResponses:number; durations:number[];
+  };
+  const groups = new Map<string,Mutable>();
+  for (const event of report.events) {
+    if (!["fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response","xhr-error","xhr-stall"].includes(event.kind)) continue;
+    const host = event.host;
+    const path = event.path || "/";
+    const method = event.method || "—";
+    const key = [host,method,path].join("\u0000");
+    let row = groups.get(key);
+    if (!row) {
+      row = {host,path,method,requestStarts:0,responseCount:0,errorCount:0,stallCount:0,http4xx:0,http5xx:0,slowResponses:0,durations:[]};
+      groups.set(key,row);
+    }
+    if (event.kind === "fetch-start" || event.kind === "xhr-start") row.requestStarts++;
+    if (event.kind === "fetch-error" || event.kind === "xhr-error") row.errorCount++;
+    if (event.kind === "fetch-stall" || event.kind === "xhr-stall") row.stallCount++;
+    if (event.kind === "fetch-response" || event.kind === "xhr-response") {
+      row.responseCount++;
+      if ((event.status ?? 0) >= 400 && (event.status ?? 0) < 500) row.http4xx++;
+      if ((event.status ?? 0) >= 500 && (event.status ?? 0) < 600) row.http5xx++;
+      if (typeof event.durationMs === "number") {
+        row.durations.push(event.durationMs);
+        if (event.durationMs >= 2500) row.slowResponses++;
+      }
+    }
+  }
+  const percentile = (values:number[], p:number):number|null => {
+    if (!values.length) return null;
+    return values[Math.min(values.length-1,Math.max(0,Math.ceil(p*values.length)-1))];
+  };
+  return [...groups.values()].map(row => {
+    const durations = [...row.durations].sort((a,b)=>a-b);
+    return {
+      host:row.host,path:row.path,method:row.method,
+      requestStarts:row.requestStarts,responseCount:row.responseCount,
+      errorCount:row.errorCount,stallCount:row.stallCount,
+      http4xx:row.http4xx,http5xx:row.http5xx,slowResponses:row.slowResponses,
+      medianResponseMs:percentile(durations,0.5),
+      p95ResponseMs:percentile(durations,0.95),
+      maxResponseMs:durations.length?durations[durations.length-1]:null
+    };
+  }).sort((a,b) =>
+    (b.errorCount*100+b.stallCount*100+b.http5xx*50+b.http4xx*10+b.slowResponses*5) -
+    (a.errorCount*100+a.stallCount*100+a.http5xx*50+a.http4xx*10+a.slowResponses*5) ||
+    (b.p95ResponseMs??0)-(a.p95ResponseMs??0) ||
+    b.responseCount-a.responseCount
+  );
+}
