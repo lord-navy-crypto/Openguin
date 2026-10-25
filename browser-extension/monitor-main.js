@@ -19,7 +19,7 @@
     try {
       const url = new URL(String(raw || ""), location.href);
       const path = url.pathname.split("/").map((part) => {
-        if (/^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part) || /^\d{7,}$/.test(part) || part.length > 64) return ":id";
+        if (part.includes("@") || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part) || /^\d{7,}$/.test(part) || /^[A-Za-z0-9_-]{24,}$/.test(part) || part.length > 64) return ":id";
         return part;
       }).join("/").slice(0, 160);
       return { host: url.hostname.slice(0, 120), path };
