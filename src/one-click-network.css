@@ -35,3 +35,15 @@
 .one-click-probes-metrics b{font-size:14px;font-variant-numeric:tabular-nums}
 .one-click-probes p{font-size:10px;line-height:1.5;margin:0;color:#a8bfd2}
 @media(max-width:1100px){.one-click-probes-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.one-click-targets{display:grid;gap:10px;border:1px solid #34566b;border-radius:10px;padding:13px}
+.one-click-targets h4{font-size:12px;margin:0}
+.one-click-targets>p{font-size:10px;line-height:1.5;color:#a9c4d3;margin:0}
+.one-click-target-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:8px}
+.one-click-target{border-left:3px solid #6ac9b3;background:#091c29;border-radius:8px;padding:10px;display:grid;gap:6px}
+.one-click-target.transport,.one-click-target.dns{border-color:#f08f8a}
+.one-click-target.rejection,.one-click-target.server{border-color:#e9be72}
+.one-click-target.dns-only,.one-click-target.unknown{border-color:#829eb5}
+.one-click-target>div{display:grid;gap:4px}
+.one-click-target b{font-size:11px}
+.one-click-target small,.one-click-target p{font-size:10px;color:#a2b9c8;margin:0;overflow-wrap:anywhere}
