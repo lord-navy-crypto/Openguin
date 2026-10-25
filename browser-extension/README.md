@@ -18,7 +18,7 @@ A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the ac
 
 1. Reproduce the issue (for example, wait for a stuck response or failed download).
 2. Click the extension icon. The recent-events list should show fetch/XHR errors, response statuses, long response gaps, script/resource errors, or download events if the relevant permission was enabled.
-3. Click **Copy diagnostic report** to copy the redacted JSON, or click **Download JSON report** / **Download CSV table** to save a file under your browser's Downloads folder.
+3. Click **Copy diagnostic report** to copy the redacted JSON, or click **Download JSON report** / **Download CSV table** to save a file under your browser's Downloads folder. The popup shows whether duplicate events were suppressed or older events were dropped after the 300-event buffer filled.
 4. In Openguin, open **电脑网络体检 → 高级网络与浏览器诊断 → Browser incident report · 浏览器故障诊断**.
 5. For copied JSON, click **从剪贴板分析**. For a downloaded JSON file, open it in a text editor, copy its contents, paste them into the report box, then click **分析粘贴报告**. The CSV is for spreadsheet review; use JSON when importing events.
 6. After import, choose **复制完整诊断包**, **下载 JSON**, or **下载 CSV 表格**. This combines the browser timeline with the current desktop DNS/HTTPS checks, speed-test samples, VPN comparisons, local scan history, and suggested findings. Paste the copied JSON into a ChatGPT conversation for analysis, or attach the downloaded JSON file.
@@ -32,7 +32,7 @@ If the extension icon is missing, open the Extensions menu and pin it. If events
 - Resource load errors, slow resource timing entries, JavaScript error categories, unhandled promise rejections, long main-thread tasks, navigation/paint timing, and early DOM-mutation activity.
 - Optional browser download monitoring after separate user-granted `downloads` and `alarms` permissions: start, coarse progress, completion, interrupted/failure categories, and a no-progress warning after 60 seconds. It does not store filenames or full download URLs.
 
-Only metadata is recorded: event kind, timestamp, sanitized host/path, request method, HTTP status, timing, coarse rendering/download metrics, and error category. Query strings, page text, prompts, model answers, cookies, headers, and request/response bodies are not recorded. The JSON/CSV exports apply a second sanitization pass and are created locally. Events are stored in chrome.storage.local and are not uploaded. Review any report before sharing it.
+Only metadata is recorded: event kind, page-event and capture timestamps, sanitized host/path, request method, HTTP status, timing, coarse rendering/download metrics, and error category. Duplicate page events are suppressed using a short-lived fingerprint of the sanitized event and its source timestamp. The report includes a capture-quality summary (duplicates suppressed, events dropped after the 300-event buffer fills, and per-kind counts). Query strings, page text, prompts, model answers, cookies, headers, and request/response bodies are not recorded. The JSON/CSV exports apply a second sanitization pass and are created locally. Events are stored in chrome.storage.local and are not uploaded. Review any report before sharing it.
 
 ## Permission model
 
