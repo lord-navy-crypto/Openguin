@@ -47,3 +47,25 @@
 .one-click-target>div{display:grid;gap:4px}
 .one-click-target b{font-size:11px}
 .one-click-target small,.one-click-target p{font-size:10px;color:#a2b9c8;margin:0;overflow-wrap:anywhere}
+
+.one-click-history{display:grid;gap:11px;padding:14px;background:#0d2232;border:1px solid #36546b;border-radius:11px}
+.one-click-history-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.one-click-history-head h4{margin:0 0 5px;font-size:12px}
+.one-click-history-head small,.one-click-history-note{font-size:10px;color:#a3bcca;line-height:1.6}
+.one-click-history-head button{font-size:11px;white-space:nowrap}
+.one-click-history-bar{display:flex;gap:5px;align-items:stretch;min-height:20px}
+.one-click-history-bar>div{flex:1;border-radius:5px;background:#65859b;min-width:5px;max-width:60px;min-height:22px;overflow:hidden}
+.one-click-history-bar>div.no-clear-problem{background:#46aa8f}
+.one-click-history-bar>div.network-failure,.one-click-history-bar>div.connection-problem{background:#e18e85}
+.one-click-history-bar>div.service-response,.one-click-history-bar>div.slow-or-unstable{background:#c5a76e}
+.one-click-history-bar>div.incomplete{background:#77889a}
+.one-click-history-bar>div span{font-size:0}
+.one-click-history-note{margin:0}
+.one-click-trend-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:9px}
+.one-click-trend{border-radius:9px;border:1px solid #395265;background:#0a1824;padding:10px;display:grid;gap:7px}
+.one-click-trend>div{display:flex;flex-wrap:wrap;gap:6px;justify-content:space-between;align-items:baseline}
+.one-click-trend b{font-size:11px;overflow-wrap:anywhere}
+.one-click-trend span{font-size:10px;color:#add7c9}
+.one-click-trend.persistent,.one-click-trend.intermittent,.one-click-trend.new-issue{border-color:#d3988d}
+.one-click-trend.recovered{border-color:#80c5a7}
+.one-click-trend p,.one-click-trend small{font-size:10px;line-height:1.55;color:#acc3d3;margin:0}
