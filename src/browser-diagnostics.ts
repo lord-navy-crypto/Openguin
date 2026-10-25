@@ -64,8 +64,8 @@ export function parseBrowserReport(raw: string): BrowserReport {
     const entry = item as Record<string, unknown>;
     if (typeof entry.kind !== "string" || !VALID_KINDS.has(entry.kind)) continue;
     if (typeof entry.host !== "string" || !RE_HOST.test(entry.host)) continue;
-    const at = bounded(entry.at);
-    if (at === undefined || at < 1_000_000_000_000) continue;
+    const at = typeof entry.at === "number" && Number.isFinite(entry.at) ? entry.at : undefined;
+    if (at === undefined || at < 1_000_000_000_000 || at > 9_000_000_000_000) continue;
     const event: BrowserEvent = { at, kind: entry.kind, host: entry.host.toLowerCase() };
     for (const field of ["durationMs", "gapMs", "status", "progressPercent", "bodyChildCount"] as const) {
       const numeric = bounded(entry[field]);
