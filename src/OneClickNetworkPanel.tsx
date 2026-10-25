@@ -39,6 +39,17 @@ export default function OneClickNetworkPanel({result,busy,stage,onRun,onCopy}:Pr
         <div><span>值得处理的线索</span><b>{issues.length}</b></div>
         <div><span>测速检查</span><b>{result.checked.speedAttempted?"已运行":"未运行"}</b></div>
       </div>
+      {result.targets.length>0&&<div className="one-click-targets">
+        <h4>逐个域名定位</h4>
+        <div className="one-click-target-grid">
+          {result.targets.map(t=><div key={t.host} className={"one-click-target "+t.symptom}>
+            <div><b>{t.label}</b><small>{t.host}</small></div>
+            <p>DNS：{t.dns==="ok"?"解析成功":t.dns==="failed"?"解析失败":"未检测"} · HTTPS：{t.https==="responded"?"收到响应":t.https==="failed"?"连接失败":"未检测"}</p>
+            <p>{t.status!==null?"HTTP "+t.status:"无 HTTP 状态"}{t.elapsedMs!==null?" · "+Math.round(t.elapsedMs)+"ms":""}</p>
+          </div>)}
+        </div>
+        <p>HTTPS 已响应不代表网页功能正常；HTTP 401/403/429 与 TCP/TLS 连接失败是不同情况。</p>
+      </div>}
       {result.stability&&<div className="one-click-probes" aria-label="HTTP 探测稳定性">
         <div className="one-click-probes-head"><h4>HTTP 重复采样稳定性</h4><span>{result.stability.passed}/{result.stability.total} 次成功</span></div>
         <div className="one-click-probes-metrics">
