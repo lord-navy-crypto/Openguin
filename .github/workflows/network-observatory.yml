@@ -43,6 +43,9 @@ jobs:
       - name: Install frontend dependencies
         run: npm install --no-audit --no-fund
 
+      - name: Run deterministic browser diagnostics tests
+        run: node scripts/test-network-observatory.mjs
+
       - name: Build frontend
         run: npm run build
 
