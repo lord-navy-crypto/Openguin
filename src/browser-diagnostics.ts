@@ -172,10 +172,22 @@ export function analyzeBrowserReport(report: BrowserReport): DiagnosticFinding[]
       match: e => e.kind === "fetch-stall" || e.kind === "xhr-stall"
     },
     {
+      id: "timeout", label: "请求超时", severity: "high",
+      evidence: "浏览器明确报告请求以 TimeoutError 结束。超时可能来自网络、服务端、客户端超时设置或中间代理。",
+      nextStep: "对照同一请求的开始、停滞和结束事件；比较相同端点的重复结果，并结合 DNS/HTTPS 与 VPN 样本判断。",
+      match: e => (e.kind === "fetch-error" || e.kind === "xhr-error") && e.errorType === "TimeoutError"
+    },
+    {
+      id: "cancelled", label: "请求被取消", severity: "low",
+      evidence: "请求以 AbortError 结束。取消可能是页面导航、用户操作或应用主动取消，不等同于网络故障。",
+      nextStep: "检查是否紧邻页面导航或新请求；只有非预期取消反复发生时，才继续追查页面脚本或连接问题。",
+      match: e => (e.kind === "fetch-error" || e.kind === "xhr-error") && e.errorType === "AbortError"
+    },
+    {
       id: "transport", label: "请求传输失败", severity: "high",
       evidence: "页面捕获到 Fetch/XHR 网络错误，不能仅据此确定是 VPN 问题。",
       nextStep: "结合桌面端 DNS、HTTPS 结果区分解析失败、路由/TLS 问题和服务本身异常。",
-      match: e => e.kind === "fetch-error" || e.kind === "xhr-error"
+      match: e => (e.kind === "fetch-error" || e.kind === "xhr-error") && !["AbortError","TimeoutError"].includes(e.errorType ?? "")
     },
     {
       id: "stream", label: "响应流停顿或出错", severity: "medium",
@@ -385,7 +397,7 @@ export type BrowserRequestLifecycle = {
   startedAt: number | null;
   finishedAt: number | null;
   durationMs: number | null;
-  outcome: "response" | "http-error" | "transport-error" | "stalled" | "incomplete";
+  outcome: "response" | "http-error" | "transport-error" | "timeout" | "cancelled" | "stalled" | "incomplete";
   status: number | null;
   stallEvents: number;
   streamPauseEvents: number;
@@ -439,14 +451,15 @@ export function summarizeBrowserRequests(report: BrowserReport): BrowserRequestL
         row.durationMs = typeof event.durationMs === "number" ? event.durationMs :
           (row.startedAt === null ? null : Math.max(0,event.at-row.startedAt));
         row.status = typeof event.status === "number" ? event.status : null;
-        row.outcome = isError ? "transport-error" :
-          ((event.status ?? 0) >= 400 ? "http-error" : "response");
+        row.outcome = isError
+          ? event.errorType === "TimeoutError" ? "timeout" : event.errorType === "AbortError" ? "cancelled" : "transport-error"
+          : ((event.status ?? 0) >= 400 ? "http-error" : "response");
       }
     }
   }
   return [...groups.values()].map(({terminalPriority,...row})=>row).sort((a,b)=>{
     const weight:Record<BrowserRequestLifecycle["outcome"],number> = {
-      "transport-error":5,"http-error":4,"stalled":3,"incomplete":2,"response":1
+      "transport-error":6,"timeout":5,"http-error":4,"stalled":3,"incomplete":2,"cancelled":1,"response":0
     };
     return weight[b.outcome]-weight[a.outcome] ||
       (b.durationMs??0)-(a.durationMs??0) ||
