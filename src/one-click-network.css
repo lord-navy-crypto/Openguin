@@ -168,3 +168,17 @@
  .one-click-network{padding:14px!important}
 }
 @media(prefers-reduced-motion:reduce){.doctor-spin{animation:none}.doctor-sample-track i{transition:none}}
+
+/* Optional technical diagnostics: keep first-run experience uncluttered. */
+.doctor-advanced{display:block;border:1px solid #2c495a;border-radius:13px;background:#0c1d2b;overflow:hidden;margin-top:4px}
+.doctor-advanced-summary{list-style:none;display:flex;justify-content:space-between;align-items:center;gap:15px;padding:19px 22px;cursor:pointer;user-select:none}
+.doctor-advanced-summary::-webkit-details-marker{display:none}
+.doctor-advanced-summary>div{display:grid;gap:5px}
+.doctor-advanced-summary b{font-size:14px;color:#eff8ff}
+.doctor-advanced-summary small{font-size:11px;color:#94afc0}
+.doctor-advanced-summary>span{font-size:11px;padding:9px 12px;border-radius:9px;border:1px solid #456476;color:#d3e7f5;white-space:nowrap}
+.doctor-advanced[open] .doctor-advanced-summary{border-bottom:1px solid #ffffff18}
+.doctor-advanced[open] .doctor-advanced-summary>span{background:#224258;color:#e5f9fb}
+.doctor-advanced-body{padding:18px;display:grid;gap:15px;min-width:0}
+.doctor-advanced-body>.v07-grid4{width:100%}
+.doctor-advanced:focus-within{border-color:#549da0}
