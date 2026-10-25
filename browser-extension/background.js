@@ -1,5 +1,12 @@
 const MAX_EVENTS = 300;
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
+const ALLOWED_KINDS = new Set([
+  "monitor-active", "monitor-started", "navigation",
+  "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
+  "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
+  "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
+  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task"
+]);
 
 function cleanHost(value) {
   try { return new URL(value).hostname.slice(0, 120); } catch { return ""; }
@@ -16,13 +23,18 @@ function cleanPath(value) {
 
 function sanitizeEvent(input) {
   const event = input && typeof input === "object" ? input : {};
+  const kind = String(event.kind || "unknown").slice(0, 40);
+  const host = String(event.host || "").slice(0, 120);
+  const method = String(event.method || "").toUpperCase().slice(0, 12);
+  const errorType = String(event.errorType || "").slice(0, 60);
+  const tag = String(event.tag || "").slice(0, 20);
   const output = {
-    kind: String(event.kind || "unknown").slice(0, 40),
-    host: String(event.host || "").slice(0, 120),
+    kind: ALLOWED_KINDS.has(kind) ? kind : "unknown",
+    host: /^[a-z0-9.-]+$/i.test(host) ? host : "",
     path: cleanPath(event.path),
-    method: String(event.method || "").slice(0, 12),
-    errorType: String(event.errorType || "").slice(0, 60),
-    tag: String(event.tag || "").slice(0, 20)
+    method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method) ? method : "",
+    errorType: /^[A-Za-z][A-Za-z0-9]{0,59}$/.test(errorType) ? errorType : "",
+    tag: /^[a-z][a-z0-9-]{0,19}$/i.test(tag) ? tag : ""
   };
   for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs"]) {
     if (Number.isFinite(event[key])) output[key] = Math.max(0, Math.min(Number(event[key]), 1e9));
