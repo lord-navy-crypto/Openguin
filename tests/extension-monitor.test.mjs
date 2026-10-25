@@ -49,6 +49,9 @@ test("XHR timeout and abort are exported as distinct safe error categories", () 
   assert.equal(aborted.errorType,"AbortError");
   assert.equal(timeout.status,0);
   assert.equal(aborted.status,0);
+  assert.match(timeout.requestId,/^r[a-z0-9]+-[a-z0-9]+$/i);
+  assert.equal(timeout.requestId,captureXhrFailure("timeout").find(event=>event.kind==="xhr-start").requestId);
+  assert.equal(aborted.requestId,captureXhrFailure("abort").find(event=>event.kind==="xhr-start").requestId);
 });
 
 test("XHR error event is classified as a network error without recording error text", () => {
