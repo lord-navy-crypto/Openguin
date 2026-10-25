@@ -49,6 +49,14 @@ jobs:
       - name: Install frontend dependencies
         run: npm install
 
+      - name: Test browser network monitor and report parser
+        run: |
+          node --check browser-extension/background.js
+          node --check browser-extension/monitor-main.js
+          node --check browser-extension/monitor-bridge.js
+          node --check browser-extension/popup.js
+          node scripts/test-network-observatory.mjs
+
       - name: Build Universal2 app and DMG
         run: npm run desktop:build -- --target universal-apple-darwin
 
