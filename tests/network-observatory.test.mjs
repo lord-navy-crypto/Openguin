@@ -36,8 +36,8 @@ test("rejects malformed/untrusted report source and oversized content", () => {
 
 test("drops malicious metadata while keeping diagnostic event categories", () => {
   const parsed = parseBrowserReport(report([
-    {kind: "fetch-response", status: 403, host: "CHATGPT.COM",
-      path: "/conversation/private", body: "secret answer",
+    {kind: "fetch-response", status: 403, host: "CHATGPT.COM", method: "POST",
+      path: "/conversation/private?token=secret", body: "secret answer",
       headers: {Authorization: "Bearer example"},
       durationMs: -100},
     {kind: "malicious-new-kind", host: "chatgpt.com"},
@@ -48,7 +48,9 @@ test("drops malicious metadata while keeping diagnostic event categories", () =>
   assert.equal(parsed.events[0].durationMs, 0);
   assert.equal(Object.hasOwn(parsed.events[0], "body"), false);
   assert.equal(Object.hasOwn(parsed.events[0], "headers"), false);
-  assert.equal(Object.hasOwn(parsed.events[0], "path"), false);
+  assert.equal(parsed.events[0].path, "/conversation/private");
+  assert.equal(parsed.events[0].method, "POST");
+  assert.equal(JSON.stringify(parsed).includes("token=secret"), false);
 });
 
 test("distinguishes HTTP access denial from transport failure", () => {
