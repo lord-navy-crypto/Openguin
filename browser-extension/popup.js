@@ -95,6 +95,8 @@ function eventText(event) {
   switch (event.kind) {
     case "monitor-started": return "Monitor started on " + location;
     case "navigation": return "Navigation timing · DOM " + (event.domContentLoadedMs ?? "—") + " ms · load " + (event.loadMs ?? "—") + " ms";
+    case "render-summary": return "Render snapshot · ready " + (event.readyState || "unknown") + " · body elements " + (event.bodyChildCount ?? "—") + " · first contentful paint " + (event.firstContentfulPaintMs === null || event.firstContentfulPaintMs === undefined ? "not recorded" : event.firstContentfulPaintMs + " ms");
+    case "render-stability": return "DOM activity in first 5 seconds · " + (event.mutationCount ?? "—") + " mutation batches (content not captured)";
     case "fetch-start": return "Fetch started · " + (event.method || "GET") + " " + location;
     case "fetch-response": return "Fetch response · HTTP " + event.status + " · " + location + duration;
     case "fetch-error": return "Fetch failed (" + (event.errorType || "network error") + ") · " + location + duration;
