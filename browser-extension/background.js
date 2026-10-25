@@ -9,6 +9,7 @@ const ALLOWED_KINDS = new Set([
   "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
   "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
+  "body-read-complete", "body-read-error",
   "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability",
   "download-start", "download-progress", "download-complete", "download-failed", "download-stall"
 ]);
@@ -50,7 +51,7 @@ function sanitizeEvent(input) {
     output.sourceAt = sourceAt;
     output.bridgeDelayMs = Math.max(0, Math.min(300_000, receivedAt - sourceAt));
   }
-  for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "bodyChildCount", "firstPaintMs", "firstContentfulPaintMs", "mutationCount", "bytesReceived", "totalBytes", "progressPercent"]) {
+  for (const key of ["status", "durationMs", "gapMs", "bodyReadDurationMs", "headersToBodyReadMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "bodyChildCount", "firstPaintMs", "firstContentfulPaintMs", "mutationCount", "bytesReceived", "totalBytes", "progressPercent"]) {
     if (Number.isFinite(event[key])) output[key] = Math.max(0, Math.min(Number(event[key]), 1e9));
   }
   output.readyState = ["loading", "interactive", "complete"].includes(event.readyState) ? event.readyState : "";
