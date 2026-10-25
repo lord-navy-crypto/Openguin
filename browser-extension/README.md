@@ -11,7 +11,8 @@ A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the ac
 5. Open `https://chatgpt.com`, click the puzzle-piece Extensions menu, and pin **Openguin Network Watch** if desired.
 6. Click the extension icon, then click **Start this tab**. Keep the tab open while reproducing the loading or response problem.
 7. If you need to capture events after ChatGPT reloads, click **Allow ChatGPT reload monitoring** and approve the optional permission. This permission is limited to `chatgpt.com` or `chat.openai.com`.
-8. To monitor downloads, click **Enable download + timeout monitoring** and approve the separate downloads/alarms permission. This watches download metadata browser-wide, so only enable it if you want that additional coverage.
+8. After installing an updated extension version, reload the ChatGPT tab once to clear any old page-injected listeners, then click **Start this tab** once. The bridge now guards against repeated injection, but an already-open page may still contain listeners from an older version.
+9. To monitor downloads, click **Enable download + timeout monitoring** and approve the separate downloads/alarms permission. This watches download metadata browser-wide, so only enable it if you want that additional coverage.
 
 ## Export a report and analyze it in Openguin
 
@@ -22,7 +23,7 @@ A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the ac
 5. For copied JSON, click **从剪贴板分析**. For a downloaded JSON file, open it in a text editor, copy its contents, paste them into the report box, then click **分析粘贴报告**. The CSV is for spreadsheet review; use JSON when importing events.
 6. After import, choose **复制完整诊断包**, **下载 JSON**, or **下载 CSV 表格**. This combines the browser timeline with the current desktop DNS/HTTPS checks, speed-test samples, VPN comparisons, local scan history, and suggested findings. Paste the copied JSON into a ChatGPT conversation for analysis, or attach the downloaded JSON file.
 
-If the extension icon is missing, open the Extensions menu and pin it. If it says no events were captured, reload the page, click **Start this tab** again, and reproduce the problem. Some browser-internal failures are not visible to a page-level extension.
+If the extension icon is missing, open the Extensions menu and pin it. If events appear duplicated, reload the page, click **Start this tab** once, and reproduce the problem; duplicate bridge listeners from an older injected version are cleared by a page reload. If it says no events were captured, reload the page, click **Start this tab** again, and reproduce the problem. Some browser-internal failures are not visible to a page-level extension.
 
 ## What it records
 
