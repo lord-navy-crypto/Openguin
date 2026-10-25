@@ -1,5 +1,9 @@
 const MAX_EVENTS = 300;
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
+// Page events carry their own timestamp. A duplicate bridge listener forwards
+// the same timestamp and payload, which lets us suppress duplicates safely.
+const recentPageEvents = new Map();
+const DUPLICATE_WINDOW_MS = 5000;
 const ALLOWED_KINDS = new Set([
   "monitor-active", "monitor-started", "navigation",
   "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
@@ -37,6 +41,13 @@ function sanitizeEvent(input) {
     errorType: /^[A-Za-z][A-Za-z0-9_-]{0,59}$/.test(errorType) ? errorType : "",
     tag: /^[a-z][a-z0-9-]{0,19}$/i.test(tag) ? tag : ""
   };
+  const receivedAt = Date.now();
+  const sourceAt = Number.isFinite(event.at) && event.at > 1_000_000_000_000 &&
+    Math.abs(receivedAt - event.at) <= 5 * 60_000 ? Math.round(event.at) : undefined;
+  if (sourceAt !== undefined) {
+    output.sourceAt = sourceAt;
+    output.bridgeDelayMs = Math.max(0, Math.min(300_000, receivedAt - sourceAt));
+  }
   for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "bodyChildCount", "firstPaintMs", "firstContentfulPaintMs", "mutationCount", "bytesReceived", "totalBytes", "progressPercent"]) {
     if (Number.isFinite(event[key])) output[key] = Math.max(0, Math.min(Number(event[key]), 1e9));
   }
@@ -47,9 +58,33 @@ function sanitizeEvent(input) {
 let eventWriteQueue = Promise.resolve();
 function appendEvent(record) {
   eventWriteQueue = eventWriteQueue.catch(() => {}).then(async () => {
-    const { events } = await chrome.storage.local.get({ events: [] });
+    const state = await chrome.storage.local.get({ events: [], droppedEvents: 0 });
+    const events = Array.isArray(state.events) ? state.events : [];
+    const droppedEvents = Number(state.droppedEvents) || 0;
+    const nextDropped = events.length >= MAX_EVENTS ? Math.min(1e9, droppedEvents + 1) : droppedEvents;
     await chrome.storage.local.set({
-      events: [record, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS)
+      events: [record, ...events].slice(0, MAX_EVENTS),
+      droppedEvents: nextDropped
+    });
+  });
+  return eventWriteQueue;
+}
+
+function fingerprintPageEvent(event, sourceAt) {
+  return JSON.stringify([
+    sourceAt, event.kind, event.host, event.path, event.method, event.status,
+    event.durationMs, event.gapMs, event.errorType, event.tag, event.line,
+    event.readyState, event.bodyChildCount, event.firstPaintMs,
+    event.firstContentfulPaintMs, event.mutationCount, event.transferBytes,
+    event.bytesReceived, event.totalBytes, event.progressPercent
+  ]);
+}
+
+function noteDuplicateSuppressed() {
+  eventWriteQueue = eventWriteQueue.catch(() => {}).then(async () => {
+    const state = await chrome.storage.local.get({ duplicateEventsSuppressed: 0 });
+    await chrome.storage.local.set({
+      duplicateEventsSuppressed: Math.min(1e9, (Number(state.duplicateEventsSuppressed) || 0) + 1)
     });
   });
   return eventWriteQueue;
@@ -68,6 +103,21 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     const safe = sanitizeEvent(message.event);
     if (safe.kind === "unknown") return;
     const at = Date.now();
+    if (Number.isFinite(safe.sourceAt)) {
+      // A short-lived exact fingerprint suppresses duplicate forwarding while
+      // allowing legitimate repeated requests with different source times.
+      for (const [key, expiry] of recentPageEvents) {
+        if (expiry <= at) recentPageEvents.delete(key);
+      }
+      const key = fingerprintPageEvent(safe, safe.sourceAt);
+      if (recentPageEvents.has(key)) {
+        return noteDuplicateSuppressed();
+      }
+      recentPageEvents.set(key, at + DUPLICATE_WINDOW_MS);
+      while (recentPageEvents.size > 1200) {
+        recentPageEvents.delete(recentPageEvents.keys().next().value);
+      }
+    }
     return appendEvent({
       id: at.toString(36) + Math.random().toString(36).slice(2, 8),
       at, tabId, ...safe
