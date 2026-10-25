@@ -137,6 +137,38 @@ function eventText(event) {
   }
 }
 
+function eventAdvice(event) {
+  if (event.kind === "download-failed") {
+    const code = String(event.errorType || "").toUpperCase();
+    if (code.includes("NETWORK") || code.includes("CONNECTION") || code.includes("TIMEOUT")) return "Next: rerun the desktop DNS/HTTPS check. If only VPN-on runs fail, compare a nearby VPN exit or protocol one change at a time.";
+    if (code.includes("FILE") || code.includes("ACCESS") || code.includes("DISK")) return "Next: check free disk space, the download folder, and file permissions before retrying.";
+    if (code.includes("CANCELED") || code.includes("CANCELLED")) return "The download was cancelled; no network fault is implied.";
+    return "Next: retry once and note the error category. Compare VPN-on/off and verify whether the source server is reachable.";
+  }
+  if (event.kind === "fetch-stall" || event.kind === "xhr-stall") return "No response arrived for 15 seconds. Run desktop DNS/HTTPS diagnostics; if those pass, compare VPN routes and check whether only this site is affected.";
+  if (event.kind === "fetch-error" || event.kind === "xhr-error") return "The request failed before a usable response. Check DNS first; if DNS succeeds, inspect VPN routing, proxy/TLS filtering, and the target service.";
+  if (event.kind === "fetch-response" || event.kind === "xhr-response") {
+    const status = Number(event.status);
+    if (status === 429) return "The server rate-limited this request. Avoid rapid retries and wait before trying again.";
+    if (status === 401 || status === 403) return "The server answered but denied or challenged the request. Check sign-in or service access; if VPN-only, compare another exit location without disabling security controls.";
+    if (status >= 500) return "The server returned an error. Check again later and compare another endpoint; this is not proof of a local network failure.";
+    if (status >= 400) return "The server returned an HTTP error. Separate this application-level response from DNS or connection failure.";
+  }
+  if (event.kind === "stream-gap") return "The response connection stayed open but produced no readable chunk for 15 seconds. Check service status, repeat the request, and compare VPN-on/off latency and jitter.";
+  if (event.kind === "stream-error") return "The response stream ended with an error. Compare request timing with desktop connectivity checks; if DNS/HTTPS are healthy, suspect a page/session or upstream stream issue.";
+  if (event.kind === "resource-error") return "A page resource failed. If repeatable, compare the resource host with DNS/VPN results and check browser content-blocking settings.";
+  if (event.kind === "slow-resource") return "This resource was slow. Compare its host and timing across repeated runs; a single slow resource does not establish the cause.";
+  if (event.kind === "javascript-error" || event.kind === "unhandled-rejection") return "This points to a page-script error, not necessarily a network problem. Reload once; if repeatable, test in a clean browser profile and inspect the browser console.";
+  if (event.kind === "long-task") return "The page's main thread was busy. If requests completed but the UI froze, test with fewer heavy tabs and compare a clean profile.";
+  if (event.kind === "navigation") {
+    if ((event.loadMs ?? 0) > 10000) return "Page load took over 10 seconds. Compare DNS/HTTPS timing and inspect slow resources before changing network settings.";
+    return "Use this navigation timing as a baseline and compare it with a later slow or failed load.";
+  }
+  if (event.kind === "render-summary" && event.readyState === "complete" && event.bodyChildCount === 0) return "The document reports complete but has no body elements. This can indicate a blocked or failed page render; reload and check script/resource errors.";
+  if (event.kind === "render-stability" && (event.mutationCount ?? 0) > 500) return "The DOM changed frequently during the first five seconds. Check for a busy UI or repeated rendering; correlate with long-task and request events.";
+  return "";
+}
+
 async function render() {
   const [tab, stored, downloadPermission] = await Promise.all([
     activeTab(),
@@ -172,6 +204,14 @@ async function render() {
       const label = document.createElement("div");
       label.textContent = eventText(event);
       row.append(time, label);
+      const adviceText = eventAdvice(event);
+      if (adviceText) {
+        const advice = document.createElement("div");
+        advice.className = "muted";
+        advice.style.marginTop = "4px";
+        advice.textContent = "Next step: " + adviceText;
+        row.appendChild(advice);
+      }
       eventsNode.appendChild(row);
     }
   }
