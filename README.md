@@ -122,7 +122,7 @@ The extension lives in `browser-extension/`. Load it as an unpacked extension in
 
 ### Download and run the macOS build
 
-The `Build Openguin macOS DMG` GitHub Actions workflow builds the desktop DMG and a separate `Openguin-Network-Watch.zip` browser extension bundle. After a successful workflow run, download the `Openguin-Network-Observatory-macOS-ARM64` artifact from the Actions run and extract it. The DMG is an unsigned/unnotarized developer build; the extension is installed through Chrome/Chromium's **Load unpacked** flow after extracting its ZIP.
+The `Openguin macOS Universal2 Build` GitHub Actions workflow builds the desktop DMG and a separate `Openguin-Network-Watch.zip` browser extension bundle. After a successful workflow run, download the `Openguin-Network-Observatory-Universal2-<commit>` artifact from that Actions run and extract it. The DMG is an unsigned/unnotarized developer build; the extension is installed through Chrome/Chromium's **Load unpacked** flow after extracting its ZIP.
 
 The browser extension's file-download monitor is opt-in and requires separate downloads/alarms permissions. It records host, coarse progress, byte counts, duration, and failure/stall category, but not filenames or full URLs.
 
