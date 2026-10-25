@@ -32,7 +32,7 @@ v010=(root/'src-tauri/src/v010.rs').read_text()
 for token in ['universal_model_search','universal_model_variants','repair_bundled_runtime','huggingface.co/api/models','api.github.com/search/repositories','/tags','Ollama-darwin.zip','openguin://runtime-install-progress']:
     require(token in v010,f'Missing 0.10 backend token: {token}')
 app=(root/'src/App07.tsx').read_text()
-for token in ['Openguin','Thinking','Streaming playground','Hardware Fit 3','Diagnostics & Usage','Observatory','Runtime Observatory','BrandMark','MegaLibrary','RuntimeInstallerCard','DeveloperStudio010','AdvancedSettings010','top_k:topK','min_p:minP','repeat_penalty:repeatPenalty','keep_alive:keepAlive']:
+for token in ['Openguin','Thinking','Streaming playground','Hardware Fit 3','电脑网络体检','Observatory','Runtime Observatory','BrandMark','MegaLibrary','RuntimeInstallerCard','DeveloperStudio010','AdvancedSettings010','top_k:topK','min_p:minP','repeat_penalty:repeatPenalty','keep_alive:keepAlive']:
     require(token in app,f'Missing Openguin frontend integration: {token}')
 obs=(root/'src/Observatory.tsx').read_text()
 for token in ['/api/ps','Runtime memory map','Decode performance trend','Last generation pipeline','Context residency','size_vram','context_length','RuntimeControl09','CompareBench09']:
