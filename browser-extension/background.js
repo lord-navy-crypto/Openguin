@@ -44,17 +44,34 @@ function sanitizeEvent(input) {
   return output;
 }
 
+let eventWriteQueue = Promise.resolve();
+function appendEvent(record) {
+  eventWriteQueue = eventWriteQueue.catch(() => {}).then(async () => {
+    const { events } = await chrome.storage.local.get({ events: [] });
+    await chrome.storage.local.set({
+      events: [record, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS)
+    });
+  });
+  return eventWriteQueue;
+}
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (!message || message.type !== "openguin-network-event") return;
-  const safe = sanitizeEvent(message.event);
-  chrome.storage.local.get({ events: [] }).then(({ events }) => {
-    const record = {
-      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
-      at: Date.now(),
-      tabId: Number.isInteger(sender.tab && sender.tab.id) ? sender.tab.id : null,
-      ...safe
-    };
-    return chrome.storage.local.set({ events: [record, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS) });
+  const tabId = sender.tab && sender.tab.id;
+  if (!Number.isInteger(tabId)) return;
+  // Events must originate from the tab the user explicitly activated.
+  // Do not accept unrelated tabs/frames or events after monitoring was stopped.
+  void chrome.storage.local.get({ monitoring: false, activeTabId: null, activeHost: "" }).then(state => {
+    if (!state.monitoring || state.activeTabId !== tabId) return;
+    let senderHost = "";
+    try { senderHost = new URL(sender.url || sender.tab.url).hostname; } catch { return; }
+    if (senderHost !== state.activeHost) return;
+    const safe = sanitizeEvent(message.event);
+    if (safe.kind === "unknown") return;
+    const at = Date.now();
+    return appendEvent({
+      id: at.toString(36) + Math.random().toString(36).slice(2, 8),
+      at, tabId, ...safe
+    });
   }).catch(() => {});
 });
 
@@ -90,14 +107,10 @@ function emitDownload(kind, item, extra = {}) {
   if (event.totalBytes && Number.isFinite(event.bytesReceived)) {
     event.progressPercent = Math.min(100, Math.round(event.bytesReceived * 100 / event.totalBytes));
   }
-  return chrome.storage.local.get({ events: [] }).then(({ events }) =>
-    chrome.storage.local.set({
-      events: [{
-        id: at.toString(36) + Math.random().toString(36).slice(2, 8),
-        at, tabId: null, ...sanitizeEvent(event)
-      }, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS)
-    })
-  ).catch(() => {});
+  return appendEvent({
+    id: at.toString(36) + Math.random().toString(36).slice(2, 8),
+    at, tabId: null, ...sanitizeEvent(event)
+  }).catch(() => {});
 }
 
 // Stored in storage.session: unlike globals, sampling survives Manifest V3
