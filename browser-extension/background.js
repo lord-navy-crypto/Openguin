@@ -112,8 +112,10 @@ function emitDownload(kind, item, extra = {}) {
   }).catch(() => {});
 }
 
-function registerDownloadListeners() {
-  if (downloadListenersRegistered || !chrome.downloads) return;
+async function registerDownloadListeners() {
+  if (downloadListenersRegistered || !chrome.downloads || !chrome.permissions) return;
+  const granted = await chrome.permissions.contains({ permissions: ["downloads"] }).catch(() => false);
+  if (!granted || downloadListenersRegistered || !chrome.downloads) return;
   downloadListenersRegistered = true;
   chrome.downloads.onCreated.addListener((item) => {
     const now = Date.now();
@@ -172,8 +174,10 @@ function registerDownloadListeners() {
   });
 }
 
-function registerDownloadAlarm() {
-  if (!chrome.alarms || downloadAlarmListenerRegistered) return;
+async function registerDownloadAlarm() {
+  if (!chrome.alarms || !chrome.permissions || downloadAlarmListenerRegistered) return;
+  const granted = await chrome.permissions.contains({ permissions: ["alarms"] }).catch(() => false);
+  if (!granted || downloadAlarmListenerRegistered || !chrome.alarms) return;
   downloadAlarmListenerRegistered = true;
   chrome.alarms.onAlarm.addListener((alarm) => {
     if (alarm.name !== "openguin-download-stall-watch" || !chrome.downloads) return;
@@ -205,14 +209,14 @@ async function startDownloadAlarmIfPermitted() {
   if (granted) chrome.alarms.create("openguin-download-stall-watch", { periodInMinutes: 0.5 });
 }
 
-registerDownloadListeners();
-registerDownloadAlarm();
+void registerDownloadListeners();
+void registerDownloadAlarm();
 void startDownloadAlarmIfPermitted();
 if (chrome.permissions && chrome.permissions.onAdded) {
   chrome.permissions.onAdded.addListener((permissions) => {
     const granted = permissions.permissions || [];
-    if (granted.includes("downloads")) registerDownloadListeners();
-    if (granted.includes("alarms")) registerDownloadAlarm();
+    if (granted.includes("downloads")) void registerDownloadListeners();
+    if (granted.includes("alarms")) void registerDownloadAlarm();
     if (granted.includes("downloads") || granted.includes("alarms")) void startDownloadAlarmIfPermitted();
   });
 }
