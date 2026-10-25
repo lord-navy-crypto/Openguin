@@ -1,5 +1,5 @@
 import {useMemo,useState} from "react";
-import {analyzeBrowserReport,eventCounts,parseBrowserReport,summarizeBrowserEndpoints,summarizeBrowserTelemetry,type BrowserReport} from "./browser-diagnostics";
+import {analyzeBrowserReport,eventCounts,parseBrowserReport,summarizeBrowserEndpoints,summarizeBrowserRequests,summarizeBrowserTelemetry,type BrowserReport} from "./browser-diagnostics";
 import {correlateBrowserWithOneClick} from "./network-correlation";
 import {diagnosticBundleToCsv,downloadDiagnosticText} from "./diagnostic-export";
 import type {NetworkHistoryEntry} from "./network-history";
@@ -48,6 +48,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
   const counts=useMemo(()=>report?eventCounts(report):[],[report]);
   const telemetry=useMemo(()=>report?summarizeBrowserTelemetry(report):null,[report]);
   const endpoints=useMemo(()=>report?summarizeBrowserEndpoints(report):[],[report]);
+  const requestLifecycles=useMemo(()=>report?summarizeBrowserRequests(report):[],[report]);
   const correlation=useMemo(()=>report?correlateBrowserWithOneClick(report,oneClickReport):null,[report,oneClickReport]);
   const dnsFailed=networkSnapshot?.dns.filter(x=>!x.resolved).length??0;
   const httpsFailed=networkSnapshot?.endpoints.filter(x=>!x.reachable).length??0;
@@ -80,7 +81,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       networkHistory:networkHistory.slice(0,12),
       browser:report?{
         source:report.source,formatVersion:report.formatVersion,generatedAt:report.generatedAt,
-        eventCount:report.events.length,quality:report.quality??null,findings,eventCounts:counts,events:report.events
+        eventCount:report.events.length,quality:report.quality??null,findings,eventCounts:counts,requestLifecycles,events:report.events
       }:null,
       crossLayer:correlation,
       privacy:{
@@ -172,6 +173,18 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <div><span>最长已记录流停顿</span><strong>{metric(telemetry.maxStreamGapMs,"ms")}</strong></div>
         </div>
         <p className="browser-report-howto">P95 表示本次已记录响应中 95% 不超过的耗时，不是网络延迟保证值。响应耗时包含浏览器可观测的请求等待时间，不能单独分离服务器处理时间与网络传输时间。</p>
+      </div>}
+      {requestLifecycles.length>0&&<div className="browser-request-lifecycles">
+        <h4>逐请求生命周期 · 同一请求 ID 关联</h4>
+        <p className="browser-report-howto">同一 request ID 将请求开始、响应/错误、15 秒停滞事件及响应流停顿关联起来。若报告没有 request ID 的旧版事件，将不会出现在此列表。</p>
+        {requestLifecycles.slice(0,10).map(item=><article key={item.requestId} className={"browser-request-row "+item.outcome}>
+          <div className="browser-endpoint-head"><b>{item.method} {item.host}{item.path}</b><span>{({
+            response:"已响应","http-error":"HTTP 错误","transport-error":"传输错误",
+            stalled:"未完成/停滞",incomplete:"未观察到结束"
+          } as Record<string,string>)[item.outcome]}</span></div>
+          <p>HTTP {item.status??"—"} · 耗时 {metric(item.durationMs,"ms")} · 请求停滞 {item.stallEvents} · 流停顿 {item.streamPauseEvents}</p>
+          <small>请求 ID：{item.requestId} · 关联事件 {item.eventCount}{item.startedAt?" · 开始 "+new Date(item.startedAt).toLocaleTimeString():""}</small>
+        </article>)}
       </div>}
       {endpoints.length>0&&<div className="browser-endpoints">
         <h4>问题最集中的请求端点 · 按异常和耗时排序</h4>
