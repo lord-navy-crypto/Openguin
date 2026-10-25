@@ -268,6 +268,11 @@ export function summarizeBrowserTelemetry(report: BrowserReport): BrowserTelemet
     if (!durations.length) return null;
     return durations[Math.min(durations.length-1, Math.max(0, Math.ceil(p*durations.length)-1))];
   };
+  const median = ():number|null => {
+    if (!durations.length) return null;
+    const middle = Math.floor(durations.length/2);
+    return durations.length%2 ? durations[middle] : (durations[middle-1]+durations[middle])/2;
+  };
   const statuses = events.filter(e => e.kind === "fetch-response" || e.kind === "xhr-response");
   const gaps = events.filter(e => e.kind === "stream-gap" || e.kind === "stream-gap-resolved" || e.kind === "stream-error");
   const gapValues = gaps.map(e => e.gapMs).filter((n):n is number => typeof n === "number");
@@ -277,7 +282,7 @@ export function summarizeBrowserTelemetry(report: BrowserReport): BrowserTelemet
     transportErrors: events.filter(e => e.kind === "fetch-error" || e.kind === "xhr-error").length,
     requestStalls: events.filter(e => e.kind === "fetch-stall" || e.kind === "xhr-stall").length,
     slowResponses: responses.filter(e => (e.durationMs ?? 0) >= 2500).length,
-    medianResponseMs: percentile(0.5),
+    medianResponseMs: median(),
     p95ResponseMs: percentile(0.95),
     http4xx: statuses.filter(e => (e.status ?? 0) >= 400 && (e.status ?? 0) < 500).length,
     http5xx: statuses.filter(e => (e.status ?? 0) >= 500 && (e.status ?? 0) < 600).length,
@@ -344,6 +349,11 @@ export function summarizeBrowserEndpoints(report: BrowserReport): BrowserEndpoin
     if (!values.length) return null;
     return values[Math.min(values.length-1,Math.max(0,Math.ceil(p*values.length)-1))];
   };
+  const median = (values:number[]):number|null => {
+    if (!values.length) return null;
+    const middle = Math.floor(values.length/2);
+    return values.length%2 ? values[middle] : (values[middle-1]+values[middle])/2;
+  };
   return [...groups.values()].map(row => {
     const durations = [...row.durations].sort((a,b)=>a-b);
     return {
@@ -351,7 +361,7 @@ export function summarizeBrowserEndpoints(report: BrowserReport): BrowserEndpoin
       requestStarts:row.requestStarts,responseCount:row.responseCount,
       errorCount:row.errorCount,stallCount:row.stallCount,
       http4xx:row.http4xx,http5xx:row.http5xx,slowResponses:row.slowResponses,
-      medianResponseMs:percentile(durations,0.5),
+      medianResponseMs:median(durations),
       p95ResponseMs:percentile(durations,0.95),
       maxResponseMs:durations.length?durations[durations.length-1]:null
     };
