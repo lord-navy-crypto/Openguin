@@ -33,13 +33,15 @@ function sanitizeEvent(input) {
   const method = String(event.method || "").toUpperCase().slice(0, 12);
   const errorType = String(event.errorType || "").slice(0, 60);
   const tag = String(event.tag || "").slice(0, 20);
+  const requestId = String(event.requestId || "").slice(0, 64);
   const output = {
     kind: ALLOWED_KINDS.has(kind) ? kind : "unknown",
     host: /^[a-z0-9.-]+$/i.test(host) ? host : "",
     path: cleanPath(event.path),
     method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method) ? method : "",
     errorType: /^[A-Za-z][A-Za-z0-9_-]{0,59}$/.test(errorType) ? errorType : "",
-    tag: /^[a-z][a-z0-9-]{0,19}$/i.test(tag) ? tag : ""
+    tag: /^[a-z][a-z0-9-]{0,19}$/i.test(tag) ? tag : "",
+    requestId: /^[a-z0-9_-]{1,64}$/i.test(requestId) ? requestId : ""
   };
   const receivedAt = Date.now();
   const sourceAt = Number.isFinite(event.at) && event.at > 1_000_000_000_000 &&
@@ -72,7 +74,7 @@ function appendEvent(record) {
 
 function fingerprintPageEvent(event, sourceAt) {
   return JSON.stringify([
-    sourceAt, event.kind, event.host, event.path, event.method, event.status,
+    sourceAt, event.kind, event.host, event.path, event.method, event.requestId, event.status,
     event.durationMs, event.gapMs, event.errorType, event.tag, event.line,
     event.readyState, event.bodyChildCount, event.firstPaintMs,
     event.firstContentfulPaintMs, event.mutationCount, event.transferBytes,
