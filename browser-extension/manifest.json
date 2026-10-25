@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Openguin Network Watch",
-  "version": "0.1.0",
-  "description": "Opt-in, local-only diagnostics for page requests, resource failures, JavaScript errors, and long response gaps.",
+  "version": "0.2.0",
+  "description": "Opt-in, local-only diagnostics with correlated request lifecycles, resource failures, JavaScript errors, and response-gap analysis.",
   "permissions": ["activeTab", "scripting", "storage"],
   "optional_permissions": ["downloads", "alarms"],
   "optional_host_permissions": [
