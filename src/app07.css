@@ -44,3 +44,6 @@
 
 .speed-results .network-columns{grid-template-columns:repeat(3,minmax(0,1fr))}
 @media(max-width:1150px){.speed-results .network-columns{grid-template-columns:1fr}}
+
+.speed-summary{margin:0 0 4px}
+.vpn-diff{grid-template-columns:repeat(3,minmax(0,1fr))}
