@@ -172,6 +172,10 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <div><span>请求停滞事件</span><strong>{telemetry.requestStalls}</strong></div>
           <div><span>4xx / 5xx 响应</span><strong>{telemetry.http4xx} / {telemetry.http5xx}</strong></div>
           <div><span>最长已记录流停顿</span><strong>{metric(telemetry.maxStreamGapMs,"ms")}</strong></div>
+          <div><span>正文读取完成</span><strong>{telemetry.bodyReadCount}</strong></div>
+          <div><span>正文读取错误</span><strong>{telemetry.bodyReadErrors}</strong></div>
+          <div><span>正文读取耗时中位数</span><strong>{metric(telemetry.medianBodyReadMs,"ms")}</strong></div>
+          <div><span>响应后等待开始读取</span><strong>{metric(telemetry.maxHeadersToBodyReadMs,"ms")}</strong></div>
         </div>
         <p className="browser-report-howto">P95 表示本次已记录响应中 95% 不超过的耗时，不是网络延迟保证值。响应耗时包含浏览器可观测的请求等待时间，不能单独分离服务器处理时间与网络传输时间。</p>
       </div>}
@@ -183,7 +187,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
             response:"已响应","http-error":"HTTP 错误","transport-error":"传输错误",
             timeout:"请求超时",cancelled:"请求取消",stalled:"未完成/停滞",incomplete:"未观察到结束"
           } as Record<string,string>)[item.outcome]}</span></div>
-          <p>HTTP {item.status??"—"} · 耗时 {metric(item.durationMs,"ms")} · 请求停滞 {item.stallEvents} · 流停顿 {item.streamPauseEvents}</p>
+          <p>HTTP {item.status??"—"} · 耗时 {metric(item.durationMs,"ms")} · 请求停滞 {item.stallEvents} · 流停顿 {item.streamPauseEvents} · 正文读取错误 {item.bodyReadErrors}</p>
           <small>请求 ID：{item.requestId} · 关联事件 {item.eventCount}{item.startedAt?" · 开始 "+new Date(item.startedAt).toLocaleTimeString():""}</small>
         </article>)}
       </div>}
