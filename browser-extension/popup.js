@@ -311,8 +311,8 @@ function downloadReport(filename, content, mime) {
 
 function reportCsv(report) {
   const columns = [
-    "at","kind","host","path","method","status","durationMs","gapMs","errorType",
-    "readyState","progressPercent","bytesReceived","totalBytes","bodyChildCount",
+    "at","kind","host","path","method","tag","status","durationMs","gapMs","errorType","line",
+    "readyState","progressPercent","bytes","transferBytes","bytesReceived","totalBytes","bodyChildCount",
     "domContentLoadedMs","loadMs","firstPaintMs","firstContentfulPaintMs","mutationCount"
   ];
   const rows = [["source","formatVersion","generatedAt","eventCount",...columns]];
