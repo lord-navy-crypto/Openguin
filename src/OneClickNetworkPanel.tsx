@@ -22,7 +22,7 @@ const tone:Record<OneClickResult["verdict"],{label:string;hint:string}>={
   "no-clear-problem":{label:"采样正常",hint:"受测服务未见明确异常；如果网页仍卡顿，请进一步分析浏览器事件。"},
   "network-failure":{label:"重点异常",hint:"DNS 与 HTTPS 同时出现异常，优先检查网络连接和代理配置。"},
   "connection-problem":{label:"连接异常",hint:"部分连接无法顺利建立；先看下方目标域名的具体结果。"},
-  "service-response":{label:"服务响应异常",hint:"服务器已回复 HTTP 状态；请区分访问权限和真正的网络中断。"},
+  "service-response":{label:"HTTP 响应需核对",hint:"匿名探测收到受限或服务端状态；这不等于断网、账号被封或浏览器会话失效。请结合实际网页表现判断。"},
   "slow-or-unstable":{label:"稳定性异常",hint:"发现延迟、波动或传输问题线索；建议多次对照验证。"},
   incomplete:{label:"检测未完成",hint:"无法获取足够的本机网络证据，请重试或检查应用网络权限。"}
 };
@@ -132,7 +132,7 @@ export default function OneClickNetworkPanel({
       </div>
 
       {result.stability&&<section className="doctor-stability">
-        <div className="doctor-section-header"><h4><Activity size={17}/>请求稳定性图</h4><small>{result.stability.passed}/{result.stability.total} 次 HTTP 探测成功</small></div>
+        <div className="doctor-section-header"><h4><Activity size={17}/>测速端点请求稳定性图</h4><small>{result.stability.passed}/{result.stability.total} 次测速端点 HTTP 探测成功</small></div>
         <div className="doctor-stability-grid">
           <div className="doctor-sample-bars">
             {samples.map((sample,i)=><div className="doctor-sample-row" key={i}>
@@ -145,9 +145,9 @@ export default function OneClickNetworkPanel({
             <div><small>上传 / HTTP 耗时波动</small><b>{money(speedTest?.uploadMbps)} / {money(speedTest?.jitterMs,"ms")}</b></div>
           </div>
         </div>
-        <small className="doctor-footnote">图形长度只用于比较同一轮 HTTP 请求耗时，并非 ICMP Ping、系统丢包率或网站整体质量评级。</small>
+        <small className="doctor-footnote">此图统计的是测速服务的 HTTP 探测，不是上方 ChatGPT 网站请求；图形长度只比较同一轮耗时，并非 ICMP Ping、系统丢包率或网站整体质量评级。</small>
       </section>}
-      {result.issues.some(x=>x.severity==="info")&&<p className="doctor-footnote">环境线索：{result.issues.filter(x=>x.severity==="info").map(x=>x.title).join("；")}。不能仅凭网络接口推断 VPN 实际转发路径。</p>}
+      {result.issues.some(x=>x.severity==="info")&&<p className="doctor-footnote">补充诊断线索：{result.issues.filter(x=>x.severity==="info").map(x=>x.title).join("；")}。匿名 HTTP 401/403 不能单独证明登录会话异常；VPN 接口线索也不能证明实际转发路径。</p>}
       {result.notes.length>0&&<p className="doctor-footnote">{result.notes.join(" ")}</p>}
     </div>}
 
