@@ -1,9 +1,11 @@
 export type DiagnosticValue = Record<string, unknown>;
 
 function csvCell(value: unknown): string {
-  let text = value === null || value === undefined ? "" :
-    typeof value === "string" ? value :
-    typeof value === "object" ? JSON.stringify(value) : String(value);
+  let text: string;
+  if (value === null || value === undefined) text = "";
+  else if (typeof value === "string") text = value;
+  else if (typeof value === "object") text = JSON.stringify(value) ?? "[object]";
+  else text = String(value);
   if (/^[\s]*[=+\-@]/.test(text)) text = "'" + text;
   return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
