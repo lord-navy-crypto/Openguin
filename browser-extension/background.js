@@ -1,11 +1,15 @@
 const MAX_EVENTS = 300;
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
+const downloadStartedAt = new Map();
+const downloadLastPercent = new Map();
+let downloadListenersRegistered = false;
 const ALLOWED_KINDS = new Set([
   "monitor-active", "monitor-started", "navigation",
   "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
   "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
-  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability"
+  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability",
+  "download-start", "download-progress", "download-complete", "download-failed"
 ]);
 
 function cleanHost(value) {
@@ -33,10 +37,10 @@ function sanitizeEvent(input) {
     host: /^[a-z0-9.-]+$/i.test(host) ? host : "",
     path: cleanPath(event.path),
     method: /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(method) ? method : "",
-    errorType: /^[A-Za-z][A-Za-z0-9]{0,59}$/.test(errorType) ? errorType : "",
+    errorType: /^[A-Za-z][A-Za-z0-9_-]{0,59}$/.test(errorType) ? errorType : "",
     tag: /^[a-z][a-z0-9-]{0,19}$/i.test(tag) ? tag : ""
   };
-  for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "bodyChildCount", "firstPaintMs", "firstContentfulPaintMs", "mutationCount"]) {
+  for (const key of ["status", "durationMs", "gapMs", "line", "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "bodyChildCount", "firstPaintMs", "firstContentfulPaintMs", "mutationCount", "bytesReceived", "totalBytes", "progressPercent"]) {
     if (Number.isFinite(event[key])) output[key] = Math.max(0, Math.min(Number(event[key]), 1e9));
   }
   output.readyState = ["loading", "interactive", "complete"].includes(event.readyState) ? event.readyState : "";
@@ -73,6 +77,86 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   if (!(await chrome.permissions.contains({ origins: [origin] }))) return;
   try { await injectMonitor(tabId); } catch { /* Permission or navigation changed; do not broaden access. */ }
 });
+
+function downloadHost(url) {
+  try { return new URL(url).hostname.slice(0, 120); } catch { return ""; }
+}
+
+function emitDownload(kind, item, extra = {}) {
+  const at = Date.now();
+  const startedAt = downloadStartedAt.get(item.id);
+  const totalBytes = Number.isFinite(item.totalBytes) && item.totalBytes > 0 ? item.totalBytes : null;
+  const bytesReceived = Number.isFinite(item.bytesReceived) && item.bytesReceived >= 0 ? item.bytesReceived : null;
+  const progressPercent = totalBytes && bytesReceived !== null ? Math.max(0, Math.min(100, Math.round(bytesReceived / totalBytes * 100))) : null;
+  const event = {
+    kind,
+    host: downloadHost(item.url),
+    totalBytes: totalBytes ?? undefined,
+    bytesReceived: bytesReceived ?? undefined,
+    progressPercent: progressPercent ?? undefined,
+    durationMs: startedAt ? Math.max(0, at - startedAt) : undefined,
+    ...extra
+  };
+  chrome.storage.local.get({ events: [] }).then(({ events }) => {
+    const record = {
+      id: at.toString(36) + Math.random().toString(36).slice(2, 8),
+      at,
+      tabId: null,
+      ...sanitizeEvent(event)
+    };
+    return chrome.storage.local.set({ events: [record, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS) });
+  }).catch(() => {});
+}
+
+function registerDownloadListeners() {
+  if (downloadListenersRegistered || !chrome.downloads) return;
+  downloadListenersRegistered = true;
+  chrome.downloads.onCreated.addListener((item) => {
+    downloadStartedAt.set(item.id, Date.now());
+    downloadLastPercent.set(item.id, 0);
+    emitDownload("download-start", item);
+  });
+  chrome.downloads.onChanged.addListener((delta) => {
+    const id = delta.id;
+    if (delta.state && delta.state.current === "complete") {
+      chrome.downloads.search({ id }, (items) => {
+        const item = items && items[0];
+        if (item) emitDownload("download-complete", item);
+        downloadStartedAt.delete(id);
+        downloadLastPercent.delete(id);
+      });
+      return;
+    }
+    if (delta.state && delta.state.current === "interrupted") {
+      chrome.downloads.search({ id }, (items) => {
+        const item = items && items[0];
+        if (item) emitDownload("download-failed", item, { errorType: String(delta.error && delta.error.current || "INTERRUPTED").slice(0, 60) });
+        downloadStartedAt.delete(id);
+        downloadLastPercent.delete(id);
+      });
+      return;
+    }
+    if (delta.bytesReceived || delta.totalBytes) {
+      chrome.downloads.search({ id }, (items) => {
+        const item = items && items[0];
+        if (!item || !item.totalBytes || item.totalBytes <= 0) return;
+        const percent = Math.round(item.bytesReceived / item.totalBytes * 100);
+        const last = downloadLastPercent.get(id) ?? 0;
+        if (percent >= last + 10 || percent >= 100) {
+          downloadLastPercent.set(id, percent);
+          emitDownload("download-progress", item);
+        }
+      });
+    }
+  });
+}
+
+registerDownloadListeners();
+if (chrome.permissions && chrome.permissions.onAdded) {
+  chrome.permissions.onAdded.addListener((permissions) => {
+    if (permissions.permissions && permissions.permissions.includes("downloads")) registerDownloadListeners();
+  });
+}
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const state = await chrome.storage.local.get({ activeTabId: null });
