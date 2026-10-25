@@ -291,8 +291,9 @@ async function buildDiagnosticReport() {
 }
 
 function csvCell(value) {
-  const text = value === null || value === undefined ? "" :
+  let text = value === null || value === undefined ? "" :
     typeof value === "object" ? JSON.stringify(value) : String(value);
+  if (/^[\s]*[=+\-@]/.test(text)) text = "'" + text;
   return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
