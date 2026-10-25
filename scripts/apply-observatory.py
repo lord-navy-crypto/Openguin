@@ -13,6 +13,11 @@ t=t.replace("type StreamEvent={requestId:string;thinking:string;content:string;d
 t=t.replace("type Bench={at:string;model:string;ctx:number;temperature:number;tokS:number;tokens:number;mode:Mode;thinking:boolean};", "type Bench={at:string;model:string;ctx:number;temperature:number;tokS:number;tokens:number;mode:Mode;thinking:boolean;loadMs?:number;promptMs?:number;decodeMs?:number;promptTokens?:number;doneReason?:string};")
 
 t=t.replace("(['overview','models','lab','library','diagnostics','developer'] as Tab[])", "(['overview','observatory','models','lab','library','diagnostics','developer'] as Tab[])")
+# Network Doctor places Diagnostics first. Preserve Runtime Observatory in this
+# newer navigation instead of relying on the original 0.7 exact-string match.
+t=t.replace("(['diagnostics','overview','models','lab','library','developer'] as Tab[])", "(['diagnostics','overview','observatory','models','lab','library','developer'] as Tab[])")
+t=t.replace("overview:'概览 Overview',models:", "overview:'概览 Overview',observatory:'运行监控',models:")
+t=t.replace("overview:'Control Center',models:", "overview:'Control Center',observatory:'Runtime Observatory',models:")
 t=t.replace("({overview:'Overview',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)", "({overview:'Overview',observatory:'Observatory',models:'My Models',lab:'Model Lab',library:'Library',diagnostics:'Diagnostics',developer:'Developer'} as Record<Tab,string>)")
 t=t.replace("({overview:'Control Center',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)", "({overview:'Control Center',observatory:'Runtime Observatory',models:'Model Passports',lab:'Model Lab',library:'Unified Library',diagnostics:'Diagnostics & Usage',developer:'Developer Studio'} as Record<Tab,string>)")
 
