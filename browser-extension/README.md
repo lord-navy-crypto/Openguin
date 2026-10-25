@@ -4,10 +4,10 @@ A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the ac
 
 ## Install in Chrome, Edge, Brave, or another Chromium browser
 
-1. Download or clone this repository and extract it if it is a ZIP.
+1. Download the dedicated **Openguin-Network-Watch.zip** artifact from the repository's latest successful **Network Observatory checks** workflow, then extract it. The extracted folder should contain `manifest.json` directly. Alternatively, download/clone the full source repository and select its `browser-extension` subfolder.
 2. Open `chrome://extensions` in Chrome/Brave, or `edge://extensions` in Edge.
 3. Turn on **Developer mode**.
-4. Click **Load unpacked** and select the repository's `browser-extension` folder itself (the folder containing `manifest.json`).
+4. Click **Load unpacked** and select the extracted extension folder containing `manifest.json` (do not select the ZIP file itself).
 5. Open `https://chatgpt.com`, click the puzzle-piece Extensions menu, and pin **Openguin Network Watch** if desired.
 6. Click the extension icon, then click **Start this tab**. Keep the tab open while reproducing the loading or response problem.
 7. If you need to capture events after ChatGPT reloads, click **Allow ChatGPT reload monitoring** and approve the optional permission. This permission is limited to `chatgpt.com` or `chat.openai.com`.
