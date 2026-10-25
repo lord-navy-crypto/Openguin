@@ -1,12 +1,5 @@
 const MAX_EVENTS = 300;
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
-const downloadStartedAt = new Map();
-const downloadLastPercent = new Map();
-const downloadLastProgressAt = new Map();
-const downloadLastBytes = new Map();
-const downloadStallNotified = new Set();
-let downloadListenersRegistered = false;
-let downloadAlarmListenerRegistered = false;
 const ALLOWED_KINDS = new Set([
   "monitor-active", "monitor-started", "navigation",
   "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
@@ -88,137 +81,137 @@ function downloadHost(url) {
 
 function emitDownload(kind, item, extra = {}) {
   const at = Date.now();
-  const startedAt = downloadStartedAt.get(item.id);
-  const totalBytes = Number.isFinite(item.totalBytes) && item.totalBytes > 0 ? item.totalBytes : null;
-  const bytesReceived = Number.isFinite(item.bytesReceived) && item.bytesReceived >= 0 ? item.bytesReceived : null;
-  const progressPercent = totalBytes && bytesReceived !== null ? Math.max(0, Math.min(100, Math.round(bytesReceived / totalBytes * 100))) : null;
   const event = {
-    kind,
-    host: downloadHost(item.url),
-    totalBytes: totalBytes ?? undefined,
-    bytesReceived: bytesReceived ?? undefined,
-    progressPercent: progressPercent ?? undefined,
-    durationMs: startedAt ? Math.max(0, at - startedAt) : undefined,
+    kind, host: downloadHost(item.url),
+    bytesReceived: Number.isFinite(item.bytesReceived) ? Math.max(0, item.bytesReceived) : undefined,
+    totalBytes: Number.isFinite(item.totalBytes) && item.totalBytes > 0 ? item.totalBytes : undefined,
     ...extra
   };
-  chrome.storage.local.get({ events: [] }).then(({ events }) => {
-    const record = {
-      id: at.toString(36) + Math.random().toString(36).slice(2, 8),
-      at,
-      tabId: null,
-      ...sanitizeEvent(event)
-    };
-    return chrome.storage.local.set({ events: [record, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS) });
-  }).catch(() => {});
+  if (event.totalBytes && Number.isFinite(event.bytesReceived)) {
+    event.progressPercent = Math.min(100, Math.round(event.bytesReceived * 100 / event.totalBytes));
+  }
+  return chrome.storage.local.get({ events: [] }).then(({ events }) =>
+    chrome.storage.local.set({
+      events: [{
+        id: at.toString(36) + Math.random().toString(36).slice(2, 8),
+        at, tabId: null, ...sanitizeEvent(event)
+      }, ...(Array.isArray(events) ? events : [])].slice(0, MAX_EVENTS)
+    })
+  ).catch(() => {});
 }
 
-async function registerDownloadListeners() {
-  if (downloadListenersRegistered || !chrome.downloads || !chrome.permissions) return;
-  const granted = await chrome.permissions.contains({ permissions: ["downloads"] }).catch(() => false);
-  if (!granted || downloadListenersRegistered || !chrome.downloads) return;
-  downloadListenersRegistered = true;
-  chrome.downloads.onCreated.addListener((item) => {
-    const now = Date.now();
-    downloadStartedAt.set(item.id, now);
-    downloadLastPercent.set(item.id, 0);
-    downloadLastProgressAt.set(item.id, now);
-    downloadLastBytes.set(item.id, Number(item.bytesReceived) || 0);
-    downloadStallNotified.delete(item.id);
-    emitDownload("download-start", item);
-  });
-  chrome.downloads.onChanged.addListener((delta) => {
-    const id = delta.id;
-    if (delta.state && delta.state.current === "complete") {
-      chrome.downloads.search({ id }, (items) => {
-        const item = items && items[0];
-        if (item) emitDownload("download-complete", item);
-        downloadStartedAt.delete(id);
-        downloadLastPercent.delete(id);
-        downloadLastProgressAt.delete(id);
-        downloadLastBytes.delete(id);
-        downloadStallNotified.delete(id);
-      });
-      return;
-    }
-    if (delta.state && delta.state.current === "interrupted") {
-      chrome.downloads.search({ id }, (items) => {
-        const item = items && items[0];
-        if (item) emitDownload("download-failed", item, { errorType: String(delta.error && delta.error.current || "INTERRUPTED").slice(0, 60) });
-        downloadStartedAt.delete(id);
-        downloadLastPercent.delete(id);
-        downloadLastProgressAt.delete(id);
-        downloadLastBytes.delete(id);
-        downloadStallNotified.delete(id);
-      });
-      return;
-    }
-    if (delta.bytesReceived || delta.totalBytes) {
-      chrome.downloads.search({ id }, (items) => {
-        const item = items && items[0];
-        if (!item || !item.totalBytes || item.totalBytes <= 0) return;
-        const now = Date.now();
-        const bytes = Number(item.bytesReceived) || 0;
-        if (bytes !== (downloadLastBytes.get(id) ?? 0)) {
-          downloadLastBytes.set(id, bytes);
-          downloadLastProgressAt.set(id, now);
-          downloadStallNotified.delete(id);
-        }
-        const percent = Math.round(bytes / item.totalBytes * 100);
-        const last = downloadLastPercent.get(id) ?? 0;
-        if (percent >= last + 10 || percent >= 100) {
-          downloadLastPercent.set(id, percent);
-          emitDownload("download-progress", item);
-        }
-      });
-    }
+// Stored in storage.session: unlike globals, sampling survives Manifest V3
+// background-service-worker suspension. Never persist filenames or full URLs.
+const downloadTrackKey = "openguinDownloadTracks";
+async function getTracks() {
+  const stored = await chrome.storage.session.get({ [downloadTrackKey]: {} });
+  return stored[downloadTrackKey] || {};
+}
+async function setTracks(tracks) {
+  await chrome.storage.session.set({ [downloadTrackKey]: tracks });
+}
+async function beginTrack(item) {
+  if (item.incognito) return; // Avoid collecting private-browsing activity.
+  const tracks = await getTracks();
+  const id = String(item.id);
+  const time = Date.now();
+  if (tracks[id]) return;
+  tracks[id] = {
+    startedAt: time, lastProgressAt: time, bytes: Number(item.bytesReceived) || 0,
+    percent: 0, notified: false
+  };
+  await setTracks(tracks);
+  await emitDownload("download-start", item);
+}
+async function finishTrack(item, kind, error) {
+  if (!item || item.incognito) return;
+  const tracks = await getTracks();
+  const id = String(item.id);
+  const track = tracks[id];
+  if (!track) return;
+  delete tracks[id];
+  await setTracks(tracks);
+  await emitDownload(kind, item, {
+    durationMs: Math.max(0, Date.now() - track.startedAt),
+    errorType: error || undefined
   });
 }
-
-async function registerDownloadAlarm() {
-  if (!chrome.alarms || !chrome.permissions || downloadAlarmListenerRegistered) return;
-  const granted = await chrome.permissions.contains({ permissions: ["alarms"] }).catch(() => false);
-  if (!granted || downloadAlarmListenerRegistered || !chrome.alarms) return;
-  downloadAlarmListenerRegistered = true;
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name !== "openguin-download-stall-watch" || !chrome.downloads) return;
-    chrome.downloads.search({ state: "in_progress" }, (items) => {
-      const now = Date.now();
-      for (const item of items || []) {
-        const id = item.id;
-        const bytes = Number(item.bytesReceived) || 0;
-        const previousBytes = downloadLastBytes.get(id);
-        const lastAt = downloadLastProgressAt.get(id) ?? (downloadStartedAt.get(id) || now);
-        if (previousBytes === undefined || previousBytes !== bytes) {
-          downloadLastBytes.set(id, bytes);
-          downloadLastProgressAt.set(id, now);
-          downloadStallNotified.delete(id);
-          continue;
-        }
-        if (now - lastAt >= 60000 && !downloadStallNotified.has(id)) {
-          downloadStallNotified.add(id);
-          emitDownload("download-stall", item, { gapMs: now - lastAt });
-        }
+async function sampleDownloads() {
+  if (!chrome.downloads) return;
+  const items = await chrome.downloads.search({ state: "in_progress" });
+  const tracks = await getTracks(), now = Date.now();
+  const activeIds = new Set();
+  const events = [];
+  for (const item of items) {
+    if (item.incognito) continue;
+    const id = String(item.id);
+    activeIds.add(id);
+    const bytes = Number(item.bytesReceived) || 0;
+    let track = tracks[id];
+    if (!track) {
+      tracks[id] = { startedAt: now, lastProgressAt: now, bytes, percent: 0, notified: false };
+      continue;
+    }
+    if (bytes > track.bytes) {
+      track.bytes = bytes;
+      track.lastProgressAt = now;
+      track.notified = false;
+      const percent = item.totalBytes > 0 ? Math.round(bytes * 100 / item.totalBytes) : 0;
+      if (percent >= track.percent + 10 || (item.totalBytes <= 0 && now - track.startedAt >= 30000)) {
+        track.percent = percent;
+        events.push(["download-progress", item, {}]);
       }
-    });
-  });
+    } else if (!item.paused && now - track.lastProgressAt >= 60000 && !track.notified) {
+      track.notified = true;
+      events.push(["download-stall", item, { gapMs: now - track.lastProgressAt }]);
+    }
+  }
+  // Old nonactive tracks can linger if their completion event occurred while
+  // the service worker was stopped; clean them up without fabricating outcomes.
+  for (const id of Object.keys(tracks)) {
+    if (!activeIds.has(id)) delete tracks[id];
+  }
+  await setTracks(tracks);
+  for (const [kind, item, extra] of events) await emitDownload(kind, item, extra);
 }
 
-async function startDownloadAlarmIfPermitted() {
+if (chrome.downloads) {
+  // Event listeners register synchronously at worker load, per MV3 rules.
+  chrome.downloads.onCreated.addListener((item) => { void beginTrack(item); });
+  chrome.downloads.onChanged.addListener((delta) => {
+    if (!delta.state) return; // Chrome does NOT emit byte-only progress events.
+    if (!["complete", "interrupted"].includes(delta.state.current)) return;
+    chrome.downloads.search({ id: delta.id }).then((items) => {
+      const item = items && items[0];
+      return finishTrack(
+        item,
+        delta.state.current === "complete" ? "download-complete" : "download-failed",
+        delta.state.current === "interrupted"
+          ? String(delta.error && delta.error.current || (item && item.error) || "INTERRUPTED").slice(0, 60)
+          : undefined
+      );
+    }).catch(() => {});
+  });
+}
+if (chrome.alarms) {
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name === "openguin-download-stall-watch") void sampleDownloads().catch(() => {});
+  });
+}
+async function configureDownloadAlarm() {
   if (!chrome.permissions || !chrome.alarms) return;
-  const granted = await chrome.permissions.contains({ permissions: ["downloads", "alarms"] }).catch(() => false);
-  if (granted) chrome.alarms.create("openguin-download-stall-watch", { periodInMinutes: 0.5 });
+  const granted = await chrome.permissions.contains({ permissions: ["downloads", "alarms"] });
+  if (granted) {
+    chrome.alarms.create("openguin-download-stall-watch", { periodInMinutes: 0.5 });
+  } else {
+    chrome.alarms.clear("openguin-download-stall-watch");
+    await chrome.storage.session.remove(downloadTrackKey);
+  }
 }
-
-void registerDownloadListeners();
-void registerDownloadAlarm();
-void startDownloadAlarmIfPermitted();
-if (chrome.permissions && chrome.permissions.onAdded) {
-  chrome.permissions.onAdded.addListener((permissions) => {
-    const granted = permissions.permissions || [];
-    if (granted.includes("downloads")) void registerDownloadListeners();
-    if (granted.includes("alarms")) void registerDownloadAlarm();
-    if (granted.includes("downloads") || granted.includes("alarms")) void startDownloadAlarmIfPermitted();
-  });
+void configureDownloadAlarm().catch(() => {});
+if (chrome.permissions) {
+  chrome.permissions.onAdded.addListener(() => { void configureDownloadAlarm().catch(() => {}); });
+  chrome.permissions.onRemoved.addListener(() => { void configureDownloadAlarm().catch(() => {}); });
 }
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
