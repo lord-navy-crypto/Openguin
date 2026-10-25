@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {diagnoseOneClick,summarizeHttpProbes} from "../.network-test/network-one-click.mjs";
+import {diagnoseOneClick,summarizeHttpProbes,summarizeTargets} from "../.network-test/network-one-click.mjs";
 
 const baseline = () => ({
   capturedAtMs:1792900000000,
@@ -121,4 +121,38 @@ test("repeat HTTP probes with large spread produce instability clue",()=>{
 test("backward compatible older speed payloads omit new stability rather than fail",()=>{
   assert.equal(diagnoseOneClick(baseline(),speed()).stability,null);
   assert.equal(summarizeHttpProbes([]),null);
+});
+
+test("per-host target diagnosis keeps DNS, HTTPS transport and HTTP rejection distinct",()=>{
+  const snap=baseline();
+  snap.dns[0].resolved=false;
+  snap.endpoints[0].reachable=false;
+  snap.endpoints[0].status=null;
+  const targets=summarizeTargets(snap);
+  assert.equal(targets.find(t=>t.host==="chatgpt.com").symptom,"dns");
+  assert.equal(targets.find(t=>t.host==="github.com").symptom,"ok");
+  assert.equal(targets.find(t=>t.host==="chatgpt.com").https,"failed");
+});
+test("when control is healthy but ChatGPT has HTTP denial, flag site-specific issue",()=>{
+  const snap=baseline();
+  snap.endpoints[0].status=403;
+  const r=diagnoseOneClick(snap,speed());
+  assert(r.issues.some(x=>x.code==="target-specific"));
+  assert.equal(r.targets.find(x=>x.host==="chatgpt.com").symptom,"rejection");
+  assert.equal(r.targets.find(x=>x.host==="github.com").symptom,"ok");
+});
+test("control comparison does not imply broad internet outage",()=>{
+  const snap=baseline();
+  snap.endpoints[0].reachable=false;snap.endpoints[0].status=null;
+  const r=diagnoseOneClick(snap,speed());
+  assert(r.issues.some(x=>x.code==="target-specific"));
+  assert(r.verdict!=="network-failure");
+});
+test("domain with only DNS check is not called a successful HTTPS connection",()=>{
+  const snap=baseline();
+  snap.dns.push({host:"speed.cloudflare.com",resolved:true,elapsedMs:22});
+  const targets=summarizeTargets(snap);
+  const sample=targets.find(x=>x.host==="speed.cloudflare.com");
+  assert.equal(sample.symptom,"dns-only");
+  assert.equal(sample.https,"not-tested");
 });
