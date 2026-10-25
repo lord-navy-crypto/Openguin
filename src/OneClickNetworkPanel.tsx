@@ -1,15 +1,17 @@
 import type { OneClickResult } from "./network-one-click";
+import { analyzeNetworkHistory, type NetworkHistoryEntry } from "./network-history";
 import "./one-click-network.css";
 
 type Stage = "idle"|"connecting"|"speed"|"completed";
-type Props={result:OneClickResult|null;busy:boolean;stage:Stage;onRun:()=>void;onCopy:()=>void};
+type Props={result:OneClickResult|null;busy:boolean;stage:Stage;history:NetworkHistoryEntry[];onClearHistory:()=>void;onRun:()=>void;onCopy:()=>void};
 const statusText:Record<Stage,string>={
   idle:"尚未检测",connecting:"正在检查 DNS、HTTPS、代理和 VPN 路由",
   speed:"连接检查结束，正在采样 Cloudflare HTTP 延迟、下载和上传",
   completed:"本轮检测完成"
 };
-export default function OneClickNetworkPanel({result,busy,stage,onRun,onCopy}:Props){
+export default function OneClickNetworkPanel({result,busy,stage,history,onClearHistory,onRun,onCopy}:Props){
   const issues=result?.issues.filter(x=>x.severity!=="info")||[];
+  const historyAnalysis=analyzeNetworkHistory(history);
   return <section className="v07-card one-click-network">
     <div className="one-click-network-head">
       <div><span className="eyebrow">AUTOMATED NETWORK DIAGNOSIS</span>
@@ -27,6 +29,30 @@ export default function OneClickNetworkPanel({result,busy,stage,onRun,onCopy}:Pr
       <b>{statusText[stage]}</b>
     </div>
     <small className="one-click-consent">一键检测会访问测试网站，预设下载约 10 MB、上传约 3 MiB 的测试数据（另有少量 DNS/HTTP 请求开销）；仅在点击后执行，不更改 VPN/DNS/代理，不采集聊天正文。测速结果受网络和提供方影响。</small>
+    {history.length>0&&<section className="one-click-history">
+      <div className="one-click-history-head">
+        <div><h4>连续检测与间歇性故障</h4>
+          <small>本地保留最多 12 次手动检测摘要，24 小时后自动忽略过期记录。</small>
+        </div>
+        <button disabled={busy} onClick={onClearHistory}>清除检测历史</button>
+      </div>
+      <div className="one-click-history-bar" aria-label="最近检测结论">
+        {history.slice().reverse().map((entry,i)=><div key={entry.at+"-"+i}
+          className={"history-result "+entry.verdict}
+          title={new Date(entry.at).toLocaleString()+" · "+entry.verdict}>
+          <span>{entry.verdict==="no-clear-problem"?"正常线索":entry.verdict==="incomplete"?"未完成":"发现异常"}</span>
+        </div>)}
+      </div>
+      <p className="one-click-history-note">{historyAnalysis.note}</p>
+      {historyAnalysis.trends.length>0&&<div className="one-click-trend-grid">
+        {historyAnalysis.trends.map(trend=><article key={trend.host}
+          className={"one-click-trend "+trend.state}>
+          <div><b>{trend.host}</b><span>{trend.caption}</span></div>
+          <p>{trend.passed}/{trend.count} 次通过 · {trend.failed} 次异常</p>
+          <small>{trend.details}</small>
+        </article>)}
+      </div>}
+    </section>}
     {result&&<div className="one-click-result">
       <div className={"one-click-verdict "+result.verdict}>
         <span>当前检查结论</span>
