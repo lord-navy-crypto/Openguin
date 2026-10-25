@@ -443,7 +443,7 @@ export function summarizeBrowserRequests(report: BrowserReport): BrowserRequestL
     requestId:string; host:string; path:string; method:string;
     startedAt:number|null; finishedAt:number|null; durationMs:number|null;
     outcome:BrowserRequestLifecycle["outcome"]; status:number|null;
-    stallEvents:number; streamPauseEvents:number; eventCount:number;
+    stallEvents:number; streamPauseEvents:number; bodyReadErrors:number; eventCount:number;
     terminalPriority:number;
   };
   const groups = new Map<string,Mutable>();
