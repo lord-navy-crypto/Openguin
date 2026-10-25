@@ -9,6 +9,7 @@ const exportButton = document.getElementById("exportReport");
 const downloadJsonButton = document.getElementById("downloadJson");
 const downloadCsvButton = document.getElementById("downloadCsv");
 const eventsNode = document.getElementById("events");
+const qualityNode = document.getElementById("quality");
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 
 async function activeTab() {
@@ -183,7 +184,10 @@ function eventAdvice(event) {
 async function render() {
   const [tab, stored, downloadPermission] = await Promise.all([
     activeTab(),
-    chrome.storage.local.get({ events: [], monitoring: false, activeTabId: null, activeHost: "" }),
+    chrome.storage.local.get({
+      events: [], monitoring: false, activeTabId: null, activeHost: "",
+      duplicateEventsSuppressed: 0, droppedEvents: 0
+    }),
     chrome.permissions.contains({ permissions: ["downloads"] }).catch(() => false)
   ]);
   let host = "";
@@ -200,6 +204,13 @@ async function render() {
     status.textContent = "Another tab is being monitored. Stop it before switching.";
   }
   const events = Array.isArray(stored.events) ? stored.events.slice(0, 12) : [];
+  const duplicateCount = Math.max(0, Number(stored.duplicateEventsSuppressed) || 0);
+  const droppedCount = Math.max(0, Number(stored.droppedEvents) || 0);
+  qualityNode.textContent = [
+    duplicateCount ? "Suppressed duplicate events: " + duplicateCount : "",
+    droppedCount ? "Older events omitted after the 300-event cap: " + droppedCount : "",
+    !duplicateCount && !droppedCount ? "Capture quality: no duplicate or overflow events recorded." : ""
+  ].filter(Boolean).join(" ");
   const hasEvents = Array.isArray(stored.events) && stored.events.length > 0;
   exportButton.disabled = !hasEvents;
   downloadJsonButton.disabled = !hasEvents;
@@ -248,7 +259,9 @@ function safeExportPath(value) {
 }
 
 async function buildDiagnosticReport() {
-  const stored = await chrome.storage.local.get({ events: [] });
+  const stored = await chrome.storage.local.get({
+    events: [], duplicateEventsSuppressed: 0, droppedEvents: 0
+  });
   const allowedKinds = new Set([
     "monitor-active","monitor-started","navigation","render-summary","render-stability",
     "fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response",
@@ -262,6 +275,8 @@ async function buildDiagnosticReport() {
       && Number.isFinite(event.at))
     .map(event => {
       const row = { kind: event.kind, host: event.host.toLowerCase(), at: event.at };
+      if (Number.isFinite(event.sourceAt)) row.sourceAt = event.sourceAt;
+      if (Number.isFinite(event.bridgeDelayMs)) row.bridgeDelayMs = Math.max(0, Math.min(event.bridgeDelayMs, 300000));
       const path = safeExportPath(event.path);
       if (path) row.path = path;
       if (/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(event.method || "")) row.method = event.method;
@@ -277,11 +292,25 @@ async function buildDiagnosticReport() {
       if (["loading","interactive","complete"].includes(event.readyState)) row.readyState = event.readyState;
       return row;
     });
+  const eventCounts = {};
+  for (const event of cleanEvents) eventCounts[event.kind] = (eventCounts[event.kind] || 0) + 1;
+  const droppedEvents = Math.max(0, Number(stored.droppedEvents) || 0);
+  const duplicateEventsSuppressed = Math.max(0, Number(stored.duplicateEventsSuppressed) || 0);
   return {
     source: "openguin-network-watch",
     formatVersion: 1,
     generatedAt: new Date().toISOString(),
     eventCount: cleanEvents.length,
+    quality: {
+      storedEventCount: Array.isArray(stored.events) ? stored.events.length : 0,
+      exportedEventCount: cleanEvents.length,
+      duplicateEventsSuppressed,
+      droppedEvents,
+      eventCapReached: droppedEvents > 0 || (Array.isArray(stored.events) && stored.events.length >= 300),
+      firstEventAt: cleanEvents.length ? Math.min(...cleanEvents.map(event => event.at)) : null,
+      lastEventAt: cleanEvents.length ? Math.max(...cleanEvents.map(event => event.at)) : null,
+      eventCounts
+    },
     privacy: {
       localOnly: true,
       includes: ["event category","timestamp","sanitized host/path","HTTP status","request duration","coarse rendering and download metrics","error category"],
@@ -311,15 +340,23 @@ function downloadReport(filename, content, mime) {
 }
 
 function reportCsv(report) {
+  const quality = report.quality || {};
   const columns = [
-    "at","kind","host","path","method","tag","status","durationMs","gapMs","errorType","line",
+    "at","sourceAt","bridgeDelayMs","kind","host","path","method","tag","status","durationMs","gapMs","errorType","line",
     "readyState","progressPercent","bytes","transferBytes","bytesReceived","totalBytes","bodyChildCount",
     "domContentLoadedMs","loadMs","firstPaintMs","firstContentfulPaintMs","mutationCount"
   ];
-  const rows = [["source","formatVersion","generatedAt","eventCount",...columns]];
-  if (!report.events.length) rows.push([report.source,report.formatVersion,report.generatedAt,0,...columns.map(() => "")]);
+  const metadata = [
+    "source","formatVersion","generatedAt","eventCount","duplicateEventsSuppressed","droppedEvents","eventCapReached"
+  ];
+  const metaValues = [
+    report.source,report.formatVersion,report.generatedAt,report.eventCount,
+    quality.duplicateEventsSuppressed ?? 0,quality.droppedEvents ?? 0,Boolean(quality.eventCapReached)
+  ];
+  const rows = [[...metadata,...columns]];
+  if (!report.events.length) rows.push([...metaValues,...columns.map(() => "")]);
   else for (const event of report.events) {
-    rows.push([report.source,report.formatVersion,report.generatedAt,report.eventCount,...columns.map(key => event[key] ?? "")]);
+    rows.push([...metaValues,...columns.map(key => event[key] ?? "")]);
   }
   return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }
@@ -357,7 +394,7 @@ downloadJsonButton.addEventListener("click", () => { void downloadDiagnosticRepo
 downloadCsvButton.addEventListener("click", () => { void downloadDiagnosticReport("csv"); });
 
 clearButton.addEventListener("click", async () => {
-  await chrome.storage.local.set({ events: [] });
+  await chrome.storage.local.set({ events: [], duplicateEventsSuppressed: 0, droppedEvents: 0 });
   await render();
 });
 chrome.storage.onChanged.addListener(() => { void render(); });
