@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "description": "Opt-in, local-only diagnostics for page requests, resource failures, JavaScript errors, and long response gaps.",
   "permissions": ["activeTab", "scripting", "storage"],
-  "optional_permissions": ["downloads"],
+  "optional_permissions": ["downloads", "alarms"],
   "optional_host_permissions": [
     "https://chatgpt.com/*",
     "https://chat.openai.com/*"
