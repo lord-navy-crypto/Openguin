@@ -1,5 +1,9 @@
 name: Network Observatory checks
 
+concurrency:
+  group: network-observatory-${{ github.ref }}
+  cancel-in-progress: true
+
 on:
   push:
     branches:
