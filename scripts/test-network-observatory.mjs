@@ -26,7 +26,7 @@ const sample = {
 };
 const report=parseBrowserReport(JSON.stringify(sample));
 assert.equal(report.events.length,4,"Unrecognized event kinds must not be imported");
-assert.deepEqual(analyzeBrowserReport(report).map(x=>x.id).slice(0,2),["downloads","no-headers"]);
+assert.deepEqual(Array.from(analyzeBrowserReport(report),x=>x.id).slice(0,2),["downloads","no-headers"]);
 assert.equal(JSON.stringify(report).includes("sensitive"),false);
 assert.throws(()=>parseBrowserReport('{"source":"unknown"}'));
 assert.throws(()=>parseBrowserReport("x".repeat(300001)));
