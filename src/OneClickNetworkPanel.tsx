@@ -26,7 +26,7 @@ export default function OneClickNetworkPanel({result,busy,stage,onRun,onCopy}:Pr
       <span className={stage==="completed"?"done":""}>3 · 故障总结</span>
       <b>{statusText[stage]}</b>
     </div>
-    <small className="one-click-consent">一键检测会访问测试网站，最多使用约 13 MB 下载及 3 MB 上传测试数据；仅在点击后执行，不更改 VPN/DNS/代理，不采集聊天正文。测速结果受网络和提供方影响。</small>
+    <small className="one-click-consent">一键检测会访问测试网站，预设下载约 10 MB、上传约 3 MiB 的测试数据（另有少量 DNS/HTTP 请求开销）；仅在点击后执行，不更改 VPN/DNS/代理，不采集聊天正文。测速结果受网络和提供方影响。</small>
     {result&&<div className="one-click-result">
       <div className={"one-click-verdict "+result.verdict}>
         <span>当前检查结论</span>
