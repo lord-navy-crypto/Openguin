@@ -1,5 +1,5 @@
 import {useMemo,useState} from "react";
-import {analyzeBrowserReport,eventCounts,parseBrowserReport,type BrowserReport} from "./browser-diagnostics";
+import {analyzeBrowserReport,eventCounts,parseBrowserReport,summarizeBrowserTelemetry,type BrowserReport} from "./browser-diagnostics";
 import {correlateBrowserWithOneClick} from "./network-correlation";
 import {diagnosticBundleToCsv,downloadDiagnosticText} from "./diagnostic-export";
 import type {NetworkHistoryEntry} from "./network-history";
@@ -31,7 +31,7 @@ type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Samp
 const labels:Record<string,string>={
   "fetch-response":"请求响应","fetch-error":"请求失败","fetch-stall":"等待响应超时",
   "xhr-error":"XHR 请求失败","xhr-stall":"XHR 等待超时","stream-gap":"响应流卡顿",
-  "stream-error":"响应流异常","resource-error":"资源加载失败",
+  "stream-gap-resolved":"响应流停顿后恢复","stream-error":"响应流异常","resource-error":"资源加载失败",
   "javascript-error":"脚本异常","long-task":"页面卡顿",
   "download-failed":"下载失败","download-stall":"下载停滞",
   "download-progress":"下载进度","download-complete":"下载完成"
@@ -46,6 +46,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
   const [copied,setCopied]=useState(false);
   const findings=useMemo(()=>report?analyzeBrowserReport(report):[],[report]);
   const counts=useMemo(()=>report?eventCounts(report):[],[report]);
+  const telemetry=useMemo(()=>report?summarizeBrowserTelemetry(report):null,[report]);
   const correlation=useMemo(()=>report?correlateBrowserWithOneClick(report,oneClickReport):null,[report,oneClickReport]);
   const dnsFailed=networkSnapshot?.dns.filter(x=>!x.resolved).length??0;
   const httpsFailed=networkSnapshot?.endpoints.filter(x=>!x.reachable).length??0;
@@ -157,6 +158,20 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
         <div><span>DNS 失败</span><strong>{networkSnapshot?dnsFailed:"—"}</strong></div>
         <div><span>HTTPS 建连失败</span><strong>{networkSnapshot?httpsFailed:"—"}</strong></div>
       </div>
+      {telemetry&&<div className="browser-telemetry">
+        <h4>请求性能与采集质量 · 自动汇总</h4>
+        <div className="browser-report-stats">
+          <div><span>已收到的 HTTP 响应</span><strong>{telemetry.responseCount}</strong></div>
+          <div><span>响应耗时中位数</span><strong>{metric(telemetry.medianResponseMs,"ms")}</strong></div>
+          <div><span>响应耗时 P95</span><strong>{metric(telemetry.p95ResponseMs,"ms")}</strong></div>
+          <div><span>慢响应（≥ 2.5 秒）</span><strong>{telemetry.slowResponses}</strong></div>
+          <div><span>请求传输错误</span><strong>{telemetry.transportErrors}</strong></div>
+          <div><span>请求停滞事件</span><strong>{telemetry.requestStalls}</strong></div>
+          <div><span>4xx / 5xx 响应</span><strong>{telemetry.http4xx} / {telemetry.http5xx}</strong></div>
+          <div><span>最长已记录流停顿</span><strong>{metric(telemetry.maxStreamGapMs,"ms")}</strong></div>
+        </div>
+        <p className="browser-report-howto">P95 表示本次已记录响应中 95% 不超过的耗时，不是网络延迟保证值。响应耗时包含浏览器可观测的请求等待时间，不能单独分离服务器处理时间与网络传输时间。</p>
+      </div>}
       <div className="browser-report-grid">
         <div className="browser-findings"><h4>故障证据及下一步</h4>
           {findings.length===0&&<p>没有检测到预设的故障特征。但单次监测不能排除间歇性问题。</p>}
