@@ -238,7 +238,7 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
   };
   return {
     at:new Date().toISOString(),verdict,headline:headline[verdict],issues,
-    checked:{dns:dns.length,dnsPassed,https:endpoints.length,httpsResponded:responded,httpFailures:blocked.length+serverErrors.length,speedAttempted:speed!==null},
+    checked:{dns:dns.length,dnsPassed,https:endpoints.length,httpsResponded:responded,httpFailures:accessPolicyResponses.length+rateLimited.length+serverErrors.length,speedAttempted:speed!==null},
     context:{vpnInterfaceSignal:!!snapshot?.route.vpnLikely,
       proxySignal:!!(snapshot?.proxy.environmentConfigured||snapshot?.proxy.systemConfigured)},
     stability,targets,
