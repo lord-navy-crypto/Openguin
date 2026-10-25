@@ -178,7 +178,13 @@ export function analyzeBrowserReport(report: BrowserReport): DiagnosticFinding[]
       id: "stream", label: "响应流停顿或出错", severity: "medium",
       evidence: "响应流读取期间出现较长的无数据间隔或读流异常。",
       nextStep: "如果请求已返回 HTTP 200，但答案迟迟不显示，可检查响应流与页面脚本错误，重复测试判断是否偶发。",
-      match: e => e.kind === "stream-gap" || e.kind === "stream-error"
+      match: e => e.kind === "stream-gap" || e.kind === "stream-gap-resolved" || e.kind === "stream-error"
+    },
+    {
+      id: "slow-response", label: "网页请求响应较慢", severity: "medium",
+      evidence: "Fetch/XHR 已收到响应，但响应阶段耗时达到 2.5 秒或更长。此指标不能单独区分网络、服务端或浏览器等待。",
+      nextStep: "按域名和路径比较多次响应耗时；同时查看 DNS/HTTPS 与 VPN 对照结果。若只有某个 API 慢，不要直接判定整个网络变慢。",
+      match: e => (e.kind === "fetch-response" || e.kind === "xhr-response") && (e.durationMs ?? 0) >= 2500
     },
     {
       id: "blocked", label: "服务端拒绝或限流", severity: "medium",
@@ -229,4 +235,59 @@ export function eventCounts(report: BrowserReport): Array<{kind:string; count:nu
   const counts = new Map<string,number>();
   for (const event of report.events) counts.set(event.kind,(counts.get(event.kind)||0)+1);
   return [...counts].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([kind,count])=>({kind,count}));
+}
+
+export type BrowserTelemetrySummary = {
+  totalEvents: number;
+  responseCount: number;
+  transportErrors: number;
+  requestStalls: number;
+  slowResponses: number;
+  medianResponseMs: number | null;
+  p95ResponseMs: number | null;
+  http4xx: number;
+  http5xx: number;
+  streamPauseEvents: number;
+  maxStreamGapMs: number | null;
+  resourceErrors: number;
+  scriptErrors: number;
+  longTasks: number;
+  duplicateEventsSuppressed: number;
+  droppedEvents: number;
+  eventCapReached: boolean;
+};
+
+export function summarizeBrowserTelemetry(report: BrowserReport): BrowserTelemetrySummary {
+  const events = report.events;
+  const responses = events.filter(e =>
+    (e.kind === "fetch-response" || e.kind === "xhr-response") &&
+    typeof e.durationMs === "number"
+  );
+  const durations = responses.map(e => e.durationMs as number).sort((a,b)=>a-b);
+  const percentile = (p:number):number|null => {
+    if (!durations.length) return null;
+    return durations[Math.min(durations.length-1, Math.max(0, Math.ceil(p*durations.length)-1))];
+  };
+  const statuses = events.filter(e => e.kind === "fetch-response" || e.kind === "xhr-response");
+  const gaps = events.filter(e => e.kind === "stream-gap" || e.kind === "stream-gap-resolved" || e.kind === "stream-error");
+  const gapValues = gaps.map(e => e.gapMs).filter((n):n is number => typeof n === "number");
+  return {
+    totalEvents: events.length,
+    responseCount: responses.length,
+    transportErrors: events.filter(e => e.kind === "fetch-error" || e.kind === "xhr-error").length,
+    requestStalls: events.filter(e => e.kind === "fetch-stall" || e.kind === "xhr-stall").length,
+    slowResponses: responses.filter(e => (e.durationMs ?? 0) >= 2500).length,
+    medianResponseMs: percentile(0.5),
+    p95ResponseMs: percentile(0.95),
+    http4xx: statuses.filter(e => (e.status ?? 0) >= 400 && (e.status ?? 0) < 500).length,
+    http5xx: statuses.filter(e => (e.status ?? 0) >= 500 && (e.status ?? 0) < 600).length,
+    streamPauseEvents: gaps.length,
+    maxStreamGapMs: gapValues.length ? Math.max(...gapValues) : null,
+    resourceErrors: events.filter(e => e.kind === "resource-error").length,
+    scriptErrors: events.filter(e => e.kind === "javascript-error" || e.kind === "unhandled-rejection").length,
+    longTasks: events.filter(e => e.kind === "long-task").length,
+    duplicateEventsSuppressed: report.quality?.duplicateEventsSuppressed ?? 0,
+    droppedEvents: report.quality?.droppedEvents ?? 0,
+    eventCapReached: report.quality?.eventCapReached ?? false
+  };
 }
