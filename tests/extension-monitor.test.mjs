@@ -42,6 +42,67 @@ function captureXhrFailure(failureEvent) {
   return posted.map(item=>item.event).filter(Boolean);
 }
 
+function captureFetchBodyRead(bodyFailure = false) {
+  const posted = [];
+  const response = {
+    status:200,
+    body:null,
+    json() {
+      return bodyFailure
+        ? Promise.reject(new SyntaxError("private response detail must not be captured"))
+        : Promise.resolve({private:"body content must not be captured"});
+    }
+  };
+  const fakeWindow = {
+    fetch() { return Promise.resolve(response); },
+    addEventListener() {},
+    postMessage(message) { posted.push(message); }
+  };
+  class FakeXHR {
+    open() {}
+    send() {}
+    addEventListener() {}
+  }
+  const context = {
+    window:fakeWindow,
+    XMLHttpRequest:FakeXHR,
+    location:{href:"https://chatgpt.com/",hostname:"chatgpt.com",pathname:"/"},
+    document:{readyState:"complete",body:null},
+    performance:{now:()=>100,getEntriesByType:()=>[]},
+    PerformanceObserver:class { observe(){throw new Error("not supported in test");} disconnect(){} },
+    URL,Date,Math,Number,String,Object,Promise,
+    setTimeout:()=>1,clearTimeout:()=>{}
+  };
+  runInNewContext(source,context);
+  return context.window.fetch("/backend-api/test")
+    .then(result=>result.json())
+    .then(()=>posted.map(item=>item.event).filter(Boolean),()=>posted.map(item=>item.event).filter(Boolean));
+}
+
+test("Fetch body JSON read emits timing metadata but never captures response content", async () => {
+  const events = await captureFetchBodyRead(false);
+  const start = events.find(event=>event.kind==="fetch-start");
+  const response = events.find(event=>event.kind==="fetch-response");
+  const body = events.find(event=>event.kind==="body-read-complete");
+  assert(start && response && body);
+  assert.equal(start.requestId,response.requestId);
+  assert.equal(response.requestId,body.requestId);
+  assert.equal(body.tag,"json");
+  assert.equal(typeof body.bodyReadDurationMs,"number");
+  assert.equal(typeof body.headersToBodyReadMs,"number");
+  assert.equal(Object.hasOwn(body,"body"),false);
+  assert.equal(Object.hasOwn(body,"response"),false);
+});
+
+test("Fetch body read errors are classified without recording error messages", async () => {
+  const events = await captureFetchBodyRead(true);
+  const body = events.find(event=>event.kind==="body-read-error");
+  assert(body);
+  assert.equal(body.errorType,"SyntaxError");
+  assert.equal(Object.hasOwn(body,"message"),false);
+  assert.equal(Object.hasOwn(body,"body"),false);
+});
+
 test("XHR timeout and abort are exported as distinct safe error categories", () => {
   const timeoutEvents = captureXhrFailure("timeout");
   const abortedEvents = captureXhrFailure("abort");
