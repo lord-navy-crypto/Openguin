@@ -39,6 +39,16 @@ export default function OneClickNetworkPanel({result,busy,stage,onRun,onCopy}:Pr
         <div><span>值得处理的线索</span><b>{issues.length}</b></div>
         <div><span>测速检查</span><b>{result.checked.speedAttempted?"已运行":"未运行"}</b></div>
       </div>
+      {result.stability&&<div className="one-click-probes" aria-label="HTTP 探测稳定性">
+        <div className="one-click-probes-head"><h4>HTTP 重复采样稳定性</h4><span>{result.stability.passed}/{result.stability.total} 次成功</span></div>
+        <div className="one-click-probes-metrics">
+          <div><small>最快</small><b>{result.stability.minMs===null?"—":Math.round(result.stability.minMs)+" ms"}</b></div>
+          <div><small>中位数</small><b>{result.stability.medianMs===null?"—":Math.round(result.stability.medianMs)+" ms"}</b></div>
+          <div><small>最慢</small><b>{result.stability.maxMs===null?"—":Math.round(result.stability.maxMs)+" ms"}</b></div>
+          <div><small>HTTP 非成功状态 / 传输失败</small><b>{result.stability.httpRejected} / {result.stability.transportFailed}</b></div>
+        </div>
+        <p>这些是同一测速服务的 HTTP 请求耗时样本，不是 ICMP Ping、真实丢包率或所有网站的稳定性证明。</p>
+      </div>}
       {issues.length===0?<p className="one-click-no-issues">
         本次采样没有发现明确的连接或性能问题；如果 ChatGPT 仍在加载、打字卡顿或下载失败，请在浏览器扩展中开启页面监测，再导入事件报告。
       </p>:<div className="one-click-findings">
