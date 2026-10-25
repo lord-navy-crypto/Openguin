@@ -1,13 +1,32 @@
 import {useMemo,useState} from "react";
 import {analyzeBrowserReport,eventCounts,parseBrowserReport,type BrowserReport} from "./browser-diagnostics";
 import {correlateBrowserWithOneClick} from "./network-correlation";
+import {diagnosticBundleToCsv,downloadDiagnosticText} from "./diagnostic-export";
+import type {NetworkHistoryEntry} from "./network-history";
 import type {OneClickResult} from "./network-one-click";
 import "./browser-report.css";
 
-type Connection={dns:Array<{resolved:boolean}>;endpoints:Array<{reachable:boolean}>;hints:string[]};
-type Speed={downloadMbps?:number|null;uploadMbps?:number|null;latencyMs?:number|null;jitterMs?:number|null;probeFailures:number;probeCount:number};
-type Sample={label:"on"|"off";avgResponseMs:number|null;downloadMbps:number|null};
-type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Sample[];oneClickReport:OneClickResult|null};
+type Connection={
+  capturedAtMs?:number;os?:string;
+  dns:Array<{host?:string;resolved:boolean;elapsedMs?:number;addressCount?:number;error?:string|null}>;
+  endpoints:Array<{name?:string;host?:string;reachable:boolean;status?:number|null;elapsedMs?:number|null;error?:string|null}>;
+  route?:{defaultInterface?:string|null;vpnLikely?:boolean;vpnInterfaces?:string[]};
+  proxy?:{environmentConfigured?:boolean;systemConfigured?:boolean};
+  hints:string[];
+};
+type Speed={
+  capturedAtMs?:number;provider?:string;downloadBytes?:number;uploadBytes?:number;
+  downloadMs?:number|null;uploadMs?:number|null;downloadError?:string|null;uploadError?:string|null;
+  downloadMbps?:number|null;uploadMbps?:number|null;latencyMs?:number|null;jitterMs?:number|null;
+  probeFailures:number;probeCount:number;
+  probeSamples?:Array<{elapsedMs:number;status?:number|null;success:boolean;failureKind?:string|null}>;
+};
+type Sample={
+  id?:string;label:"on"|"off";at?:string;reachable?:number;avgResponseMs:number|null;
+  latencyMs?:number|null;jitterMs?:number|null;probeFailures?:number|null;probeCount?:number|null;
+  downloadMbps:number|null;uploadMbps:number|null;vpnLikely?:boolean;defaultInterface?:string|null;proxyConfigured?:boolean;
+};
+type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Sample[];oneClickReport:OneClickResult|null;networkHistory:NetworkHistoryEntry[]};
 const labels:Record<string,string>={
   "fetch-response":"请求响应","fetch-error":"请求失败","fetch-stall":"等待响应超时",
   "xhr-error":"XHR 请求失败","xhr-stall":"XHR 等待超时","stream-gap":"响应流卡顿",
@@ -19,7 +38,7 @@ const labels:Record<string,string>={
 function metric(value:number|null|undefined,unit:string):string{
   return value===null||value===undefined?"—":value.toFixed(1)+" "+unit;
 }
-export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples,oneClickReport}:Props){
+export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples,oneClickReport,networkHistory}:Props){
   const [raw,setRaw]=useState("");
   const [report,setReport]=useState<BrowserReport|null>(null);
   const [error,setError]=useState("");
@@ -42,47 +61,69 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       setReport(parseBrowserReport(content));setRaw("");setError("");setCopied(false);
     }catch(e){setError(e instanceof Error?e.message:"读取剪贴板失败，请手动粘贴报告。")}
   }
-  async function copyCombined(){
-    if(!report)return;
-    const result={
-      name:"Openguin Network Observatory — combined diagnosis",
-      createdAt:new Date().toISOString(),
-      browser:{at:report.generatedAt,eventCount:report.events.length,findings,events:report.events},
+  function buildCombinedBundle(){
+    return {
+      schema:{name:"Openguin Network Doctor combined diagnostic bundle",formatVersion:1},
+      generatedAt:new Date().toISOString(),
+      oneClickDiagnosis:oneClickReport,
+      networkSnapshot,
+      speedTest,
+      vpnComparisonSamples:vpnSamples.slice(0,10),
+      networkHistory:networkHistory.slice(0,12),
+      browser:report?{
+        source:report.source,formatVersion:report.formatVersion,generatedAt:report.generatedAt,
+        eventCount:report.events.length,findings,eventCounts:counts,events:report.events
+      }:null,
       crossLayer:correlation,
-      oneClick:oneClickReport?{
-        at:oneClickReport.at,verdict:oneClickReport.verdict,
-        issues:oneClickReport.issues,checked:oneClickReport.checked
-      }:null,
-      network:networkSnapshot?{
-        dnsFailed,httpsFailed,dnsCount:networkSnapshot.dns.length,
-        httpsCount:networkSnapshot.endpoints.length,
-        hints:networkSnapshot.hints.slice(0,12)
-      }:null,
-      speed:speedTest?{
-        latencyMs:speedTest.latencyMs,jitterMs:speedTest.jitterMs,
-        downloadMbps:speedTest.downloadMbps,uploadMbps:speedTest.uploadMbps,
-        probeFailures:speedTest.probeFailures,probeCount:speedTest.probeCount
-      }:null,
-      vpnComparison:vpnOn&&vpnOff?{on:vpnOn,off:vpnOff}:null,
-      note:"Symptoms and correlations are not definitive proof of a root cause."
+      privacy:{
+        localOnly:true,
+        excludes:["page text","prompts and model answers","cookies and headers","request/response bodies","proxy addresses and credentials","full URLs and query strings","download filenames","local file paths"],
+        browserEvents:"Only sanitized event metadata is included: category, host, status, duration, and coarse error signals.",
+        caution:"Review the exported report before sharing it."
+      },
+      limitations:[
+        "HTTP 401/403/429 are server responses, not proof of a network outage.",
+        "VPN interface indicators do not prove that a particular request used the tunnel.",
+        "HTTP request timing is not ICMP ping or a packet-loss measurement.",
+        "Browser instrumentation may miss browser-internal failures and is not a packet capture."
+      ]
     };
+  }
+  async function copyCombined(){
+    const result=buildCombinedBundle();
     try{await navigator.clipboard.writeText(JSON.stringify(result,null,2));setCopied(true);setError("")}
     catch{setError("复制失败。请检查剪贴板访问权限。")}
   }
+  function downloadCombined(format:"json"|"csv"){
+    try{
+      const result=buildCombinedBundle();
+      const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+      if(format==="json"){
+        downloadDiagnosticText(JSON.stringify(result,null,2),"openguin-combined-diagnostic-"+stamp+".json","application/json;charset=utf-8");
+      }else{
+        downloadDiagnosticText("\\uFEFF"+diagnosticBundleToCsv(result),"openguin-combined-diagnostic-"+stamp+".csv","text/csv;charset=utf-8");
+      }
+      setError("");
+    }catch(e){setError(e instanceof Error?e.message:"导出报告失败")}
+  }
+  const hasExportData=Boolean(report||networkSnapshot||speedTest||oneClickReport||vpnSamples.length||networkHistory.length);
+
   return <section className="v07-card browser-report-panel">
     <div className="diag-head"><div>
       <h3>Browser incident report · 浏览器故障诊断</h3>
       <p>关联网页加载、请求/响应、下载故障与 DNS、测速、VPN 结果。每条判断都附带证据和建议。</p>
     </div><span className="browser-report-pill">{report?report.events.length+" events":"Awaiting report"}</span></div>
-    <p className="browser-report-howto">先在扩展点击「Copy diagnostic report」，然后使用「从剪贴板分析」即可自动导入。也可以手动粘贴 JSON。不会上传或后台共享。</p>
+    <p className="browser-report-howto">先在扩展点击「Copy diagnostic report」或下载 JSON，然后使用「从剪贴板分析」或粘贴报告。导入后可一次复制/下载包含网页事件、DNS/HTTPS、测速、VPN 对比和故障分析的完整诊断包；不会上传或后台共享。</p>
     <label htmlFor="browser-report-import">浏览器诊断报告 JSON</label>
     <textarea id="browser-report-import" value={raw} onChange={e=>setRaw(e.target.value)}
       placeholder="在这里粘贴浏览器扩展复制的诊断报告…" rows={3} maxLength={300000}/>
     <div className="network-actions">
       <button onClick={()=>void importFromClipboard()}>从剪贴板分析</button>
       <button disabled={!raw.trim()} onClick={importReport}>分析粘贴报告</button>
-      <button disabled={!report} onClick={()=>void copyCombined()}>{copied?"已复制综合报告":"复制综合报告"}</button>
-      <button disabled={!report} onClick={()=>{setReport(null);setCopied(false);setError("")}}>清除</button>
+      <button disabled={!hasExportData} onClick={()=>void copyCombined()}>{copied?"已复制完整诊断包":"复制完整诊断包"}</button>
+      <button disabled={!hasExportData} onClick={()=>downloadCombined("json")}>下载 JSON</button>
+      <button disabled={!hasExportData} onClick={()=>downloadCombined("csv")}>下载 CSV 表格</button>
+      <button disabled={!report} onClick={()=>{setReport(null);setCopied(false);setError("")}}>清除浏览器报告</button>
     </div>
     {error&&<p className="browser-report-error" role="alert">{error}</p>}
     {report&&<>
