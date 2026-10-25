@@ -126,9 +126,9 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
     <div className="network-actions">
       <button onClick={()=>void importFromClipboard()}>从剪贴板分析</button>
       <button disabled={!raw.trim()} onClick={importReport}>分析粘贴报告</button>
-      <button disabled={!hasExportData} onClick={()=>void copyCombined()}>{copied?"已复制完整诊断包":"复制完整诊断包"}</button>
-      <button disabled={!hasExportData} onClick={()=>downloadCombined("json")}>下载 JSON</button>
-      <button disabled={!hasExportData} onClick={()=>downloadCombined("csv")}>下载 CSV 表格</button>
+      <button disabled={!hasExportData} onClick={()=>void copyCombined()}>{copied?"已复制诊断包":report?"复制完整诊断包":"复制桌面诊断包"}</button>
+      <button disabled={!hasExportData} onClick={()=>downloadCombined("json")}>{report?"下载综合 JSON":"下载桌面 JSON"}</button>
+      <button disabled={!hasExportData} onClick={()=>downloadCombined("csv")}>{report?"下载综合 CSV 表格":"下载桌面 CSV 表格"}</button>
       <button disabled={!report} onClick={()=>{setReport(null);setCopied(false);setError("")}}>清除浏览器报告</button>
     </div>
     {error&&<p className="browser-report-error" role="alert">{error}</p>}
