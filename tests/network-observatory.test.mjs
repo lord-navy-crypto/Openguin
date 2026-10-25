@@ -158,6 +158,22 @@ test("classifies correlated HTTP denial and incomplete requests separately", () 
   assert.equal(lifecycles.find(item=>item.requestId==="rabc-3").outcome,"incomplete");
 });
 
+test("distinguishes explicit timeout and cancellation from transport failure", () => {
+  const parsed = parseBrowserReport(report([
+    {kind:"fetch-error",requestId:"rtime-1",errorType:"TimeoutError"},
+    {kind:"xhr-error",requestId:"rabort-1",errorType:"AbortError"},
+    {kind:"fetch-error",requestId:"rnet-1",errorType:"TypeError"}
+  ]));
+  const findings = new Map(analyzeBrowserReport(parsed).map(item=>[item.id,item.count]));
+  assert.equal(findings.get("timeout"),1);
+  assert.equal(findings.get("cancelled"),1);
+  assert.equal(findings.get("transport"),1);
+  const requests = summarizeBrowserRequests(parsed);
+  assert.equal(requests.find(item=>item.requestId==="rtime-1").outcome,"timeout");
+  assert.equal(requests.find(item=>item.requestId==="rabort-1").outcome,"cancelled");
+  assert.equal(requests.find(item=>item.requestId==="rnet-1").outcome,"transport-error");
+});
+
 test("distinguishes HTTP access denial from transport failure", () => {
   const parsed = parseBrowserReport(report([
     {kind: "fetch-response", status: 401},
