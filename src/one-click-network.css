@@ -69,3 +69,11 @@
 .one-click-trend.persistent,.one-click-trend.intermittent,.one-click-trend.new-issue{border-color:#d3988d}
 .one-click-trend.recovered{border-color:#80c5a7}
 .one-click-trend p,.one-click-trend small{font-size:10px;line-height:1.55;color:#acc3d3;margin:0}
+
+.one-click-repeat{border:1px solid #526e79;padding:11px;border-radius:10px;background:#142a35;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap}
+.one-click-repeat>div:first-child{display:grid;gap:5px;max-width:680px}
+.one-click-repeat b{font-size:12px}
+.one-click-repeat small{font-size:10px;color:#a9d0d3;line-height:1.55}
+.one-click-repeat button{font-size:11px}
+.one-click-repeat .network-actions{display:flex;gap:8px;align-items:center}
+.one-click-repeat .network-actions span{color:#b7d4d9;font-size:11px;font-variant-numeric:tabular-nums}
