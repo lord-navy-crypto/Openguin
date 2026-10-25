@@ -78,7 +78,7 @@ jobs:
           node --check browser-extension/monitor-bridge.js
           node --check browser-extension/monitor-main.js
           node --check browser-extension/popup.js
-          node --test tests/extension-bridge.test.mjs
+          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs
           python3 -m json.tool browser-extension/manifest.json > /dev/null
 
       - name: Package browser extension
