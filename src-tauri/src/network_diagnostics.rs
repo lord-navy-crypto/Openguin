@@ -227,13 +227,13 @@ pub async fn run_network_diagnostics() -> Result<NetworkSnapshot, String> {
     let mut hints = Vec::new();
 
     if dns.iter().all(|check| !check.resolved) {
-        hints.push("All sampled DNS lookups failed. Check the active network, DNS settings, or VPN DNS behavior.".into());
+        hints.push("All sampled DNS lookups failed. First reconnect the active network or VPN, then repeat the test. If it still fails, compare once with the VPN off and inspect the VPN app's DNS setting; record the original setting before changing anything.".into());
     } else if dns.iter().any(|check| !check.resolved) {
-        hints.push("Some DNS lookups failed while others succeeded. This may be a domain-specific DNS, filtering, or routing issue.".into());
+        hints.push("Some DNS lookups failed while others succeeded. This points more toward domain-specific DNS, filtering, split-tunnel rules, or routing than a complete internet outage. Compare the same domains with the VPN off.".into());
     }
 
     if endpoints.iter().any(|check| !check.reachable) {
-        hints.push("At least one HTTPS connection failed before an HTTP status was received. Compare DNS results and repeat with the VPN state changed manually.".into());
+        hints.push("At least one HTTPS connection failed before an HTTP status was received. If DNS resolved, suspect a route/tunnel, TLS, firewall, or endpoint reachability issue before changing DNS. Repeat the same test with VPN on and off.".into());
     }
     if dns.iter().all(|check| check.resolved)
         && endpoints.iter().all(|check| check.reachable && check.status.is_some_and(|status| status < 400))
@@ -241,15 +241,15 @@ pub async fn run_network_diagnostics() -> Result<NetworkSnapshot, String> {
         hints.push("All sampled DNS lookups resolved and the sampled HTTPS endpoints returned successful HTTP responses. This does not rule out intermittent or page-specific failures.".into());
     }
     if endpoints.iter().any(|check| matches!(check.status, Some(401 | 403 | 429))) {
-        hints.push("A 401, 403, or 429 means a server responded but denied, challenged, or rate-limited the request; it is not the same as a connection timeout.".into());
+        hints.push("A 401, 403, or 429 means the server answered but denied, challenged, or rate-limited the request. If this occurs only with VPN on, test a different VPN exit location or protocol; do not treat it as proof of low bandwidth.".into());
     }
     if proxy.environment_configured || proxy.system_configured {
-        hints.push("A proxy configuration signal was detected. This is not proof it caused the problem; proxy addresses and credentials are intentionally not displayed.".into());
+        hints.push("A proxy configuration signal was detected. Check whether the VPN app and system/browser proxy settings are both routing traffic; avoid disabling security controls blindly. Proxy addresses and credentials are intentionally not displayed.".into());
     }
     if route.vpn_likely {
-        hints.push("A VPN-like interface or default route was detected. This is only a routing hint, not authoritative proof that all traffic uses a VPN.".into());
+        hints.push("A VPN-like interface or default route was detected, but split tunneling may still route some domains outside the tunnel. For calibration, change one setting at a time (nearby exit server or VPN protocol), rerun the same tests, and keep the best repeatable result.".into());
     } else {
-        hints.push("No obvious VPN interface was detected. Some VPNs use other mechanisms, so this does not prove the VPN is off.".into());
+        hints.push("No obvious VPN interface was detected. Some VPNs use system network extensions or app-specific proxies, so confirm the connection state in the VPN app before drawing a conclusion.".into());
     }
     if hints.is_empty() {
         hints.push("The sampled DNS and HTTPS checks completed. If one web page still stalls, use the browser extension to inspect page-level errors.".into());
