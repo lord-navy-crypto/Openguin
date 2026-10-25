@@ -5,6 +5,7 @@ import {
   analyzeBrowserReport,
   eventCounts,
   summarizeBrowserTelemetry,
+  summarizeBrowserEndpoints,
 } from "../.network-test/browser-diagnostics.mjs";
 
 const baseTime = Date.UTC(2026, 9, 25, 5, 0);
@@ -104,6 +105,28 @@ test("summarizes response percentiles, slow requests, and resolved stream pauses
   assert.equal(summary.scriptErrors, 1);
   assert(analyzeBrowserReport(parsed).some(item => item.id === "stream"));
   assert(analyzeBrowserReport(parsed).some(item => item.id === "slow-response"));
+});
+
+test("groups endpoint performance by sanitized host, path, and method", () => {
+  const parsed = parseBrowserReport(report([
+    {kind:"fetch-start",method:"POST",path:"/backend-api/f/conversation"},
+    {kind:"fetch-response",method:"POST",path:"/backend-api/f/conversation",durationMs:6100,status:200},
+    {kind:"fetch-response",method:"POST",path:"/backend-api/f/conversation",durationMs:6200,status:200},
+    {kind:"fetch-error",method:"POST",path:"/backend-api/f/conversation"},
+    {kind:"fetch-stall",method:"GET",path:"/slow"},
+    {kind:"fetch-response",method:"GET",path:"/slow",durationMs:7000,status:503}
+  ]));
+  const endpoints = summarizeBrowserEndpoints(parsed);
+  assert.equal(endpoints.length,2);
+  assert.equal(endpoints[0].path,"/slow");
+  assert.equal(endpoints[0].http5xx,1);
+  assert.equal(endpoints[0].stallCount,1);
+  const conversation = endpoints.find(item=>item.path==="/backend-api/f/conversation");
+  assert(conversation);
+  assert.equal(conversation.responseCount,2);
+  assert.equal(conversation.errorCount,1);
+  assert.equal(conversation.medianResponseMs,6150);
+  assert.equal(conversation.maxResponseMs,6200);
 });
 
 test("distinguishes HTTP access denial from transport failure", () => {
