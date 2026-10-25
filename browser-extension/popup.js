@@ -184,7 +184,7 @@ async function render() {
   stopButton.disabled = !stored.monitoring;
   permissionButton.hidden = !isChatGPT(host);
   downloadPermissionButton.disabled = downloadPermission;
-  downloadPermissionButton.textContent = downloadPermission ? "File download monitoring enabled" : "Enable file download monitoring";
+  downloadPermissionButton.textContent = downloadPermission ? "Download + timeout monitoring enabled" : "Enable download + timeout monitoring";
   if (stored.monitoring && stored.activeTabId === (tab && tab.id)) {
     status.textContent = "Monitoring this tab. Events are stored locally.";
   } else if (stored.monitoring) {
