@@ -101,4 +101,40 @@ handlers.message({type:"openguin-network-event",event:{kind:"fetch-stall",host:"
 });
 await flush();
 assert.equal(data.local.events.length,countBefore+1,"Authorized events should be stored");
-console.log("Network Observatory: report parser, download progress/stall, redaction and active-tab checks passed.");
+// Active-tab page navigation must invalidate the selected monitor.
+data.local.monitorMode="active-tab";
+await handlers.tabUpdated(23,{status:"loading"},{id:23,url:"https://chatgpt.com/next"});
+assert.equal(data.local.monitoring,false,"Tab navigation must stop an activeTab-only monitor");
+data.local.monitoring=true;data.local.activeTabId=23;
+data.local.activeHost="chatgpt.com";data.local.monitorMode="chatgpt-persistent";
+await handlers.tabUpdated(23,{status:"complete"},{id:23,url:"https://unrelated.example/"});
+assert.equal(data.local.monitoring,false,"Persistent monitor cannot follow an unrelated host");
+
+// Manifest V3 may expose chrome.downloads only after optional permission grant.
+// The existing service worker must register listeners after this event.
+const delayedHandlers={};
+const delayedChrome={
+  ...chrome,
+  runtime:{onMessage:{addListener() {}}},
+  tabs:{onUpdated:{addListener() {}},onRemoved:{addListener() {}}},
+  permissions:{
+    contains:async()=>true,
+    onAdded:{addListener(fn){delayedHandlers.permissionAdded=fn}},
+    onRemoved:{addListener(){}}
+  },
+  alarms:{onAlarm:{addListener(){}},create(){},clear(){}},
+  downloads:undefined
+};
+vm.runInNewContext(fs.readFileSync("browser-extension/background.js","utf8"),{
+  chrome:delayedChrome,Date:Clock,URL,Math,Number,String,Promise,Set,Map,Object,RegExp,Array
+});
+delayedChrome.downloads={
+  onCreated:{addListener(fn){delayedHandlers.created=fn}},
+  onChanged:{addListener(fn){delayedHandlers.changed=fn}},
+  search:async()=>[]
+};
+delayedHandlers.permissionAdded({permissions:["downloads","alarms"]});
+await flush();
+assert.equal(typeof delayedHandlers.created,"function","Download events must attach after permission was granted");
+assert.equal(typeof delayedHandlers.changed,"function","Download completion listener must attach after grant");
+console.log("Network Observatory: browser parser, download monitoring, navigation, permissions, and privacy tests passed.");
