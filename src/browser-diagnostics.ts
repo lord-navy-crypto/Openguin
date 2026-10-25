@@ -12,6 +12,8 @@ export type BrowserEvent = {
   status?: number;
   durationMs?: number;
   gapMs?: number;
+  bodyReadDurationMs?: number;
+  headersToBodyReadMs?: number;
   errorType?: string;
   method?: string;
   path?: string;
@@ -58,6 +60,7 @@ const VALID_KINDS = new Set([
   "render-stability", "fetch-start", "fetch-response", "fetch-error",
   "fetch-stall", "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
+  "body-read-complete", "body-read-error",
   "resource-error", "slow-resource", "javascript-error", "unhandled-rejection",
   "long-task", "download-start", "download-progress", "download-complete",
   "download-failed", "download-stall"
@@ -111,7 +114,7 @@ export function parseBrowserReport(raw: string): BrowserReport {
     const path = sanitizedPath(entry.path);
     if (path) event.path = path;
     for (const field of [
-      "durationMs", "gapMs", "status", "progressPercent", "bodyChildCount", "line",
+      "durationMs", "gapMs", "bodyReadDurationMs", "headersToBodyReadMs", "status", "progressPercent", "bodyChildCount", "line",
       "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "firstPaintMs",
       "firstContentfulPaintMs", "mutationCount", "bytesReceived", "totalBytes"
     ] as const) {
