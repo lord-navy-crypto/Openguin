@@ -148,9 +148,9 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       </div>}
       {report.quality&&<div className="browser-report-stats">
         <div><span>已抑制重复事件</span><strong>{report.quality.duplicateEventsSuppressed}</strong></div>
-        <div><span>超出缓存上限</span><strong>{report.quality.droppedEvents}</strong></div>
-        <div><span>事件缓存已满</span><strong>{report.quality.eventCapReached?"是":"否"}</strong></div>
-        <div><span>采集完整性</span><strong>{report.quality.eventCapReached?"部分数据已截断":"未发现溢出"}</strong></div>
+        <div><span>已丢弃的旧事件</span><strong>{report.quality.droppedEvents}</strong></div>
+        <div><span>事件缓存状态</span><strong>{report.quality.eventCapReached?"达到上限":"未满"}</strong></div>
+        <div><span>采集完整性</span><strong>{report.quality.droppedEvents>0?"确认有截断":report.quality.eventCapReached?"可能已截断":"未发现溢出"}</strong></div>
       </div>}
       <div className="browser-report-stats">
         <div><span>事件数量</span><strong>{report.events.length}</strong></div>
