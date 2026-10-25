@@ -80,16 +80,35 @@ async function injectMonitor(tabId) {
   await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-main.js"], world: "MAIN" });
 }
 
-chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
-  if (changeInfo.status !== "complete") return;
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
+  if (changeInfo.status !== "complete" && changeInfo.status !== "loading") return;
   const state = await chrome.storage.local.get({
     monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab"
   });
-  if (!state.monitoring || state.activeTabId !== tabId || state.monitorMode !== "chatgpt-persistent") return;
-  if (!CHATGPT_HOSTS.has(state.activeHost)) return;
+  if (!state.monitoring || state.activeTabId !== tabId) return;
+  // activeTab injection is document-scoped. Never keep showing "monitoring"
+  // after a real navigation when persistent permission has not been granted.
+  let currentHost = "";
+  try { currentHost = tab && tab.url ? new URL(tab.url).hostname : ""; } catch {}
+  const navigatedAway = currentHost && currentHost !== state.activeHost;
+  if (navigatedAway ||
+      (state.monitorMode === "active-tab" && changeInfo.status === "loading")) {
+    await chrome.storage.local.set({
+      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+    });
+    return;
+  }
+  if (changeInfo.status !== "complete" || state.monitorMode !== "chatgpt-persistent") return;
+  if (!CHATGPT_HOSTS.has(state.activeHost) || !currentHost ||
+      currentHost !== state.activeHost) return;
   const origin = "https://" + state.activeHost + "/*";
   if (!(await chrome.permissions.contains({ origins: [origin] }))) return;
-  try { await injectMonitor(tabId); } catch { /* Permission or navigation changed; do not broaden access. */ }
+  try { await injectMonitor(tabId); } catch {
+    // The user should not see a misleading active state if reattachment failed.
+    await chrome.storage.local.set({
+      monitoring:false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+    });
+  }
 });
 
 function downloadHost(url) {
