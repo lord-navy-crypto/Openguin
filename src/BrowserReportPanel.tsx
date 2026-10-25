@@ -101,7 +101,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       if(format==="json"){
         downloadDiagnosticText(JSON.stringify(result,null,2),"openguin-combined-diagnostic-"+stamp+".json","application/json;charset=utf-8");
       }else{
-        downloadDiagnosticText("\\uFEFF"+diagnosticBundleToCsv(result),"openguin-combined-diagnostic-"+stamp+".csv","text/csv;charset=utf-8");
+        downloadDiagnosticText("\uFEFF"+diagnosticBundleToCsv(result),"openguin-combined-diagnostic-"+stamp+".csv","text/csv;charset=utf-8");
       }
       setError("");
     }catch(e){setError(e instanceof Error?e.message:"导出报告失败")}
