@@ -14,6 +14,13 @@
     lastLongTaskAt: 0
   };
   window[STATE_KEY] = state;
+  const requestSession = Math.random().toString(36).slice(2, 10);
+  let requestSequence = 0;
+
+  function nextRequestId() {
+    requestSequence = (requestSequence + 1) % 1_000_000_000;
+    return "r" + requestSession + "-" + requestSequence.toString(36);
+  }
 
   function safeUrl(raw) {
     try {
@@ -80,7 +87,7 @@
   const wrappedFetch = function(input, init) {
     const rawUrl = typeof input === "string" ? input : (input && input.url) || "";
     const method = String((init && init.method) || (input && input.method) || "GET").toUpperCase().slice(0, 12);
-    const meta = Object.assign({ method }, safeUrl(rawUrl));
+    const meta = Object.assign({ method, requestId: nextRequestId() }, safeUrl(rawUrl));
     const started = performance.now();
     let settled = false;
     const timer = setTimeout(() => {
@@ -119,7 +126,8 @@
 
   const wrappedXhrSend = function() {
     const xhr = this;
-    const meta = xhr.__openguinNetWatchMeta || safeUrl(location.href);
+    const requestId = nextRequestId();
+    const meta = Object.assign({}, xhr.__openguinNetWatchMeta || safeUrl(location.href), { requestId });
     const started = performance.now();
     let settled = false;
     const timer = setTimeout(() => {
