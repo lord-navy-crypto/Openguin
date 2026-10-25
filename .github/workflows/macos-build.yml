@@ -68,11 +68,13 @@ jobs:
 
       - name: Package Network Watch extension and installation guide
         run: |
-          mkdir -p dist
-          ditto -c -k --sequesterRsrc --keepParent browser-extension dist/Openguin-Network-Watch.zip
-          cp LICENSE dist/LICENSE.txt
-          cp THIRD_PARTY_NOTICES.md dist/THIRD_PARTY_NOTICES.md
-          cat > dist/INSTALL-NETWORK-OBSERVATORY.txt <<'EOF'
+          # Vite/Tauri already use dist/ for the frontend, so keep downloadable
+          # release files in a separate directory.
+          mkdir -p release-artifacts
+          ditto -c -k --sequesterRsrc --keepParent browser-extension release-artifacts/Openguin-Network-Watch.zip
+          cp LICENSE release-artifacts/LICENSE.txt
+          cp THIRD_PARTY_NOTICES.md release-artifacts/THIRD_PARTY_NOTICES.md
+          cat > release-artifacts/INSTALL-NETWORK-OBSERVATORY.txt <<'EOF'
           Openguin Network Observatory — macOS Universal2 installation
 
           1. Open the DMG and drag Openguin to Applications.
@@ -102,8 +104,8 @@ jobs:
           This is an unsigned/unnotarized developer build. macOS may show a security
           warning. Only run it if you trust the source.
           EOF
-          shasum -a 256 dist/* > dist/SHA256SUMS.txt
-          ls -lh dist
+          shasum -a 256 release-artifacts/* > release-artifacts/SHA256SUMS.txt
+          ls -lh release-artifacts
 
       - name: Upload Universal2 DMG, app, extension, and guide
         if: success()
@@ -113,6 +115,6 @@ jobs:
           path: |
             src-tauri/target/universal-apple-darwin/release/bundle/macos/*.app
             src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
-            dist/*
+            release-artifacts/*
           if-no-files-found: error
           retention-days: 30
