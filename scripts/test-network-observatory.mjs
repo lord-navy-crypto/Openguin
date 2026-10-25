@@ -9,9 +9,9 @@ const reportSource = fs.readFileSync("src/browser-diagnostics.ts","utf8");
 const transpiled = transformSync(reportSource,{
   loader:"ts",format:"cjs",target:"es2022"
 }).code;
-const exported = {};
-vm.runInNewContext(transpiled,{exports:exported,Date,Map,Set,JSON,Error});
-const {parseBrowserReport,analyzeBrowserReport} = exported;
+const commonModule = { exports: {} };
+vm.runInNewContext(transpiled,{module:commonModule,exports:commonModule.exports,Date,Map,Set,JSON,Error});
+const {parseBrowserReport,analyzeBrowserReport} = commonModule.exports;
 
 const epoch = 1792900000000;
 const sample = {
