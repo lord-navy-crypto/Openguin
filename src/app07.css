@@ -41,3 +41,6 @@
 .vpn-sample>span,.vpn-sample small{color:#8197ad}
 .vpn-sample small{grid-column:2/-1}
 @media(max-width:1150px){.vpn-diff{grid-template-columns:1fr}.vpn-sample{grid-template-columns:1fr 1fr}.vpn-sample small{grid-column:1/-1}}
+
+.speed-results .network-columns{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:1150px){.speed-results .network-columns{grid-template-columns:1fr}}
