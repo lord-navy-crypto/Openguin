@@ -3,12 +3,12 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
-import ts from "typescript";
+import { transformSync } from "esbuild";
 
 const reportSource = fs.readFileSync("src/browser-diagnostics.ts","utf8");
-const transpiled = ts.transpileModule(reportSource,{
-  compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}
-}).outputText;
+const transpiled = transformSync(reportSource,{
+  loader:"ts",format:"cjs",target:"es2022"
+}).code;
 const exported = {};
 vm.runInNewContext(transpiled,{exports:exported,Date,Map,Set,JSON,Error});
 const {parseBrowserReport,analyzeBrowserReport} = exported;
