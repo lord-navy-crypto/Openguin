@@ -42,6 +42,41 @@ export type BasicSpeed = {
   downloadMbps?:number|null;uploadMbps?:number|null;
   downloadError?:string|null;uploadError?:string|null;
 };
+export type TargetResult = {
+  host:string;
+  label:string;
+  dns:"ok"|"failed"|"not-tested";
+  https:"responded"|"failed"|"not-tested";
+  status:number|null;
+  elapsedMs:number|null;
+  symptom:"dns"|"transport"|"rejection"|"server"|"ok"|"dns-only"|"unknown";
+};
+export function summarizeTargets(snapshot:BasicSnapshot|null):TargetResult[] {
+  if(!snapshot) return [];
+  const dnsByHost=new Map(snapshot.dns.map(d=>[d.host.toLowerCase(),d]));
+  const endpointsByHost=new Map(snapshot.endpoints.map(e=>[e.host.toLowerCase(),e]));
+  return [...new Set([...dnsByHost.keys(),...endpointsByHost.keys()])].map(host=>{
+    const dns=dnsByHost.get(host);
+    const endpoint=endpointsByHost.get(host);
+    const dnsState:TargetResult["dns"]=dns?(dns.resolved?"ok":"failed"):"not-tested";
+    const httpsState:TargetResult["https"]=endpoint?
+      (endpoint.reachable?"responded":"failed"):"not-tested";
+    let symptom:TargetResult["symptom"]="unknown";
+    if(dnsState==="failed") symptom="dns";
+    else if(httpsState==="failed") symptom="transport";
+    else if(endpoint?.reachable) {
+      const status=endpoint.status??0;
+      symptom=[401,403,429].includes(status)?"rejection":
+        status>=500?"server":"ok";
+    } else if(dns) symptom="dns-only";
+    return {
+      host,label:endpoint?.name||host,
+      dns:dnsState,https:httpsState,
+      status:endpoint?.status??null,elapsedMs:endpoint?.elapsedMs??null,
+      symptom
+    };
+  });
+}
 export type DiagnosticIssue = {
   code:string;
   severity:"critical"|"warning"|"info";
@@ -57,6 +92,7 @@ export type OneClickResult = {
   checked:{dns:number;dnsPassed:number;https:number;httpsResponded:number;httpFailures:number;speedAttempted:boolean};
   context:{vpnInterfaceSignal:boolean;proxySignal:boolean};
   stability:ProbeStability|null;
+  targets:TargetResult[];
   notes:string[];
 };
 const add = (issues:DiagnosticIssue[],code:string,severity:DiagnosticIssue["severity"],title:string,evidence:string,action:string)=>{
@@ -72,6 +108,7 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
   const slow=endpoints.filter(e=>e.reachable && typeof e.elapsedMs==="number" && e.elapsedMs>=2000);
   const issues:DiagnosticIssue[]=[];
   const stability=summarizeHttpProbes(speed?.probeSamples);
+  const targets=summarizeTargets(snapshot);
   if (!snapshot) {
     add(issues,"connection-unavailable","critical","连接诊断未完成",
       "没有有效的 DNS/HTTPS 诊断结果；不能仅凭测速推断原因。",
@@ -97,6 +134,16 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
       add(issues,"http-rejection","warning","服务器已响应，但拒绝或限制了部分请求",
         blocked.map(x=>x.name+" HTTP "+x.status).join("；").slice(0,250)+"。注意：HTTP 401/403/429 不等于网络连接失败。",
         "核对登录及访问状态。出现 429 时避免短时间连续重试；不要以降速或丢包解释这些状态码。");
+    const chatgpt=endpoints.find(x=>x.host==="chatgpt.com");
+    const github=endpoints.find(x=>x.host==="github.com");
+    if(chatgpt && github && github.reachable &&
+        typeof github.status==="number" && github.status<400 &&
+        (!chatgpt.reachable || (chatgpt.status??0)>=400)){
+      add(issues,"target-specific","warning","ChatGPT 与 GitHub 对照站点表现不同",
+        "GitHub 对照端点返回 HTTP "+github.status+"，而 ChatGPT "+
+          (chatgpt.reachable?"返回 HTTP "+String(chatgpt.status??"未知"):"未返回 HTTP 响应")+"。",
+        "优先查看 ChatGPT 相关域名的认证状态、域名解析、代理分流与服务状态；不能断言整个网络都故障。");
+    }
     if(serverErrors.length)
       add(issues,"http-server-error","warning","部分服务返回 HTTP 5xx 错误",
         serverErrors.map(x=>x.name+" HTTP "+x.status).join("；").slice(0,250)+"；已收到响应，无法仅凭此断定故障原因。",
@@ -180,7 +227,7 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
     checked:{dns:dns.length,dnsPassed,https:endpoints.length,httpsResponded:responded,httpFailures:blocked.length+serverErrors.length,speedAttempted:speed!==null},
     context:{vpnInterfaceSignal:!!snapshot?.route.vpnLikely,
       proxySignal:!!(snapshot?.proxy.environmentConfigured||snapshot?.proxy.systemConfigured)},
-    stability,
+    stability,targets,
     notes:[...notes,
       "检测结果是当前采样的证据，不能识别所有浏览器、VPN 或远程服务故障。",
       "网页渲染、响应流以及浏览器下载故障需要结合可选扩展进行页面级监测。"]
