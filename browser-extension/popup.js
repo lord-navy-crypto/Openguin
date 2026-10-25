@@ -48,6 +48,11 @@ async function startMonitoring() {
       ? "Monitoring this ChatGPT tab; approved permission allows re-attachment after reload."
       : "Monitoring this tab until it navigates away. No page text or request bodies are stored.";
   } catch (error) {
+    // A blocked/script-ineligible tab must not leave monitoring marked as active.
+    // Otherwise the popup appears to monitor successfully but no page events arrive.
+    await chrome.storage.local.set({
+      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+    });
     status.textContent = "Could not inject monitor: " + String(error).slice(0, 180);
   }
   await render();
