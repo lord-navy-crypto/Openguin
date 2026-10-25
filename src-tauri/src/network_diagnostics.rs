@@ -235,6 +235,11 @@ pub async fn run_network_diagnostics() -> Result<NetworkSnapshot, String> {
     if endpoints.iter().any(|check| !check.reachable) {
         hints.push("At least one HTTPS connection failed before an HTTP status was received. Compare DNS results and repeat with the VPN state changed manually.".into());
     }
+    if dns.iter().all(|check| check.resolved)
+        && endpoints.iter().all(|check| check.reachable && check.status.is_some_and(|status| status < 400))
+    {
+        hints.push("All sampled DNS lookups resolved and the sampled HTTPS endpoints returned successful HTTP responses. This does not rule out intermittent or page-specific failures.".into());
+    }
     if endpoints.iter().any(|check| matches!(check.status, Some(401 | 403 | 429))) {
         hints.push("A 401, 403, or 429 means a server responded but denied, challenged, or rate-limited the request; it is not the same as a connection timeout.".into());
     }
