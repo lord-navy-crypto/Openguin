@@ -4,6 +4,7 @@ import {
   parseBrowserReport,
   analyzeBrowserReport,
   eventCounts,
+  summarizeBrowserTelemetry,
 } from "../.network-test/browser-diagnostics.mjs";
 
 const baseTime = Date.UTC(2026, 9, 25, 5, 0);
@@ -80,6 +81,29 @@ test("drops malicious metadata while keeping diagnostic event categories", () =>
   assert.equal(parsed.events[0].path, "/conversation/private");
   assert.equal(parsed.events[0].method, "POST");
   assert.equal(JSON.stringify(parsed).includes("token=secret"), false);
+});
+
+test("summarizes response percentiles, slow requests, and resolved stream pauses", () => {
+  const parsed = parseBrowserReport(report([
+    {kind: "fetch-response", durationMs: 100, status: 200},
+    {kind: "fetch-response", durationMs: 3000, status: 200},
+    {kind: "xhr-response", durationMs: 7000, status: 503},
+    {kind: "fetch-error", errorType: "TypeError"},
+    {kind: "stream-gap-resolved", gapMs: 7815},
+    {kind: "javascript-error", errorType: "UnknownError"}
+  ]));
+  const summary = summarizeBrowserTelemetry(parsed);
+  assert.equal(summary.responseCount, 3);
+  assert.equal(summary.medianResponseMs, 3000);
+  assert.equal(summary.p95ResponseMs, 7000);
+  assert.equal(summary.slowResponses, 2);
+  assert.equal(summary.transportErrors, 1);
+  assert.equal(summary.http5xx, 1);
+  assert.equal(summary.streamPauseEvents, 1);
+  assert.equal(summary.maxStreamGapMs, 7815);
+  assert.equal(summary.scriptErrors, 1);
+  assert(analyzeBrowserReport(parsed).some(item => item.id === "stream"));
+  assert(analyzeBrowserReport(parsed).some(item => item.id === "slow-response"));
 });
 
 test("distinguishes HTTP access denial from transport failure", () => {
