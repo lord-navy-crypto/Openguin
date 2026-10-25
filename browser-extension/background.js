@@ -76,8 +76,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 });
 
 async function injectMonitor(tabId) {
-  await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-main.js"], world: "MAIN" });
   await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-bridge.js"], world: "ISOLATED" });
+  await chrome.scripting.executeScript({ target: { tabId }, files: ["monitor-main.js"], world: "MAIN" });
 }
 
 chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
