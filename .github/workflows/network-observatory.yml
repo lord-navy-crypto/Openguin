@@ -55,6 +55,8 @@ jobs:
           node --test tests/network-one-click.test.mjs
           ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
           node --test tests/network-correlation.test.mjs
+          ./node_modules/.bin/esbuild src/network-history.ts --bundle --platform=node --format=esm --outfile=.network-test/network-history.mjs
+          node --test tests/network-history.test.mjs
 
       - name: Build frontend
         run: npm run build
