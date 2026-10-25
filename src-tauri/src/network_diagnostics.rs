@@ -269,6 +269,16 @@ pub async fn run_network_diagnostics() -> Result<NetworkSnapshot, String> {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
+pub struct HttpProbeSample {
+    // One HTTP request to a fixed endpoint. This is not an ICMP ping.
+    elapsed_ms: u128,
+    status: Option<u16>,
+    success: bool,
+    failure_kind: Option<&'static str>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SpeedTestResult {
     captured_at_ms: u128,
     provider: String,
@@ -276,6 +286,7 @@ pub struct SpeedTestResult {
     jitter_ms: Option<f64>,
     probe_failures: u8,
     probe_count: u8,
+    probe_samples: Vec<HttpProbeSample>,
     download_bytes: u64,
     upload_bytes: u64,
     download_mbps: Option<f64>,
@@ -306,6 +317,7 @@ pub async fn run_network_speed_test() -> Result<SpeedTestResult, String> {
         jitter_ms: None,
         probe_failures: 0,
         probe_count: 5,
+        probe_samples: Vec::with_capacity(5),
         download_bytes: 0,
         upload_bytes: 0,
         download_mbps: None,
@@ -319,17 +331,31 @@ pub async fn run_network_speed_test() -> Result<SpeedTestResult, String> {
     let mut probes = Vec::<f64>::new();
     for _ in 0..5 {
         let started = Instant::now();
-        match timeout(
+        let observation = timeout(
             Duration::from_secs(5),
             client.get("https://www.cloudflare.com/cdn-cgi/trace")
                 .header("Cache-Control", "no-cache")
                 .send(),
-        ).await {
-            Ok(Ok(response)) if response.status().is_success() => {
-                probes.push(started.elapsed().as_secs_f64() * 1000.0);
+        ).await;
+        let elapsed_ms = started.elapsed().as_millis();
+        let (status, success, failure_kind) = match observation {
+            Ok(Ok(response)) => {
+                let status = response.status();
+                (Some(status.as_u16()), status.is_success(),
+                    if status.is_success() { None } else { Some("http-status") })
             }
-            _ => result.probe_failures += 1,
+            Ok(Err(error)) => (None, false,
+                Some(if error.is_timeout() { "timeout" } else { "transport" })),
+            Err(_) => (None, false, Some("timeout")),
+        };
+        if success {
+            probes.push(started.elapsed().as_secs_f64() * 1000.0);
+        } else {
+            result.probe_failures += 1;
         }
+        result.probe_samples.push(HttpProbeSample {
+            elapsed_ms, status, success, failure_kind,
+        });
     }
     if !probes.is_empty() {
         result.latency_ms = Some(probes.iter().sum::<f64>() / probes.len() as f64);
@@ -341,18 +367,45 @@ pub async fn run_network_speed_test() -> Result<SpeedTestResult, String> {
         }
     }
 
+    // Stream rather than buffering the provider response into one Vec.
+    // A server unexpectedly returning more data cannot exhaust application memory.
+    const DOWNLOAD_CAP: u64 = 10_100_000;
     let started = Instant::now();
     match client.get("https://speed.cloudflare.com/__down?bytes=10000000").send().await {
-        Ok(response) if response.status().is_success() => match response.bytes().await {
-            Ok(bytes) => {
-                result.download_bytes = bytes.len() as u64;
-                result.download_ms = Some(started.elapsed().as_millis());
-                result.download_mbps = mbps(result.download_bytes, result.download_ms.unwrap_or(0));
+        Ok(mut response) if response.status().is_success() => {
+            if response.content_length().is_some_and(|length| length > DOWNLOAD_CAP) {
+                result.download_error = Some("Provider advertised more data than the safe download limit".into());
+            } else {
+                loop {
+                    match response.chunk().await {
+                        Ok(Some(chunk)) => {
+                            result.download_bytes += chunk.len() as u64;
+                            if result.download_bytes > DOWNLOAD_CAP {
+                                result.download_error = Some("Provider exceeded the safe download limit".into());
+                                result.download_mbps = None;
+                                break;
+                            }
+                        }
+                        Ok(None) => {
+                            result.download_ms = Some(started.elapsed().as_millis());
+                            result.download_mbps = mbps(result.download_bytes, result.download_ms.unwrap_or(0));
+                            break;
+                        }
+                        Err(error) => {
+                            result.download_error = Some(if error.is_timeout() {
+                                "Download test timed out".into()
+                            } else {
+                                "Download stream failed".into()
+                            });
+                            result.download_mbps = None;
+                            break;
+                        }
+                    }
+                }
             }
-            Err(error) => result.download_error = Some(error.to_string()),
-        },
+        }
         Ok(response) => result.download_error = Some(format!("Download endpoint returned HTTP {}", response.status())),
-        Err(error) => result.download_error = Some(if error.is_timeout() { "Download test timed out".into() } else { error.to_string() }),
+        Err(error) => result.download_error = Some(if error.is_timeout() { "Download test timed out".into() } else { "Download transport failed".into() }),
     }
 
     let upload = vec![0x5Au8; 3 * 1024 * 1024];
@@ -365,13 +418,12 @@ pub async fn run_network_speed_test() -> Result<SpeedTestResult, String> {
         .send()
         .await
     {
-        Ok(response) if response.status().is_success() => match response.bytes().await {
-            Ok(_) => {
-                result.upload_bytes = upload_len;
-                result.upload_ms = Some(started.elapsed().as_millis());
-                result.upload_mbps = mbps(result.upload_bytes, result.upload_ms.unwrap_or(0));
-            }
-            Err(error) => result.upload_error = Some(error.to_string()),
+        Ok(response) if response.status().is_success() => {
+            // The provider accepted the upload. Never buffer an unrelated
+            // response body; the measured transfer includes HTTP overhead.
+            result.upload_bytes = upload_len;
+            result.upload_ms = Some(started.elapsed().as_millis());
+            result.upload_mbps = mbps(result.upload_bytes, result.upload_ms.unwrap_or(0));
         },
         Ok(response) => result.upload_error = Some(format!("Upload endpoint returned HTTP {}", response.status())),
         Err(error) => result.upload_error = Some(if error.is_timeout() { "Upload test timed out".into() } else { error.to_string() }),
