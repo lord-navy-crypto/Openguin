@@ -272,6 +272,10 @@ pub async fn run_network_diagnostics() -> Result<NetworkSnapshot, String> {
 pub struct SpeedTestResult {
     captured_at_ms: u128,
     provider: String,
+    latency_ms: Option<f64>,
+    jitter_ms: Option<f64>,
+    probe_failures: u8,
+    probe_count: u8,
     download_bytes: u64,
     upload_bytes: u64,
     download_mbps: Option<f64>,
@@ -298,6 +302,10 @@ pub async fn run_network_speed_test() -> Result<SpeedTestResult, String> {
     let mut result = SpeedTestResult {
         captured_at_ms: now_ms(),
         provider: "Cloudflare speed test endpoint".into(),
+        latency_ms: None,
+        jitter_ms: None,
+        probe_failures: 0,
+        probe_count: 5,
         download_bytes: 0,
         upload_bytes: 0,
         download_mbps: None,
@@ -307,6 +315,31 @@ pub async fn run_network_speed_test() -> Result<SpeedTestResult, String> {
         download_error: None,
         upload_error: None,
     };
+
+    let mut probes = Vec::<f64>::new();
+    for _ in 0..5 {
+        let started = Instant::now();
+        match timeout(
+            Duration::from_secs(5),
+            client.get("https://www.cloudflare.com/cdn-cgi/trace")
+                .header("Cache-Control", "no-cache")
+                .send(),
+        ).await {
+            Ok(Ok(response)) if response.status().is_success() => {
+                probes.push(started.elapsed().as_secs_f64() * 1000.0);
+            }
+            _ => result.probe_failures += 1,
+        }
+    }
+    if !probes.is_empty() {
+        result.latency_ms = Some(probes.iter().sum::<f64>() / probes.len() as f64);
+        if probes.len() > 1 {
+            result.jitter_ms = Some(
+                probes.windows(2).map(|pair| (pair[1] - pair[0]).abs()).sum::<f64>()
+                    / (probes.len() - 1) as f64,
+            );
+        }
+    }
 
     let started = Instant::now();
     match client.get("https://speed.cloudflare.com/__down?bytes=10000000").send().await {
