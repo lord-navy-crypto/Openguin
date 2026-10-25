@@ -1,5 +1,5 @@
 import {useMemo,useState} from "react";
-import {analyzeBrowserReport,eventCounts,parseBrowserReport,summarizeBrowserTelemetry,type BrowserReport} from "./browser-diagnostics";
+import {analyzeBrowserReport,eventCounts,parseBrowserReport,summarizeBrowserEndpoints,summarizeBrowserTelemetry,type BrowserReport} from "./browser-diagnostics";
 import {correlateBrowserWithOneClick} from "./network-correlation";
 import {diagnosticBundleToCsv,downloadDiagnosticText} from "./diagnostic-export";
 import type {NetworkHistoryEntry} from "./network-history";
@@ -47,6 +47,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
   const findings=useMemo(()=>report?analyzeBrowserReport(report):[],[report]);
   const counts=useMemo(()=>report?eventCounts(report):[],[report]);
   const telemetry=useMemo(()=>report?summarizeBrowserTelemetry(report):null,[report]);
+  const endpoints=useMemo(()=>report?summarizeBrowserEndpoints(report):[],[report]);
   const correlation=useMemo(()=>report?correlateBrowserWithOneClick(report,oneClickReport):null,[report,oneClickReport]);
   const dnsFailed=networkSnapshot?.dns.filter(x=>!x.resolved).length??0;
   const httpsFailed=networkSnapshot?.endpoints.filter(x=>!x.reachable).length??0;
@@ -171,6 +172,15 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <div><span>最长已记录流停顿</span><strong>{metric(telemetry.maxStreamGapMs,"ms")}</strong></div>
         </div>
         <p className="browser-report-howto">P95 表示本次已记录响应中 95% 不超过的耗时，不是网络延迟保证值。响应耗时包含浏览器可观测的请求等待时间，不能单独分离服务器处理时间与网络传输时间。</p>
+      </div>}
+      {endpoints.length>0&&<div className="browser-endpoints">
+        <h4>问题最集中的请求端点 · 按异常和耗时排序</h4>
+        <p className="browser-report-howto">端点按脱敏后的域名、路径和方法聚合；并发请求没有唯一请求 ID，因此这些是分组统计，不是逐请求配对追踪。</p>
+        {endpoints.slice(0,8).map((item,index)=><article key={item.host+"|"+item.method+"|"+item.path} className="browser-endpoint-row">
+          <div className="browser-endpoint-head"><b>{index+1}. {item.method} {item.host}{item.path}</b><span>{item.responseCount} 响应</span></div>
+          <p>中位数 {metric(item.medianResponseMs,"ms")} · P95 {metric(item.p95ResponseMs,"ms")} · 最慢 {metric(item.maxResponseMs,"ms")}</p>
+          <small>开始 {item.requestStarts} · 错误 {item.errorCount} · 停滞 {item.stallCount} · 4xx {item.http4xx} · 5xx {item.http5xx} · 慢响应 {item.slowResponses}</small>
+        </article>)}
       </div>}
       <div className="browser-report-grid">
         <div className="browser-findings"><h4>故障证据及下一步</h4>
