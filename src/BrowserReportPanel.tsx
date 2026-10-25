@@ -31,7 +31,8 @@ type Props={networkSnapshot:Connection|null;speedTest:Speed|null;vpnSamples:Samp
 const labels:Record<string,string>={
   "fetch-response":"请求响应","fetch-error":"请求失败","fetch-stall":"等待响应超时",
   "xhr-error":"XHR 请求失败","xhr-stall":"XHR 等待超时","stream-gap":"响应流卡顿",
-  "stream-gap-resolved":"响应流停顿后恢复","stream-error":"响应流异常","resource-error":"资源加载失败",
+  "stream-gap-resolved":"响应流停顿后恢复","stream-error":"响应流异常",
+  "body-read-complete":"响应正文读取完成","body-read-error":"响应正文读取失败","resource-error":"资源加载失败",
   "javascript-error":"脚本异常","long-task":"页面卡顿",
   "download-failed":"下载失败","download-stall":"下载停滞",
   "download-progress":"下载进度","download-complete":"下载完成"
