@@ -6,6 +6,7 @@ export type BrowserEvent = {
   at: number;
   sourceAt?: number;
   bridgeDelayMs?: number;
+  requestId?: string;
   kind: string;
   host: string;
   status?: number;
@@ -64,6 +65,7 @@ const VALID_KINDS = new Set([
 const RE_HOST = /^[a-z0-9.-]{1,120}$/i;
 const RE_ERROR = /^[A-Za-z][A-Za-z0-9_-]{0,59}$/;
 const RE_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/;
+const RE_REQUEST_ID = /^[a-z0-9_-]{1,64}$/i;
 function sanitizedPath(value: unknown): string | undefined {
   if (typeof value !== "string" || !value.startsWith("/") || value.includes("\\") || value.length > 1000) return undefined;
   const path = value.split("?")[0].split("#")[0];
@@ -104,6 +106,7 @@ export function parseBrowserReport(raw: string): BrowserReport {
     const bridgeDelayMs = bounded(entry.bridgeDelayMs);
     if (sourceAt !== undefined && sourceAt >= 1_000_000_000_000 && sourceAt <= 9_000_000_000_000) event.sourceAt = sourceAt;
     if (bridgeDelayMs !== undefined && bridgeDelayMs <= 300_000) event.bridgeDelayMs = bridgeDelayMs;
+    if (typeof entry.requestId === "string" && RE_REQUEST_ID.test(entry.requestId)) event.requestId = entry.requestId;
     if (typeof entry.method === "string" && RE_METHOD.test(entry.method)) event.method = entry.method;
     const path = sanitizedPath(entry.path);
     if (path) event.path = path;
