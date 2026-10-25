@@ -375,3 +375,81 @@ export function summarizeBrowserEndpoints(report: BrowserReport): BrowserEndpoin
     b.responseCount-a.responseCount
   );
 }
+
+
+export type BrowserRequestLifecycle = {
+  requestId: string;
+  host: string;
+  path: string;
+  method: string;
+  startedAt: number | null;
+  finishedAt: number | null;
+  durationMs: number | null;
+  outcome: "response" | "http-error" | "transport-error" | "stalled" | "incomplete";
+  status: number | null;
+  stallEvents: number;
+  streamPauseEvents: number;
+  eventCount: number;
+};
+
+export function summarizeBrowserRequests(report: BrowserReport): BrowserRequestLifecycle[] {
+  type Mutable = {
+    requestId:string; host:string; path:string; method:string;
+    startedAt:number|null; finishedAt:number|null; durationMs:number|null;
+    outcome:BrowserRequestLifecycle["outcome"]; status:number|null;
+    stallEvents:number; streamPauseEvents:number; eventCount:number;
+    terminalPriority:number;
+  };
+  const groups = new Map<string,Mutable>();
+  const requestKinds = new Set([
+    "fetch-start","fetch-response","fetch-error","fetch-stall",
+    "xhr-start","xhr-response","xhr-error","xhr-stall",
+    "stream-gap","stream-gap-resolved","stream-error","stream-end"
+  ]);
+  for (const event of report.events) {
+    if (!event.requestId || !RE_REQUEST_ID.test(event.requestId) || !requestKinds.has(event.kind)) continue;
+    let row = groups.get(event.requestId);
+    if (!row) {
+      row = {
+        requestId:event.requestId,host:event.host,path:event.path||"/",method:event.method||"—",
+        startedAt:null,finishedAt:null,durationMs:null,outcome:"incomplete",status:null,
+        stallEvents:0,streamPauseEvents:0,eventCount:0,terminalPriority:0
+      };
+      groups.set(event.requestId,row);
+    }
+    row.eventCount++;
+    if (event.kind === "fetch-start" || event.kind === "xhr-start") {
+      row.startedAt = row.startedAt === null ? event.at : Math.min(row.startedAt,event.at);
+    }
+    if (event.kind === "fetch-stall" || event.kind === "xhr-stall") {
+      row.stallEvents++;
+      if (row.terminalPriority === 0) row.outcome = "stalled";
+    }
+    if (event.kind === "stream-gap" || event.kind === "stream-gap-resolved" || event.kind === "stream-error") {
+      row.streamPauseEvents++;
+    }
+    const terminal = event.kind === "fetch-response" || event.kind === "xhr-response" ||
+      event.kind === "fetch-error" || event.kind === "xhr-error";
+    if (terminal) {
+      const isError = event.kind === "fetch-error" || event.kind === "xhr-error";
+      const priority = isError ? 3 : 2;
+      if (priority >= row.terminalPriority) {
+        row.terminalPriority = priority;
+        row.finishedAt = event.at;
+        row.durationMs = typeof event.durationMs === "number" ? event.durationMs :
+          (row.startedAt === null ? null : Math.max(0,event.at-row.startedAt));
+        row.status = typeof event.status === "number" ? event.status : null;
+        row.outcome = isError ? "transport-error" :
+          ((event.status ?? 0) >= 400 ? "http-error" : "response");
+      }
+    }
+  }
+  return [...groups.values()].map(({terminalPriority,...row})=>row).sort((a,b)=>{
+    const weight:Record<BrowserRequestLifecycle["outcome"],number> = {
+      "transport-error":5,"http-error":4,"stalled":3,"incomplete":2,"response":1
+    };
+    return weight[b.outcome]-weight[a.outcome] ||
+      (b.durationMs??0)-(a.durationMs??0) ||
+      b.streamPauseEvents-a.streamPauseEvents;
+  });
+}
