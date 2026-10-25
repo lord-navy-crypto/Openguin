@@ -25,3 +25,19 @@
 .speed-metric strong{font-size:24px;font-variant-numeric:tabular-nums}
 .speed-metric small{color:#71869c;font-size:10px;overflow-wrap:anywhere}
 @media(max-width:1150px){.network-columns{grid-template-columns:1fr}.network-actions{align-items:stretch}}
+
+.vpn-compare-controls{display:flex;align-items:end;justify-content:space-between;gap:12px;flex-wrap:wrap;padding:12px;border:1px solid #ffffff10;border-radius:10px;background:#0a141e}
+.vpn-compare-controls label{display:grid;gap:6px;color:#91a6bd;font-size:11px}
+.vpn-compare-controls select{min-width:170px;border:1px solid #2d4560;border-radius:8px;padding:8px;background:#101e2c;color:#e8f1fb}
+.vpn-compare-controls button:disabled{opacity:.45;cursor:default}
+.vpn-history{display:grid;gap:10px;border-top:1px solid #ffffff10;padding-top:14px}
+.vpn-history h4{margin:0;font-size:12px}
+.vpn-history .diag-head p{margin:5px 0 0}
+.vpn-diff{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.vpn-diff>div{display:grid;gap:8px;padding:12px;border:1px solid #ffffff10;border-radius:10px}
+.vpn-diff span{font-size:10px;color:#8197ad}
+.vpn-diff b{font-size:13px;overflow-wrap:anywhere}
+.vpn-sample{display:grid;grid-template-columns:90px 1.5fr 1fr 1.2fr;gap:8px;align-items:center;padding:9px 10px;border-top:1px solid #ffffff0b;font-size:10px}
+.vpn-sample>span,.vpn-sample small{color:#8197ad}
+.vpn-sample small{grid-column:2/-1}
+@media(max-width:1150px){.vpn-diff{grid-template-columns:1fr}.vpn-sample{grid-template-columns:1fr 1fr}.vpn-sample small{grid-column:1/-1}}
