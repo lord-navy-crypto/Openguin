@@ -28,13 +28,14 @@
       <button id="start" class="primary">Start this tab</button>
       <button id="stop" disabled>Stop monitoring</button>
       <button id="chatgptPermission" class="wide" hidden>Allow ChatGPT reload monitoring</button>
+      <button id="downloadPermission" class="wide">Enable file download monitoring</button>
     </div>
     <section class="panel">
       <h2>Recent events</h2>
       <div id="events" class="events"><div class="empty">No events captured yet.</div></div>
       <div class="buttons" style="margin-top:10px"><button id="clear" class="wide">Clear local events</button></div>
     </section>
-    <div class="privacy">Privacy: captures timing, status codes, sanitized host/path metadata, and error categories. It never stores page text, prompts, model answers, cookies, headers, or request bodies. No telemetry is uploaded.</div>
+    <div class="privacy">Privacy: page monitoring captures timing, status codes, sanitized host/path metadata, and error categories. Optional file-download monitoring requires a separate permission and records download host, progress, byte counts, duration, and failure category—not filenames or full URLs. Nothing is uploaded.</div>
   </main>
   <script src="popup.js"></script>
 </body>
