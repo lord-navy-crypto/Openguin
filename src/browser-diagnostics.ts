@@ -10,6 +10,18 @@ export type BrowserEvent = {
   durationMs?: number;
   gapMs?: number;
   errorType?: string;
+  method?: string;
+  path?: string;
+  line?: number;
+  bytes?: number;
+  transferBytes?: number;
+  domContentLoadedMs?: number;
+  loadMs?: number;
+  firstPaintMs?: number;
+  firstContentfulPaintMs?: number;
+  mutationCount?: number;
+  bytesReceived?: number;
+  totalBytes?: number;
   progressPercent?: number;
   readyState?: string;
   bodyChildCount?: number;
@@ -39,6 +51,15 @@ const VALID_KINDS = new Set([
 ]);
 const RE_HOST = /^[a-z0-9.-]{1,120}$/i;
 const RE_ERROR = /^[A-Za-z][A-Za-z0-9_-]{0,59}$/;
+const RE_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/;
+function sanitizedPath(value: unknown): string | undefined {
+  if (typeof value !== "string" || !value.startsWith("/") || value.includes("\\") || value.length > 1000) return undefined;
+  const path = value.split("?")[0].split("#")[0];
+  return path.split("/").map(part =>
+    part.includes("@") || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part) ||
+    /^\d{7,}$/.test(part) || /^[A-Za-z0-9_-]{24,}$/.test(part) || part.length > 64 ? ":id" : part
+  ).join("/").slice(0,160);
+}
 const bounded = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value)
     ? Math.min(1e9, Math.max(0, value)) : undefined;
@@ -67,7 +88,14 @@ export function parseBrowserReport(raw: string): BrowserReport {
     const at = typeof entry.at === "number" && Number.isFinite(entry.at) ? entry.at : undefined;
     if (at === undefined || at < 1_000_000_000_000 || at > 9_000_000_000_000) continue;
     const event: BrowserEvent = { at, kind: entry.kind, host: entry.host.toLowerCase() };
-    for (const field of ["durationMs", "gapMs", "status", "progressPercent", "bodyChildCount"] as const) {
+    if (typeof entry.method === "string" && RE_METHOD.test(entry.method)) event.method = entry.method;
+    const path = sanitizedPath(entry.path);
+    if (path) event.path = path;
+    for (const field of [
+      "durationMs", "gapMs", "status", "progressPercent", "bodyChildCount", "line",
+      "bytes", "transferBytes", "domContentLoadedMs", "loadMs", "firstPaintMs",
+      "firstContentfulPaintMs", "mutationCount", "bytesReceived", "totalBytes"
+    ] as const) {
       const numeric = bounded(entry[field]);
       if (numeric !== undefined) event[field] = numeric;
     }
