@@ -265,6 +265,7 @@ async function buildDiagnosticReport() {
       const path = safeExportPath(event.path);
       if (path) row.path = path;
       if (/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(event.method || "")) row.method = event.method;
+      if (/^[a-z][a-z0-9-]{0,19}$/i.test(event.tag || "")) row.tag = event.tag;
       for (const key of [
         "status","durationMs","gapMs","line","bytes","transferBytes","domContentLoadedMs",
         "loadMs","bodyChildCount","firstPaintMs","firstContentfulPaintMs","mutationCount",
