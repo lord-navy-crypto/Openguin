@@ -46,6 +46,12 @@ jobs:
       - name: Run deterministic browser diagnostics tests
         run: node scripts/test-network-observatory.mjs
 
+      - name: Run browser report regression tests
+        run: |
+          mkdir -p .network-test
+          ./node_modules/.bin/esbuild src/browser-diagnostics.ts --bundle --platform=node --format=esm --outfile=.network-test/browser-diagnostics.mjs
+          node --test tests/network-observatory.test.mjs
+
       - name: Build frontend
         run: npm run build
 
