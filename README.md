@@ -107,6 +107,21 @@ src-tauri/target/release/bundle/dmg/
 
 The build pipeline applies runtime fixes, full logs, Observatory, 0.9 performance controls, Task Center, 0.10 Library/runtime/settings expansion, Openguin branding/icons, verification, bundled-runtime preparation, and then the real Tauri build.
 
+## Browser & Network Observatory (prototype)
+
+The `feature/browser-network-diagnostics` branch adds an opt-in diagnostic surface for separating network faults from page-level failures:
+
+- DNS resolution and HTTPS reachability/response timing for ChatGPT, OpenAI authentication, and GitHub.
+- On-demand download/upload throughput plus repeated HTTP latency/jitter probes.
+- VPN-like interface, default-route, and proxy-configuration signals, with manual VPN-on/VPN-off sample comparison.
+- A local-only Chrome/Chromium Manifest V3 extension that records sanitized request timing/status, resource failures, JavaScript error categories, long tasks, and some response-stream gaps.
+
+The diagnostics are evidence, not definitive attribution. HTTP probe failures are not ICMP packet loss; a VPN interface is only a signal; and HTTP 401/403/429 responses mean a server answered but denied, challenged, or rate-limited the request. The app does not change VPN, proxy, DNS, firewall, or routing settings automatically.
+
+The extension lives in `browser-extension/`. Load it as an unpacked extension in a Chromium-based browser. It requests access only to the active tab by default; optional ChatGPT host access is requested separately for re-attaching after reloads. Telemetry stays in local extension storage, and page content, prompts, response bodies, cookies, headers, and URL query strings are not recorded.
+
+Implementation plan: `docs/NETWORK_OBSERVATORY_PLAN.md`.
+
 ## Model indexing and safety policy
 
 Openguin can index much more than the small set visible on a single home page, but it intentionally distinguishes **discovery** from **safe one-click installation**.
