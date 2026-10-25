@@ -40,7 +40,7 @@ test("background stores one copy of a repeated page event and records source tim
   const sourceAt = Date.now();
   const event = {
     kind:"fetch-response",host:"chatgpt.com",path:"/backend-api/conversation",
-    method:"POST",status:200,durationMs:6200,at:sourceAt
+    method:"POST",requestId:"rabc-1",status:200,durationMs:6200,at:sourceAt
   };
   const sender = {tab:{id:7,url:"https://chatgpt.com/"},url:"https://chatgpt.com/"};
   h.send({type:"openguin-network-event",event},sender);
@@ -49,6 +49,7 @@ test("background stores one copy of a repeated page event and records source tim
 
   assert.equal(h.localState.events.length,1);
   assert.equal(h.localState.events[0].kind,"fetch-response");
+  assert.equal(h.localState.events[0].requestId,"rabc-1");
   assert.equal(h.localState.events[0].sourceAt,sourceAt);
   assert.equal(typeof h.localState.events[0].bridgeDelayMs,"number");
   assert.equal(h.localState.duplicateEventsSuppressed,1);
