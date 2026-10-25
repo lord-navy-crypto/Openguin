@@ -275,6 +275,7 @@ async function buildDiagnosticReport() {
       && Number.isFinite(event.at))
     .map(event => {
       const row = { kind: event.kind, host: event.host.toLowerCase(), at: event.at };
+      if (/^[a-z0-9_-]{1,64}$/i.test(event.requestId || "")) row.requestId = event.requestId;
       if (Number.isFinite(event.sourceAt)) row.sourceAt = event.sourceAt;
       if (Number.isFinite(event.bridgeDelayMs)) row.bridgeDelayMs = Math.max(0, Math.min(event.bridgeDelayMs, 300000));
       const path = safeExportPath(event.path);
@@ -313,7 +314,7 @@ async function buildDiagnosticReport() {
     },
     privacy: {
       localOnly: true,
-      includes: ["event category","timestamp","sanitized host/path","HTTP status","request duration","coarse rendering and download metrics","error category"],
+      includes: ["event category","timestamp","sanitized host/path","local request correlation ID","HTTP status","request duration","coarse rendering and download metrics","error category"],
       excludes: ["page text","prompts and answers","cookies","headers","request/response bodies","query strings","download filenames","full URLs","tab identifiers"]
     },
     events: cleanEvents
@@ -342,7 +343,7 @@ function downloadReport(filename, content, mime) {
 function reportCsv(report) {
   const quality = report.quality || {};
   const columns = [
-    "at","sourceAt","bridgeDelayMs","kind","host","path","method","tag","status","durationMs","gapMs","errorType","line",
+    "at","sourceAt","bridgeDelayMs","requestId","kind","host","path","method","tag","status","durationMs","gapMs","errorType","line",
     "readyState","progressPercent","bytes","transferBytes","bytesReceived","totalBytes","bodyChildCount",
     "domContentLoadedMs","loadMs","firstPaintMs","firstContentfulPaintMs","mutationCount"
   ];
