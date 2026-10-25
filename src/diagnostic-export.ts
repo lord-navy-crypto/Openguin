@@ -4,7 +4,7 @@ function csvCell(value: unknown): string {
   let text = value === null || value === undefined ? "" :
     typeof value === "string" ? value :
     typeof value === "object" ? JSON.stringify(value) : String(value);
-  if (/^[\s]*[=+@]/.test(text) || /^[\s]*-[A-Za-z]/.test(text)) text = "'" + text;
+  if (/^[\s]*[=+\-@]/.test(text)) text = "'" + text;
   return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
 }
 
