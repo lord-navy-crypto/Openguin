@@ -114,11 +114,17 @@ The `feature/browser-network-diagnostics` branch adds an opt-in diagnostic surfa
 - DNS resolution and HTTPS reachability/response timing for ChatGPT, OpenAI authentication, and GitHub.
 - On-demand download/upload throughput plus repeated HTTP latency/jitter probes.
 - VPN-like interface, default-route, and proxy-configuration signals, with manual VPN-on/VPN-off sample comparison.
-- A local-only Chrome/Chromium Manifest V3 extension that records sanitized request timing/status, resource failures, JavaScript error categories, long tasks, and some response-stream gaps.
+- A local-only Chrome/Chromium Manifest V3 extension that records sanitized request timing/status, resource failures, JavaScript error categories, long tasks, paint/DOM activity, response-stream gaps, and (with separate optional permissions) browser download progress, interrupted downloads, and 60-second no-progress warnings.
 
 The diagnostics are evidence, not definitive attribution. HTTP probe failures are not ICMP packet loss; a VPN interface is only a signal; and HTTP 401/403/429 responses mean a server answered but denied, challenged, or rate-limited the request. The app does not change VPN, proxy, DNS, firewall, or routing settings automatically.
 
 The extension lives in `browser-extension/`. Load it as an unpacked extension in a Chromium-based browser. It requests access only to the active tab by default; optional ChatGPT host access is requested separately for re-attaching after reloads. Telemetry stays in local extension storage, and page content, prompts, response bodies, cookies, headers, and URL query strings are not recorded.
+
+### Download and run the macOS build
+
+The `Build Openguin macOS DMG` GitHub Actions workflow builds the desktop DMG and a separate `Openguin-Network-Watch.zip` browser extension bundle. After a successful workflow run, download the `Openguin-Network-Observatory-macOS-ARM64` artifact from the Actions run and extract it. The DMG is an unsigned/unnotarized developer build; the extension is installed through Chrome/Chromium's **Load unpacked** flow after extracting its ZIP.
+
+The browser extension's file-download monitor is opt-in and requires separate downloads/alarms permissions. It records host, coarse progress, byte counts, duration, and failure/stall category, but not filenames or full URLs.
 
 Implementation plan: `docs/NETWORK_OBSERVATORY_PLAN.md`.
 
