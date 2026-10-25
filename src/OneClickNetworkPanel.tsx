@@ -3,13 +3,13 @@ import { analyzeNetworkHistory, type NetworkHistoryEntry } from "./network-histo
 import "./one-click-network.css";
 
 type Stage = "idle"|"connecting"|"speed"|"completed";
-type Props={result:OneClickResult|null;busy:boolean;stage:Stage;history:NetworkHistoryEntry[];onClearHistory:()=>void;onRun:()=>void;onCopy:()=>void};
+type Props={result:OneClickResult|null;busy:boolean;stage:Stage;history:NetworkHistoryEntry[];repeatBusy:boolean;repeatProgress:number;onRepeat:()=>void;onStopRepeat:()=>void;onClearHistory:()=>void;onRun:()=>void;onCopy:()=>void};
 const statusText:Record<Stage,string>={
   idle:"尚未检测",connecting:"正在检查 DNS、HTTPS、代理和 VPN 路由",
   speed:"连接检查结束，正在采样 Cloudflare HTTP 延迟、下载和上传",
   completed:"本轮检测完成"
 };
-export default function OneClickNetworkPanel({result,busy,stage,history,onClearHistory,onRun,onCopy}:Props){
+export default function OneClickNetworkPanel({result,busy,stage,history,repeatBusy,repeatProgress,onRepeat,onStopRepeat,onClearHistory,onRun,onCopy}:Props){
   const issues=result?.issues.filter(x=>x.severity!=="info")||[];
   const historyAnalysis=analyzeNetworkHistory(history);
   return <section className="v07-card one-click-network">
@@ -27,6 +27,11 @@ export default function OneClickNetworkPanel({result,busy,stage,history,onClearH
       <span className={stage==="speed"?"active":stage==="completed"?"done":""}>2 · 测速与延迟</span>
       <span className={stage==="completed"?"done":""}>3 · 故障总结</span>
       <b>{statusText[stage]}</b>
+    </div>
+    <div className="one-click-repeat">
+      <div><b>三次轻量复测</b><small>适合排查时好时坏的网页连接：自动进行最多三轮 DNS/HTTPS 检查，不执行大流量测速。</small></div>
+      {repeatBusy?<div className="network-actions"><span aria-live="polite">第 {repeatProgress<3?Math.min(3,repeatProgress+1):3}/3 轮</span><button onClick={onStopRepeat}>结束当前轮后停止</button></div>:
+        <button disabled={busy} onClick={onRepeat}>三次轻量复测</button>}
     </div>
     <small className="one-click-consent">一键检测会访问测试网站，预设下载约 10 MB、上传约 3 MiB 的测试数据（另有少量 DNS/HTTP 请求开销）；仅在点击后执行，不更改 VPN/DNS/代理，不采集聊天正文。测速结果受网络和提供方影响。</small>
     {history.length>0&&<section className="one-click-history">
