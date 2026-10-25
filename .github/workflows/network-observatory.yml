@@ -33,6 +33,7 @@ jobs:
           python3 scripts/apply-task-center.py
           python3 scripts/apply-expansion010.py
           python3 scripts/apply-openguin-brand.py
+          python3 scripts/ensure-app-icon.py
           python3 scripts/apply-network-observatory.py
 
       - name: Install frontend dependencies
