@@ -6,6 +6,8 @@ const permissionButton = document.getElementById("chatgptPermission");
 const downloadPermissionButton = document.getElementById("downloadPermission");
 const clearButton = document.getElementById("clear");
 const exportButton = document.getElementById("exportReport");
+const downloadJsonButton = document.getElementById("downloadJson");
+const downloadCsvButton = document.getElementById("downloadCsv");
 const eventsNode = document.getElementById("events");
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 
@@ -198,6 +200,10 @@ async function render() {
     status.textContent = "Another tab is being monitored. Stop it before switching.";
   }
   const events = Array.isArray(stored.events) ? stored.events.slice(0, 12) : [];
+  const hasEvents = Array.isArray(stored.events) && stored.events.length > 0;
+  exportButton.disabled = !hasEvents;
+  downloadJsonButton.disabled = !hasEvents;
+  downloadCsvButton.disabled = !hasEvents;
   eventsNode.replaceChildren();
   if (!events.length) {
     const empty = document.createElement("div");
@@ -230,35 +236,123 @@ startButton.addEventListener("click", () => { void startMonitoring(); });
 stopButton.addEventListener("click", () => { void stopMonitoring(); });
 permissionButton.addEventListener("click", () => { void enableChatGPTReloadMonitoring(); });
 downloadPermissionButton.addEventListener("click", () => { void enableDownloadMonitoring(); });
-exportButton.addEventListener("click", async () => {
-  // Deliberately exclude path, tab identifiers, download filenames, headers and
-  // query strings. This report is for troubleshooting, not browsing-history export.
+function safeExportPath(value) {
+  if (typeof value !== "string") return "";
+  const raw = value.split("?")[0].split("#")[0];
+  if (!raw.startsWith("/") || raw.includes("\\") || raw.length > 1000) return "";
+  return raw.split("/").map(part => {
+    if (part.includes("@") || /^[0-9a-f]{8}-[0-9a-f-]{27,}$/i.test(part) ||
+        /^\d{7,}$/.test(part) || /^[A-Za-z0-9_-]{24,}$/.test(part) || part.length > 64) return ":id";
+    return part;
+  }).join("/").slice(0, 160);
+}
+
+async function buildDiagnosticReport() {
+  const stored = await chrome.storage.local.get({ events: [] });
+  const allowedKinds = new Set([
+    "monitor-active","monitor-started","navigation","render-summary","render-stability",
+    "fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response",
+    "xhr-error","xhr-stall","stream-gap","stream-gap-resolved","stream-error","stream-end",
+    "resource-error","slow-resource","javascript-error","unhandled-rejection","long-task",
+    "download-start","download-progress","download-complete","download-failed","download-stall"
+  ]);
+  const cleanEvents = (Array.isArray(stored.events) ? stored.events : []).slice(0, 300)
+    .filter(event => event && typeof event === "object" && allowedKinds.has(event.kind)
+      && typeof event.host === "string" && /^[a-z0-9.-]{1,120}$/i.test(event.host)
+      && Number.isFinite(event.at))
+    .map(event => {
+      const row = { kind: event.kind, host: event.host.toLowerCase(), at: event.at };
+      const path = safeExportPath(event.path);
+      if (path) row.path = path;
+      if (/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(event.method || "")) row.method = event.method;
+      for (const key of [
+        "status","durationMs","gapMs","line","bytes","transferBytes","domContentLoadedMs",
+        "loadMs","bodyChildCount","firstPaintMs","firstContentfulPaintMs","mutationCount",
+        "bytesReceived","totalBytes","progressPercent"
+      ]) {
+        if (typeof event[key] === "number" && Number.isFinite(event[key])) row[key] = Math.max(0, Math.min(event[key], 1e9));
+      }
+      if (/^[A-Za-z][A-Za-z0-9_-]{0,59}$/.test(event.errorType || "")) row.errorType = event.errorType;
+      if (["loading","interactive","complete"].includes(event.readyState)) row.readyState = event.readyState;
+      return row;
+    });
+  return {
+    source: "openguin-network-watch",
+    formatVersion: 1,
+    generatedAt: new Date().toISOString(),
+    eventCount: cleanEvents.length,
+    privacy: {
+      localOnly: true,
+      includes: ["event category","timestamp","sanitized host/path","HTTP status","request duration","coarse rendering and download metrics","error category"],
+      excludes: ["page text","prompts and answers","cookies","headers","request/response bodies","query strings","download filenames","full URLs","tab identifiers"]
+    },
+    events: cleanEvents
+  };
+}
+
+function csvCell(value) {
+  const text = value === null || value === undefined ? "" :
+    typeof value === "object" ? JSON.stringify(value) : String(value);
+  return /[",\r\n]/.test(text) ? '"' + text.replace(/"/g, '""') + '"' : text;
+}
+
+function downloadReport(filename, content, mime) {
+  const url = URL.createObjectURL(new Blob([content], { type: mime }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.style.display = "none";
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function reportCsv(report) {
+  const columns = [
+    "at","kind","host","path","method","status","durationMs","gapMs","errorType",
+    "readyState","progressPercent","bytesReceived","totalBytes","bodyChildCount",
+    "domContentLoadedMs","loadMs","firstPaintMs","firstContentfulPaintMs","mutationCount"
+  ];
+  const rows = [["source","formatVersion","generatedAt","eventCount",...columns]];
+  if (!report.events.length) rows.push([report.source,report.formatVersion,report.generatedAt,0,...columns.map(() => "")]);
+  else for (const event of report.events) {
+    rows.push([report.source,report.formatVersion,report.generatedAt,report.eventCount,...columns.map(key => event[key] ?? "")]);
+  }
+  return "\uFEFF" + rows.map(row => row.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}
+
+async function copyDiagnosticReport() {
   try {
-    const { events } = await chrome.storage.local.get({ events: [] });
-    const cleanEvents = (Array.isArray(events) ? events : []).slice(0, 300)
-      .filter(event => event && typeof event === "object" && typeof event.kind === "string"
-        && typeof event.host === "string" && /^[a-z0-9.-]{1,120}$/i.test(event.host))
-      .map(event => {
-        const row = { kind: event.kind, host: event.host, at: event.at };
-        for (const key of ["status", "durationMs", "gapMs", "progressPercent", "bodyChildCount"]) {
-          if (typeof event[key] === "number" && Number.isFinite(event[key])) row[key] = event[key];
-        }
-        if (/^[A-Za-z][A-Za-z0-9_-]{0,59}$/.test(event.errorType || "")) row.errorType = event.errorType;
-        if (["loading", "interactive", "complete"].includes(event.readyState)) row.readyState = event.readyState;
-        return row;
-      });
-    const report = {
-      source: "openguin-network-watch",
-      formatVersion: 1,
-      generatedAt: new Date().toISOString(),
-      events: cleanEvents
-    };
+    const report = await buildDiagnosticReport();
     await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
-    status.textContent = "已复制脱敏诊断报告。可以粘贴到 Openguin 桌面端 Network Observatory。";
+    status.textContent = "已复制脱敏诊断报告。可粘贴到 Openguin 桌面端 Browser incident report。";
   } catch (error) {
     status.textContent = "Could not copy report: " + String(error).slice(0, 130);
   }
-});
+}
+
+async function downloadDiagnosticReport(format) {
+  try {
+    const report = await buildDiagnosticReport();
+    const stamp = new Date().toISOString().replace(/[:.]/g, "-");
+    if (format === "json") {
+      downloadReport("openguin-browser-diagnostic-" + stamp + ".json",
+        JSON.stringify(report, null, 2), "application/json;charset=utf-8");
+      status.textContent = "JSON report download requested. Check your Downloads folder.";
+    } else {
+      downloadReport("openguin-browser-diagnostic-" + stamp + ".csv",
+        reportCsv(report), "text/csv;charset=utf-8");
+      status.textContent = "CSV table download requested. Open it in Numbers, Excel, or a text editor.";
+    }
+  } catch (error) {
+    status.textContent = "Could not export report: " + String(error).slice(0, 130);
+  }
+}
+
+exportButton.addEventListener("click", () => { void copyDiagnosticReport(); });
+downloadJsonButton.addEventListener("click", () => { void downloadDiagnosticReport("json"); });
+downloadCsvButton.addEventListener("click", () => { void downloadDiagnosticReport("csv"); });
 
 clearButton.addEventListener("click", async () => {
   await chrome.storage.local.set({ events: [] });
