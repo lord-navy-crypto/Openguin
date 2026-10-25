@@ -103,7 +103,8 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
   const dnsPassed=dns.filter(d=>d.resolved).length;
   const responded=endpoints.filter(e=>e.reachable).length;
   const transportFailed=endpoints.filter(e=>!e.reachable);
-  const blocked=endpoints.filter(e=>e.reachable && [401,403,429].includes(e.status??0));
+  const accessPolicyResponses=endpoints.filter(e=>e.reachable && [401,403].includes(e.status??0));
+  const rateLimited=endpoints.filter(e=>e.reachable && (e.status??0)===429);
   const serverErrors=endpoints.filter(e=>e.reachable && (e.status??0)>=500);
   const slow=endpoints.filter(e=>e.reachable && typeof e.elapsedMs==="number" && e.elapsedMs>=2000);
   const issues:DiagnosticIssue[]=[];
@@ -130,19 +131,25 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
       add(issues,"https-partial","warning","部分 HTTPS 连接出现传输故障",
         "有 "+transportFailed.length+" 个请求在收到 HTTP 状态之前失败，另有 "+responded+" 个端点返回响应。",
         "先比较失败端点与正常端点；检查 VPN 分流、代理、TLS 和目标站点。");
-    if(blocked.length)
-      add(issues,"http-rejection","warning","服务器已响应，但拒绝或限制了部分请求",
-        blocked.map(x=>x.name+" HTTP "+x.status).join("；").slice(0,250)+"。注意：HTTP 401/403/429 不等于网络连接失败。",
-        "核对登录及访问状态。出现 429 时避免短时间连续重试；不要以降速或丢包解释这些状态码。");
+    if(accessPolicyResponses.length)
+      add(issues,"http-access-policy","info","匿名探测请求收到 HTTP 401/403（访问策略响应）",
+        accessPolicyResponses.map(x=>x.name+" HTTP "+x.status).join("；").slice(0,250)+
+          "。本工具不携带浏览器登录 Cookie 或 ChatGPT 会话；此状态只能说明匿名探测请求受限，不能判断账号被封或真实浏览器会话失效。",
+        "如果 ChatGPT 在浏览器中也无法使用，请采集实际页面的浏览器诊断报告；如果浏览器正常，可把此状态视为探测端点策略差异，无需仅为 403 修改网络设置。");
+    if(rateLimited.length)
+      add(issues,"http-rate-limited","warning","服务器对探测请求返回 HTTP 429（限流）",
+        rateLimited.map(x=>x.name+" HTTP 429").join("；").slice(0,250)+"。服务器已响应并限制请求频率，不等于断网或丢包。",
+        "暂停连续重试，稍后再测；如果只在 VPN 开启时出现，再用相同条件比较 VPN 开启与关闭的结果。");
     const chatgpt=endpoints.find(x=>x.host==="chatgpt.com");
     const github=endpoints.find(x=>x.host==="github.com");
     if(chatgpt && github && github.reachable &&
         typeof github.status==="number" && github.status<400 &&
         (!chatgpt.reachable || (chatgpt.status??0)>=400)){
-      add(issues,"target-specific","warning","ChatGPT 与 GitHub 对照站点表现不同",
+      add(issues,"target-specific","warning","ChatGPT 探测结果与 GitHub 对照不同",
         "GitHub 对照端点返回 HTTP "+github.status+"，而 ChatGPT "+
-          (chatgpt.reachable?"返回 HTTP "+String(chatgpt.status??"未知"):"未返回 HTTP 响应")+"。",
-        "优先查看 ChatGPT 相关域名的认证状态、域名解析、代理分流与服务状态；不能断言整个网络都故障。");
+          (chatgpt.reachable?"返回 HTTP "+String(chatgpt.status??"未知"):"未返回 HTTP 响应")+
+          "。本工具的匿名首页请求不等同于已登录浏览器会话。",
+        "先确认 ChatGPT 网页本身是否也失败。若浏览器能正常使用，不要仅凭该状态修改 VPN；若浏览器也失败，请对照实际页面错误并手动比较 VPN 开启/关闭。");
     }
     if(serverErrors.length)
       add(issues,"http-server-error","warning","部分服务返回 HTTP 5xx 错误",
@@ -208,12 +215,19 @@ export function diagnoseOneClick(snapshot:BasicSnapshot|null,speed:BasicSpeed|nu
   const serious=issues.filter(x=>x.severity==="critical");
   const warnings=issues.filter(x=>x.severity==="warning");
   const codeSet=new Set(issues.map(x=>x.code));
+  const performanceCodes=new Set([
+    "slow-https","probe-http-status","probe-transport","probe-spread",
+    "speed-probes-failed","speed-probes-intermittent","throughput-incomplete",
+    "high-http-latency","high-http-jitter","slow-download"
+  ]);
+  const hasPerformanceWarning=warnings.some(x=>performanceCodes.has(x.code));
   let verdict:OneClickResult["verdict"]="no-clear-problem";
   if(!snapshot) verdict="incomplete";
   else if(codeSet.has("dns-outage") && codeSet.has("https-outage")) verdict="network-failure";
   else if(serious.length||codeSet.has("dns-partial")||codeSet.has("https-partial")) verdict="connection-problem";
-  else if(codeSet.has("http-rejection")||codeSet.has("http-server-error")) verdict="service-response";
-  else if(warnings.length) verdict="slow-or-unstable";
+  else if(hasPerformanceWarning) verdict="slow-or-unstable";
+  else if(codeSet.has("http-access-policy")||codeSet.has("http-rate-limited")||codeSet.has("http-server-error")||codeSet.has("target-specific")) verdict="service-response";
+  else if(warnings.length) verdict="connection-problem";
   const headline:Record<OneClickResult["verdict"],string>={
     "network-failure":"网络连接或 DNS 可能存在明显问题",
     "connection-problem":"检测到连接层异常，需要优先排查",
