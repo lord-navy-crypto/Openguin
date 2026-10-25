@@ -6,6 +6,7 @@ import {
   eventCounts,
   summarizeBrowserTelemetry,
   summarizeBrowserEndpoints,
+  summarizeBrowserRequests,
 } from "../.network-test/browser-diagnostics.mjs";
 
 const baseTime = Date.UTC(2026, 9, 25, 5, 0);
@@ -127,6 +128,34 @@ test("groups endpoint performance by sanitized host, path, and method", () => {
   assert.equal(conversation.errorCount,1);
   assert.equal(conversation.medianResponseMs,6150);
   assert.equal(conversation.maxResponseMs,6200);
+});
+
+test("correlates start, response, stall, and stream pauses for one request ID", () => {
+  const parsed = parseBrowserReport(report([
+    {kind:"fetch-start",requestId:"rabc-1",method:"POST",path:"/backend-api/conversation"},
+    {kind:"fetch-stall",requestId:"rabc-1",method:"POST",path:"/backend-api/conversation",durationMs:15000},
+    {kind:"fetch-response",requestId:"rabc-1",method:"POST",path:"/backend-api/conversation",durationMs:18000,status:200},
+    {kind:"stream-gap-resolved",requestId:"rabc-1",method:"POST",path:"/backend-api/conversation",gapMs:16000}
+  ]));
+  assert.equal(parsed.events[0].requestId,"rabc-1");
+  const lifecycles = summarizeBrowserRequests(parsed);
+  assert.equal(lifecycles.length,1);
+  assert.equal(lifecycles[0].outcome,"response");
+  assert.equal(lifecycles[0].durationMs,18000);
+  assert.equal(lifecycles[0].stallEvents,1);
+  assert.equal(lifecycles[0].streamPauseEvents,1);
+  assert.equal(lifecycles[0].eventCount,4);
+});
+
+test("classifies correlated HTTP denial and incomplete requests separately", () => {
+  const parsed = parseBrowserReport(report([
+    {kind:"fetch-start",requestId:"rabc-2",method:"GET",path:"/api/limited"},
+    {kind:"fetch-response",requestId:"rabc-2",method:"GET",path:"/api/limited",durationMs:400,status:403},
+    {kind:"xhr-start",requestId:"rabc-3",method:"GET",path:"/api/hanging"}
+  ]));
+  const lifecycles = summarizeBrowserRequests(parsed);
+  assert.equal(lifecycles.find(item=>item.requestId==="rabc-2").outcome,"http-error");
+  assert.equal(lifecycles.find(item=>item.requestId==="rabc-3").outcome,"incomplete");
 });
 
 test("distinguishes HTTP access denial from transport failure", () => {
