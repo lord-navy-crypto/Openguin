@@ -180,7 +180,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
         {requestLifecycles.slice(0,10).map(item=><article key={item.requestId} className={"browser-request-row "+item.outcome}>
           <div className="browser-endpoint-head"><b>{item.method} {item.host}{item.path}</b><span>{({
             response:"已响应","http-error":"HTTP 错误","transport-error":"传输错误",
-            stalled:"未完成/停滞",incomplete:"未观察到结束"
+            timeout:"请求超时",cancelled:"请求取消",stalled:"未完成/停滞",incomplete:"未观察到结束"
           } as Record<string,string>)[item.outcome]}</span></div>
           <p>HTTP {item.status??"—"} · 耗时 {metric(item.durationMs,"ms")} · 请求停滞 {item.stallEvents} · 流停顿 {item.streamPauseEvents}</p>
           <small>请求 ID：{item.requestId} · 关联事件 {item.eventCount}{item.startedAt?" · 开始 "+new Date(item.startedAt).toLocaleTimeString():""}</small>
