@@ -8,6 +8,8 @@
 .browser-report-stats>div{border:1px solid #ffffff13;padding:10px;border-radius:10px;display:grid;gap:5px}
 .browser-report-stats span{font-size:10px;color:#8da5b9}.browser-report-stats strong{font-size:23px;font-variant-numeric:tabular-nums}
 .browser-report-grid{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,.8fr);gap:12px}
+.browser-telemetry{border:1px solid #ffffff16;border-radius:11px;padding:13px;display:grid;gap:8px}
+.browser-telemetry>p{margin:0}
 .browser-findings,.browser-events,.browser-timeline{border:1px solid #ffffff16;padding:13px;border-radius:11px;min-width:0}
 .browser-report-panel h4{margin:0 0 9px;font-size:12px}
 .browser-findings>p{font-size:11px;color:#8ba6bb}
