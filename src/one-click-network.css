@@ -24,3 +24,14 @@
 .one-click-findings article p,.one-click-no-issues{font-size:10px;color:#b7ccda;line-height:1.6;margin:7px 0 0}
 .one-click-findings article p>b{font-size:10px}
 @media(max-width:1100px){.one-click-network-head{align-items:flex-start;flex-direction:column}.one-click-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+.one-click-probes{border:1px solid #42637b;border-radius:10px;background:#0e2232;padding:13px;display:grid;gap:10px}
+.one-click-probes-head{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.one-click-probes-head h4{font-size:12px;margin:0}
+.one-click-probes-head span{font-size:10px;color:#9de6db}
+.one-click-probes-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.one-click-probes-metrics>div{display:grid;gap:5px;background:#0a1b29;padding:9px;border-radius:8px}
+.one-click-probes-metrics small{font-size:10px;color:#9db5c7}
+.one-click-probes-metrics b{font-size:14px;font-variant-numeric:tabular-nums}
+.one-click-probes p{font-size:10px;line-height:1.5;margin:0;color:#a8bfd2}
+@media(max-width:1100px){.one-click-probes-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
