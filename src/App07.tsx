@@ -212,7 +212,7 @@ export default function App07(){
 
   function buildDiagnosticBundle(){
     return {
-      schema:{name:'Openguin Network Doctor diagnostic bundle',formatVersion:1},
+      schema:{name:'Openguin Network Doctor desktop diagnostic bundle',formatVersion:1},
       generatedAt:new Date().toISOString(),
       app:{name:'Openguin Network Doctor',version:'0.10.1'},
       device:profile?{
@@ -225,7 +225,7 @@ export default function App07(){
       speedTest,
       vpnComparisonSamples:vpnSamples.slice(0,10),
       networkHistory:networkHistory.slice(0,12),
-      browserExtensionReport:null,
+      browserExtensionReportImported:false,
       privacy:{
         localOnly:true,
         includes:['DNS lookup outcomes and durations','HTTPS response status and durations','HTTP speed-test samples','VPN/proxy indicator flags and route interface name','VPN on/off comparison samples','one-click diagnosis and local summary history','basic device performance metadata'],
@@ -244,7 +244,7 @@ export default function App07(){
     const report=buildDiagnosticBundle();
     try{
       await navigator.clipboard.writeText(JSON.stringify(report,null,2));
-      setNotice('Full diagnostic bundle copied. Review it for privacy before pasting into a support conversation.');
+      setNotice('Desktop diagnostic bundle copied. Review it for privacy before pasting into a support conversation.');
       log('info','Copied a full local network diagnostic bundle.');
     }catch(error){
       setNotice('Could not copy the report. '+String(error));
