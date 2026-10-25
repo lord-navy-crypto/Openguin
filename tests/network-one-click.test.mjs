@@ -42,7 +42,7 @@ test("HTTP 403 is a response, not an outage",()=>{
   assert.equal(result.verdict,"service-response");
   assert.equal(result.checked.httpsResponded,2);
   assert(!result.issues.some(x=>x.code==="https-outage"||x.code==="https-partial"));
-  assert(result.issues.some(x=>x.code==="http-rejection"));
+  assert(result.issues.some(x=>x.code==="http-access-policy"&&x.severity==="info"));
 });
 test("isolated endpoint transport failure is separately classified",()=>{
   const snap=baseline();
@@ -155,4 +155,50 @@ test("domain with only DNS check is not called a successful HTTPS connection",()
   const sample=targets.find(x=>x.host==="speed.cloudflare.com");
   assert.equal(sample.symptom,"dns-only");
   assert.equal(sample.https,"not-tested");
+});
+
+
+test("anonymous 401/403 probe responses do not imply an account ban or broken browser session",()=>{
+  const snap=baseline();
+  snap.endpoints[0].status=403;
+  snap.endpoints[1].status=401;
+  const result=diagnoseOneClick(snap,speed());
+  const policy=result.issues.find(x=>x.code==="http-access-policy");
+  assert(policy);
+  assert.equal(policy.severity,"info");
+  assert(policy.evidence.includes("不携带浏览器登录 Cookie"));
+  assert(policy.evidence.includes("不能判断账号被封"));
+  assert(!result.issues.some(x=>x.code==="https-outage"||x.code==="https-partial"));
+  assert.equal(result.checked.httpsResponded,2);
+});
+
+test("slow speed and high HTTP latency take priority over anonymous 403 policy response",()=>{
+  const snap=baseline();
+  snap.endpoints[0].status=403;
+  const s=speed();
+  s.latencyMs=495.1;
+  s.jitterMs=305.3;
+  s.downloadMbps=3.6;
+  s.probeSamples=[
+    {elapsedMs:1469,success:true,status:200},
+    {elapsedMs:251,success:true,status:200},
+    {elapsedMs:251,success:true,status:200},
+    {elapsedMs:252,success:true,status:200},
+    {elapsedMs:250,success:true,status:200}
+  ];
+  const result=diagnoseOneClick(snap,s);
+  assert.equal(result.verdict,"slow-or-unstable");
+  assert(result.issues.some(x=>x.code==="http-access-policy"));
+  assert(result.issues.some(x=>x.code==="high-http-latency"));
+  assert(result.issues.some(x=>x.code==="high-http-jitter"));
+  assert(result.issues.some(x=>x.code==="slow-download"));
+  assert(result.issues.some(x=>x.code==="probe-spread"));
+});
+
+test("HTTP 429 remains a rate-limit warning rather than a transport failure",()=>{
+  const snap=baseline();
+  snap.endpoints[0].status=429;
+  const result=diagnoseOneClick(snap,speed());
+  assert(result.issues.some(x=>x.code==="http-rate-limited"&&x.severity==="warning"));
+  assert(!result.issues.some(x=>x.code==="https-outage"||x.code==="https-partial"));
 });
