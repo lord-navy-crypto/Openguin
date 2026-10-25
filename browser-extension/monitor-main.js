@@ -126,10 +126,20 @@
       if (!settled) emit(Object.assign({ kind: "xhr-stall", durationMs: 15000 }, meta));
     }, 15000);
     emit(Object.assign({ kind: "xhr-start" }, meta));
+    xhr.addEventListener("timeout", () => { xhr.__openguinNetWatchFailureKind = "TimeoutError"; }, { once: true });
+    xhr.addEventListener("abort", () => { xhr.__openguinNetWatchFailureKind = "AbortError"; }, { once: true });
+    xhr.addEventListener("error", () => { xhr.__openguinNetWatchFailureKind = "NetworkError"; }, { once: true });
     xhr.addEventListener("loadend", () => {
       settled = true;
       clearTimeout(timer);
-      emit(Object.assign({ kind: xhr.status ? "xhr-response" : "xhr-error", status: xhr.status, durationMs: Math.round(performance.now() - started) }, meta));
+      const failureKind = xhr.status ? "" : (xhr.__openguinNetWatchFailureKind || "NetworkError");
+      emit(Object.assign({
+        kind: xhr.status ? "xhr-response" : "xhr-error",
+        status: xhr.status,
+        durationMs: Math.round(performance.now() - started),
+        ...(failureKind ? { errorType: failureKind } : {})
+      }, meta));
+      try { delete xhr.__openguinNetWatchFailureKind; } catch {}
     }, { once: true });
     return state.originalXhrSend.apply(this, arguments);
   };
@@ -156,7 +166,16 @@
       for (const entry of list.getEntries()) {
         if (entry.duration < 1500) continue;
         const meta = safeUrl(entry.name);
-        emit(Object.assign({ kind: "slow-resource", durationMs: Math.round(entry.duration), transferBytes: Number(entry.transferSize) || 0 }, meta));
+        const initiatorType = String(entry.initiatorType || "resource").toLowerCase().slice(0, 20);
+        const responseStatus = Number(entry.responseStatus);
+        emit(Object.assign({
+          kind: "slow-resource",
+          durationMs: Math.round(entry.duration),
+          transferBytes: Number(entry.transferSize) || 0,
+          bytes: Number(entry.encodedBodySize) || 0,
+          tag: /^[a-z][a-z0-9-]{0,19}$/i.test(initiatorType) ? initiatorType : "resource",
+          ...(Number.isFinite(responseStatus) && responseStatus > 0 ? { status: responseStatus } : {})
+        }, meta));
       }
     });
     observer.observe({ type: "resource", buffered: true });
