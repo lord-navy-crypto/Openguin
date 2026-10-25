@@ -97,12 +97,22 @@ jobs:
           cat > release-artifacts/INSTALL-NETWORK-OBSERVATORY.txt <<'EOF'
           Openguin Network Observatory — macOS Universal2 installation
 
-          1. Open the DMG and drag Openguin to Applications.
-          2. Open Openguin and select Diagnostics / Network Observatory.
-          3. Run Diagnose connection for DNS and HTTPS checks.
-          4. Run Speed test for bounded download/upload and latency/jitter probes.
-          5. Change VPN state manually, select the correct state, repeat tests,
-             and save a sample. Openguin never changes VPN or DNS settings for you.
+          Quick start — no Terminal commands and no Ollama required:
+          1. Open the DMG on your Mac and drag Openguin to Applications.
+          2. Open Openguin: the Network Doctor panel is the default screen.
+          3. Select the main "Start full check" button for DNS, HTTPS, latency,
+             VPN/proxy configuration signals, and bounded speed measurements.
+          4. Inspect the per-website results, evidence and suggested next steps.
+          5. If problems come and go, select "Three quick retests" for up to
+             three lightweight DNS/HTTPS passes (no bulk upload/download).
+          6. Expand "Advanced network and browser diagnosis" only when needed
+             for raw DNS/HTTPS results, optional browser reports, and a manual
+             VPN on/off comparison. The application never changes network settings.
+
+          If your Mac warns about the app: this CI build is unsigned and
+          unnotarized. Review the source and SHA256 manifest before using it,
+          and use macOS System Settings to review the security prompt only
+          if you trust this build. Do not disable Gatekeeper globally.
 
           Browser monitoring:
           1. Extract Openguin-Network-Watch.zip.
