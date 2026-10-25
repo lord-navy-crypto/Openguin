@@ -76,7 +76,7 @@ async function enableChatGPTReloadMonitoring() {
 
 async function enableDownloadMonitoring() {
   try {
-    const granted = await chrome.permissions.request({ permissions: ["downloads"] });
+    const granted = await chrome.permissions.request({ permissions: ["downloads", "alarms"] });
     if (!granted) {
       status.textContent = "Download monitoring permission was not granted. Page monitoring still works.";
       return;
@@ -116,6 +116,7 @@ function eventText(event) {
     case "download-progress": return "Browser download progress · " + (event.host || "unknown host") + " · " + (event.progressPercent ?? "—") + "% · " + (event.bytesReceived ? (event.bytesReceived / 1048576).toFixed(1) + " MB received" : "bytes unknown");
     case "download-complete": return "Browser download completed · " + (event.host || "unknown host") + " · " + (event.durationMs ?? "—") + " ms · " + (event.bytesReceived ? (event.bytesReceived / 1048576).toFixed(1) + " MB" : "size unknown");
     case "download-failed": return "Browser download failed/interrupted · " + (event.errorType || "unknown error") + " · " + (event.host || "unknown host") + " · " + (event.durationMs ?? "—") + " ms";
+    case "download-stall": return "Browser download made no progress for 60+ seconds · " + (event.host || "unknown host") + " · " + (event.bytesReceived ? (event.bytesReceived / 1048576).toFixed(1) + " MB received" : "no progress recorded");
     case "fetch-start": return "Fetch started · " + (event.method || "GET") + " " + location;
     case "fetch-response": return "Fetch response · HTTP " + event.status + " · " + location + duration;
     case "fetch-error": return "Fetch failed (" + (event.errorType || "network error") + ") · " + location + duration;
@@ -138,6 +139,7 @@ function eventText(event) {
 }
 
 function eventAdvice(event) {
+  if (event.kind === "download-stall") return "The browser reported no byte progress for at least 60 seconds. Check whether the source server is responding, rerun DNS/HTTPS diagnostics, and compare VPN-on/off results. If other downloads work, the issue may be source-specific.";
   if (event.kind === "download-failed") {
     const code = String(event.errorType || "").toUpperCase();
     if (code.includes("NETWORK") || code.includes("CONNECTION") || code.includes("TIMEOUT")) return "Next: rerun the desktop DNS/HTTPS check. If only VPN-on runs fail, compare a nearby VPN exit or protocol one change at a time.";
