@@ -100,7 +100,7 @@ export function parseBrowserReport(raw: string): BrowserReport {
     const at = typeof entry.at === "number" && Number.isFinite(entry.at) ? entry.at : undefined;
     if (at === undefined || at < 1_000_000_000_000 || at > 9_000_000_000_000) continue;
     const event: BrowserEvent = { at, kind: entry.kind, host: entry.host.toLowerCase() };
-    const sourceAt = bounded(entry.sourceAt);
+    const sourceAt = typeof entry.sourceAt === "number" && Number.isFinite(entry.sourceAt) ? entry.sourceAt : undefined;
     const bridgeDelayMs = bounded(entry.bridgeDelayMs);
     if (sourceAt !== undefined && sourceAt >= 1_000_000_000_000 && sourceAt <= 9_000_000_000_000) event.sourceAt = sourceAt;
     if (bridgeDelayMs !== undefined && bridgeDelayMs <= 300_000) event.bridgeDelayMs = bridgeDelayMs;
