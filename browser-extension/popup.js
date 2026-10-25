@@ -5,6 +5,7 @@ const stopButton = document.getElementById("stop");
 const permissionButton = document.getElementById("chatgptPermission");
 const downloadPermissionButton = document.getElementById("downloadPermission");
 const clearButton = document.getElementById("clear");
+const exportButton = document.getElementById("exportReport");
 const eventsNode = document.getElementById("events");
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 
@@ -223,6 +224,36 @@ startButton.addEventListener("click", () => { void startMonitoring(); });
 stopButton.addEventListener("click", () => { void stopMonitoring(); });
 permissionButton.addEventListener("click", () => { void enableChatGPTReloadMonitoring(); });
 downloadPermissionButton.addEventListener("click", () => { void enableDownloadMonitoring(); });
+exportButton.addEventListener("click", async () => {
+  // Deliberately exclude path, tab identifiers, download filenames, headers and
+  // query strings. This report is for troubleshooting, not browsing-history export.
+  try {
+    const { events } = await chrome.storage.local.get({ events: [] });
+    const cleanEvents = (Array.isArray(events) ? events : []).slice(0, 300)
+      .filter(event => event && typeof event === "object" && typeof event.kind === "string"
+        && typeof event.host === "string" && /^[a-z0-9.-]{1,120}$/i.test(event.host))
+      .map(event => {
+        const row = { kind: event.kind, host: event.host, at: event.at };
+        for (const key of ["status", "durationMs", "gapMs", "progressPercent", "bodyChildCount"]) {
+          if (typeof event[key] === "number" && Number.isFinite(event[key])) row[key] = event[key];
+        }
+        if (/^[A-Za-z][A-Za-z0-9_-]{0,59}$/.test(event.errorType || "")) row.errorType = event.errorType;
+        if (["loading", "interactive", "complete"].includes(event.readyState)) row.readyState = event.readyState;
+        return row;
+      });
+    const report = {
+      source: "openguin-network-watch",
+      formatVersion: 1,
+      generatedAt: new Date().toISOString(),
+      events: cleanEvents
+    };
+    await navigator.clipboard.writeText(JSON.stringify(report, null, 2));
+    status.textContent = "已复制脱敏诊断报告。可以粘贴到 Openguin 桌面端 Network Observatory。";
+  } catch (error) {
+    status.textContent = "Could not copy report: " + String(error).slice(0, 130);
+  }
+});
+
 clearButton.addEventListener("click", async () => {
   await chrome.storage.local.set({ events: [] });
   await render();
