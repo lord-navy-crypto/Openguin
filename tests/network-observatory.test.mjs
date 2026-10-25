@@ -26,6 +26,35 @@ test("imports a valid redacted report with sorted timeline", () => {
   assert.deepEqual(parsed.events.map(x => x.kind), ["download-failed", "fetch-stall"]);
 });
 
+test("preserves source timestamps and capture-quality counters from extension export", () => {
+  const raw = JSON.stringify({
+    source: "openguin-network-watch",
+    formatVersion: 1,
+    generatedAt: new Date(baseTime + 2000).toISOString(),
+    quality: {
+      storedEventCount: 300,
+      exportedEventCount: 300,
+      duplicateEventsSuppressed: 18,
+      droppedEvents: 7,
+      eventCapReached: true,
+      firstEventAt: baseTime,
+      lastEventAt: baseTime + 1000,
+      eventCounts: {"fetch-response": 2}
+    },
+    events: [{
+      kind: "fetch-response", host: "chatgpt.com", at: baseTime + 1000,
+      sourceAt: baseTime + 900, bridgeDelayMs: 100, status: 200
+    }]
+  });
+  const parsed = parseBrowserReport(raw);
+  assert.equal(parsed.events[0].sourceAt, baseTime + 900);
+  assert.equal(parsed.events[0].bridgeDelayMs, 100);
+  assert.equal(parsed.quality?.duplicateEventsSuppressed, 18);
+  assert.equal(parsed.quality?.droppedEvents, 7);
+  assert.equal(parsed.quality?.eventCapReached, true);
+  assert.equal(parsed.quality?.eventCounts["fetch-response"], 2);
+});
+
 test("rejects malformed/untrusted report source and oversized content", () => {
   assert.throws(() => parseBrowserReport("not json"), /JSON/);
   assert.throws(() => parseBrowserReport(JSON.stringify({
