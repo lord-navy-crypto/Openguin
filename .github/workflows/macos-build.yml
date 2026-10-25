@@ -66,6 +66,8 @@ jobs:
           node --test tests/network-observatory.test.mjs tests/network-one-click.test.mjs tests/network-correlation.test.mjs
           ./node_modules/.bin/esbuild src/network-history.ts --bundle --platform=node --format=esm --outfile=.network-test/network-history.mjs
           node --test tests/network-history.test.mjs
+          ./node_modules/.bin/esbuild src/network-retest.ts --bundle --platform=node --format=esm --outfile=.network-test/network-retest.mjs
+          node --test tests/network-retest.test.mjs
 
       - name: Build Universal2 app and DMG
         run: npm run desktop:build -- --target universal-apple-darwin
