@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {diagnoseOneClick} from "../.network-test/network-one-click.mjs";
+import {diagnoseOneClick,summarizeHttpProbes} from "../.network-test/network-one-click.mjs";
 
 const baseline = () => ({
   capturedAtMs:1792900000000,
@@ -71,4 +71,54 @@ test("missing diagnostic snapshot returns incomplete report",()=>{
   const r=diagnoseOneClick(null,null,["诊断指令失败"]);
   assert.equal(r.verdict,"incomplete");
   assert.equal(r.checked.https,0);
+});
+
+test("probe distribution median and spread are derived from success samples only",()=>{
+  const data=[
+    {elapsedMs:100,success:true,status:200},
+    {elapsedMs:200,success:true,status:200},
+    {elapsedMs:400,success:true,status:200},
+    {elapsedMs:900,success:true,status:200},
+    {elapsedMs:2000,success:false,status:429,failureKind:"http-status"}
+  ];
+  const r=summarizeHttpProbes(data);
+  assert.equal(r.passed,4);
+  assert.equal(r.httpRejected,1);
+  assert.equal(r.transportFailed,0);
+  assert.equal(r.medianMs,300);
+  assert.equal(r.spreadMs,800);
+});
+test("intermittent HTTP probes can be separated into status and transport failures",()=>{
+  const s=speed();
+  s.probeCount=5;s.probeFailures=2;
+  s.probeSamples=[
+    {elapsedMs:100,success:true,status:200},
+    {elapsedMs:120,success:true,status:200},
+    {elapsedMs:140,success:true,status:200},
+    {elapsedMs:500,success:false,status:429,failureKind:"http-status"},
+    {elapsedMs:1000,success:false,status:null,failureKind:"timeout"}
+  ];
+  const result=diagnoseOneClick(baseline(),s);
+  assert(result.issues.some(x=>x.code==="probe-http-status"));
+  assert(result.issues.some(x=>x.code==="probe-transport"));
+  assert.equal(result.stability.httpRejected,1);
+  assert.equal(result.stability.transportFailed,1);
+});
+test("repeat HTTP probes with large spread produce instability clue",()=>{
+  const s=speed();
+  s.probeSamples=[
+    {elapsedMs:65,success:true,status:200},
+    {elapsedMs:75,success:true,status:200},
+    {elapsedMs:82,success:true,status:200},
+    {elapsedMs:750,success:true,status:200},
+    {elapsedMs:980,success:true,status:200}
+  ];
+  const r=diagnoseOneClick(baseline(),s);
+  assert(r.issues.some(x=>x.code==="probe-spread"));
+  assert.equal(r.stability.medianMs,82);
+  assert.equal(r.stability.maxMs,980);
+});
+test("backward compatible older speed payloads omit new stability rather than fail",()=>{
+  assert.equal(diagnoseOneClick(baseline(),speed()).stability,null);
+  assert.equal(summarizeHttpProbes([]),null);
 });
