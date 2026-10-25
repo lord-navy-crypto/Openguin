@@ -1,0 +1,104 @@
+name: Build Openguin macOS DMG
+
+on:
+  push:
+    branches:
+      - feature/browser-network-diagnostics
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-dmg:
+    # The bundled Ollama runtime is prepared for Apple Silicon on this runner.
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Set up stable Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Report build architecture
+        run: |
+          sw_vers
+          uname -m
+          node --version
+          npm --version
+          rustc --version
+          cargo --version
+
+      - name: Validate browser extension before packaging
+        run: |
+          node --check browser-extension/background.js
+          node --check browser-extension/monitor-bridge.js
+          node --check browser-extension/monitor-main.js
+          node --check browser-extension/popup.js
+          python3 -m json.tool browser-extension/manifest.json > /dev/null
+
+      - name: Install frontend dependencies
+        run: npm install --no-audit --no-fund
+
+      - name: Build signed-independent macOS app and DMG
+        # This runs the repository's idempotent source preparation and obtains
+        # the complete official Ollama runtime required by the desktop bundle.
+        run: npm run desktop:build
+
+      - name: Package browser extension and installation notes
+        run: |
+          mkdir -p dist
+          cp src-tauri/target/release/bundle/dmg/*.dmg dist/
+          ditto -c -k --sequesterRsrc --keepParent browser-extension dist/Openguin-Network-Watch.zip
+          cp LICENSE dist/LICENSE.txt
+          cp THIRD_PARTY_NOTICES.md dist/THIRD_PARTY_NOTICES.md
+          cat > dist/INSTALL-NETWORK-OBSERVATORY.txt <<'EOF'
+          Openguin Network Observatory — macOS installation
+
+          1. Open the DMG and drag Openguin to Applications.
+          2. Open Openguin and select Diagnostics / Network Observatory.
+          3. Run Diagnose connection for DNS and HTTPS checks.
+          4. Run Speed test for bounded download/upload and latency/jitter probes.
+          5. Change VPN state manually, select the correct state, repeat the tests,
+             and save a sample. Openguin never changes VPN or DNS settings for you.
+
+          Browser monitoring:
+          1. Extract Openguin-Network-Watch.zip.
+          2. In Chrome/Chromium, open the browser's Extensions page and enable
+             Developer mode.
+          3. Choose Load unpacked and select the extracted browser-extension folder.
+          4. Open the page to diagnose and click Start this tab in the extension.
+          5. Optional ChatGPT reload monitoring requires separate host permission.
+             Optional file-download monitoring requires the separate downloads
+             permission and records download metadata without filenames or full URLs.
+
+          Troubleshooting:
+          - A failed DNS lookup suggests a DNS/network path issue.
+          - If DNS succeeds but HTTPS fails, inspect routing, VPN, proxy, TLS,
+            firewall, or the target endpoint.
+          - HTTP 401/403/429 means the server responded; it is not a connection timeout.
+          - A response-stream gap means no readable chunk arrived during the interval;
+            it does not by itself identify the cause.
+          - Compare repeated tests with VPN on/off and change only one VPN setting at a time.
+          - This build is an unsigned/unnotarized developer build. macOS may show a
+            security warning. Do not bypass security controls unless you trust the source.
+          EOF
+          shasum -a 256 dist/* > dist/SHA256SUMS.txt
+          ls -lh dist
+
+      - name: Upload DMG, extension, and installation guide
+        uses: actions/upload-artifact@v4
+        with:
+          name: Openguin-Network-Observatory-macOS-ARM64
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
