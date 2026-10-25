@@ -9,7 +9,7 @@ Diagnose slow or failed browser sessions without guessing whether the cause is t
 - **Desktop diagnostics (Tauri 2 + Rust):** DNS resolution, HTTPS reachability and time-to-response for selected endpoints, default-route/interface hints, proxy/VPN signals, and an explicit on-demand download/upload speed test.
 - **Browser extension (Chrome Manifest V3):** opt-in telemetry for the active tab: fetch/XHR request outcomes, resource failures, JavaScript errors, long main-thread tasks, and long gaps while a response stream is being read.
 - **Local-only storage:** diagnostic events stay on the device. Never record page text, prompts, response content, request/response bodies, cookies, authorization headers, or URL query strings.
-- **Future integration:** export a redacted report from the desktop app and optionally import extension telemetry.
+- **Current reporting:** the desktop app can copy a redacted network-only report; extension events remain in local browser storage. Importing extension telemetry into the desktop report remains future work.
 
 ## Phase 1 — desktop MVP
 
@@ -37,3 +37,6 @@ Diagnose slow or failed browser sessions without guessing whether the cause is t
 - The extension requires a user action to begin monitoring and has no broad default host access.
 - No user content or request bodies are stored.
 - Failed tests show actionable, appropriately qualified explanations rather than a generic “internet broken” label.
+- Optional browser-download monitoring records start/progress/completion/interruption metadata without filenames or full URLs.
+- With downloads/alarms permissions granted, a download with no byte progress for 60 seconds generates a local stall event.
+- Every page/network event includes a specific next-step suggestion where the symptom supports one; advice distinguishes HTTP denial/rate limiting from transport failure.
