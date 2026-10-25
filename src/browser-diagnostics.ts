@@ -205,6 +205,18 @@ export function analyzeBrowserReport(report: BrowserReport): DiagnosticFinding[]
       match: e => (e.kind === "fetch-response" || e.kind === "xhr-response") && (e.durationMs ?? 0) >= 2500
     },
     {
+      id: "body-read-error", label: "响应正文读取失败", severity: "medium",
+      evidence: "请求收到响应后，页面调用 text/json/arrayBuffer/blob/formData 读取正文时失败。正文内容不会被读取或保存。",
+      nextStep: "查看同一 request ID 的 HTTP 状态和响应耗时；如果状态为 2xx，继续检查响应流、页面逻辑及重复出现的正文读取错误。",
+      match: e => e.kind === "body-read-error"
+    },
+    {
+      id: "slow-body-read", label: "响应正文读取较慢", severity: "low",
+      evidence: "页面消费响应正文耗时达到 2.5 秒或更长。大文件、慢速消费和网络等待都可能造成此现象，不能单独判定为网络慢。",
+      nextStep: "对比同一 request ID 的响应头耗时、正文读取耗时及资源大小；只有重复且跨端点一致时，再考虑网络路径问题。",
+      match: e => e.kind === "body-read-complete" && (e.bodyReadDurationMs ?? 0) >= 2500
+    },
+    {
       id: "blocked", label: "服务端拒绝或限流", severity: "medium",
       evidence: "HTTP 401 / 403 / 429 表示服务端已响应，但请求未获得正常处理。",
       nextStep: "401/403 检查会话和访问权限；429 避免重复快速重试。这些状态不等于网络不通。",
@@ -267,6 +279,10 @@ export type BrowserTelemetrySummary = {
   http5xx: number;
   streamPauseEvents: number;
   maxStreamGapMs: number | null;
+  bodyReadCount: number;
+  bodyReadErrors: number;
+  medianBodyReadMs: number | null;
+  maxHeadersToBodyReadMs: number | null;
   resourceErrors: number;
   scriptErrors: number;
   longTasks: number;
@@ -294,6 +310,13 @@ export function summarizeBrowserTelemetry(report: BrowserReport): BrowserTelemet
   const statuses = events.filter(e => e.kind === "fetch-response" || e.kind === "xhr-response");
   const gaps = events.filter(e => e.kind === "stream-gap" || e.kind === "stream-gap-resolved" || e.kind === "stream-error");
   const gapValues = gaps.map(e => e.gapMs).filter((n):n is number => typeof n === "number");
+  const bodyReads = events.filter(e => e.kind === "body-read-complete" && typeof e.bodyReadDurationMs === "number");
+  const bodyReadDurations = bodyReads.map(e => e.bodyReadDurationMs as number).sort((a,b)=>a-b);
+  const bodyReadMiddle = Math.floor(bodyReadDurations.length/2);
+  const medianBodyReadMs = !bodyReadDurations.length ? null :
+    bodyReadDurations.length%2 ? bodyReadDurations[bodyReadMiddle] :
+    (bodyReadDurations[bodyReadMiddle-1]+bodyReadDurations[bodyReadMiddle])/2;
+  const headersToBodyRead = bodyReads.map(e=>e.headersToBodyReadMs).filter((n):n is number=>typeof n==="number");
   return {
     totalEvents: events.length,
     responseCount: responses.length,
@@ -306,6 +329,10 @@ export function summarizeBrowserTelemetry(report: BrowserReport): BrowserTelemet
     http5xx: statuses.filter(e => (e.status ?? 0) >= 500 && (e.status ?? 0) < 600).length,
     streamPauseEvents: gaps.length,
     maxStreamGapMs: gapValues.length ? Math.max(...gapValues) : null,
+    bodyReadCount: bodyReads.length,
+    bodyReadErrors: events.filter(e=>e.kind==="body-read-error").length,
+    medianBodyReadMs,
+    maxHeadersToBodyReadMs: headersToBodyRead.length ? Math.max(...headersToBodyRead) : null,
     resourceErrors: events.filter(e => e.kind === "resource-error").length,
     scriptErrors: events.filter(e => e.kind === "javascript-error" || e.kind === "unhandled-rejection").length,
     longTasks: events.filter(e => e.kind === "long-task").length,
