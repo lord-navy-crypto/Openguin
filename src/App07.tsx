@@ -23,7 +23,7 @@ type Log={at:string;level:'info'|'warn'|'error';message:string};
 type DnsCheck={host:string;resolved:boolean;elapsedMs:number;addressCount:number;error?:string|null};
 type EndpointCheck={name:string;host:string;reachable:boolean;status?:number|null;elapsedMs?:number|null;error?:string|null};
 type NetworkSnapshot={capturedAtMs:number;os:string;dns:DnsCheck[];endpoints:EndpointCheck[];proxy:{environmentConfigured:boolean;systemConfigured:boolean};route:{defaultInterface?:string|null;vpnInterfaces:string[];vpnLikely:boolean};hints:string[]};
-type SpeedTestResult={capturedAtMs:number;provider:string;latencyMs?:number|null;jitterMs?:number|null;probeFailures:number;probeCount:number;downloadBytes:number;uploadBytes:number;downloadMbps?:number|null;uploadMbps?:number|null;downloadMs?:number|null;uploadMs?:number|null;downloadError?:string|null;uploadError?:string|null};
+type SpeedTestResult={capturedAtMs:number;provider:string;latencyMs?:number|null;jitterMs?:number|null;probeFailures:number;probeCount:number;probeSamples?:Array<{elapsedMs:number;status?:number|null;success:boolean;failureKind?:string|null}>;downloadBytes:number;uploadBytes:number;downloadMbps?:number|null;uploadMbps?:number|null;downloadMs?:number|null;uploadMs?:number|null;downloadError?:string|null;uploadError?:string|null};
 type VpnLabel='unknown'|'on'|'off';
 type VpnSample={id:string;label:'on'|'off';at:string;reachable:number;avgResponseMs:number|null;latencyMs:number|null;jitterMs:number|null;probeFailures:number|null;probeCount:number|null;downloadMbps:number|null;uploadMbps:number|null;vpnLikely:boolean;defaultInterface:string|null;proxyConfigured:boolean};
 
