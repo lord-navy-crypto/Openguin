@@ -42,7 +42,11 @@ jobs:
         run: npm run build
 
       - name: Check native Rust commands
-        run: cargo check --manifest-path src-tauri/Cargo.toml
+        run: |
+          # Tauri validates this bundled resource path even during cargo check.
+          # Keep the check lightweight: do not download or package the Ollama runtime.
+          mkdir -p src-tauri/resources/ollama-runtime
+          cargo check --manifest-path src-tauri/Cargo.toml
 
       - name: Validate extension JavaScript
         run: |
