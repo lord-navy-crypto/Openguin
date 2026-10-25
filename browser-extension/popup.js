@@ -266,6 +266,7 @@ async function buildDiagnosticReport() {
     "monitor-active","monitor-started","navigation","render-summary","render-stability",
     "fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response",
     "xhr-error","xhr-stall","stream-gap","stream-gap-resolved","stream-error","stream-end",
+    "body-read-complete","body-read-error",
     "resource-error","slow-resource","javascript-error","unhandled-rejection","long-task",
     "download-start","download-progress","download-complete","download-failed","download-stall"
   ]);
@@ -283,7 +284,7 @@ async function buildDiagnosticReport() {
       if (/^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)$/.test(event.method || "")) row.method = event.method;
       if (/^[a-z][a-z0-9-]{0,19}$/i.test(event.tag || "")) row.tag = event.tag;
       for (const key of [
-        "status","durationMs","gapMs","line","bytes","transferBytes","domContentLoadedMs",
+        "status","durationMs","gapMs","bodyReadDurationMs","headersToBodyReadMs","line","bytes","transferBytes","domContentLoadedMs",
         "loadMs","bodyChildCount","firstPaintMs","firstContentfulPaintMs","mutationCount",
         "bytesReceived","totalBytes","progressPercent"
       ]) {
@@ -343,7 +344,7 @@ function downloadReport(filename, content, mime) {
 function reportCsv(report) {
   const quality = report.quality || {};
   const columns = [
-    "at","sourceAt","bridgeDelayMs","requestId","kind","host","path","method","tag","status","durationMs","gapMs","errorType","line",
+    "at","sourceAt","bridgeDelayMs","requestId","kind","host","path","method","tag","status","durationMs","gapMs","bodyReadDurationMs","headersToBodyReadMs","errorType","line",
     "readyState","progressPercent","bytes","transferBytes","bytesReceived","totalBytes","bodyChildCount",
     "domContentLoadedMs","loadMs","firstPaintMs","firstContentfulPaintMs","mutationCount"
   ];
