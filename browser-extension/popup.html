@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Openguin Network Watch</title>
+  <style>
+    :root{color-scheme:dark;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#08111c;color:#e8f1fb}
+    *{box-sizing:border-box}body{margin:0;width:370px;min-height:480px;background:linear-gradient(150deg,#11243a,#08111c 58%)}
+    main{padding:16px;display:grid;gap:12px}.brand{display:flex;align-items:center;gap:10px}.mark{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,#70e4ff,#8290ff);display:grid;place-items:center;color:#071019;font-weight:900}
+    h1{font-size:15px;margin:0}.subtitle{font-size:10px;color:#91a6bd;margin-top:3px}.panel{border:1px solid #ffffff16;background:#0b1725;border-radius:12px;padding:12px}
+    .state{font-size:12px;line-height:1.5}.muted{color:#8aa0b7;font-size:11px;line-height:1.5}.buttons{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+    button{border:1px solid #2d4560;background:#13263a;color:#eaf5ff;border-radius:8px;padding:9px 8px;font-size:11px;font-weight:650;cursor:pointer}
+    button.primary{background:#b8efff;color:#081521;border-color:#b8efff}button:disabled{opacity:.45;cursor:default}.wide{grid-column:1/-1}
+    h2{font-size:12px;margin:0 0 8px}.events{display:grid;gap:7px;max-height:210px;overflow:auto}.event{border-top:1px solid #ffffff10;padding-top:7px;font-size:10px;line-height:1.45;overflow-wrap:anywhere}
+    .event time{display:block;color:#71869c;font-size:9px;margin-bottom:2px}.empty{font-size:11px;color:#71869c;padding:10px 0}
+    .privacy{font-size:10px;color:#7d94aa;line-height:1.5}
+  </style>
+</head>
+<body>
+  <main>
+    <div class="brand"><div class="mark">O</div><div><h1>Openguin Network Watch</h1><div class="subtitle">Opt-in browser diagnostics · local storage only</div></div></div>
+    <section class="panel">
+      <div id="currentPage" class="state">Checking active tab…</div>
+      <div id="status" class="muted">Monitoring is off until you start it.</div>
+    </section>
+    <div class="buttons">
+      <button id="start" class="primary">Start this tab</button>
+      <button id="stop" disabled>Stop monitoring</button>
+      <button id="chatgptPermission" class="wide" hidden>Allow ChatGPT reload monitoring</button>
+    </div>
+    <section class="panel">
+      <h2>Recent events</h2>
+      <div id="events" class="events"><div class="empty">No events captured yet.</div></div>
+      <div class="buttons" style="margin-top:10px"><button id="clear" class="wide">Clear local events</button></div>
+    </section>
+    <div class="privacy">Privacy: captures timing, status codes, sanitized host/path metadata, and error categories. It never stores page text, prompts, model answers, cookies, headers, or request bodies. No telemetry is uploaded.</div>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
