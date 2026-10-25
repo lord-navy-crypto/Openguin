@@ -2,14 +2,18 @@ const MAX_EVENTS = 300;
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 const downloadStartedAt = new Map();
 const downloadLastPercent = new Map();
+const downloadLastProgressAt = new Map();
+const downloadLastBytes = new Map();
+const downloadStallNotified = new Set();
 let downloadListenersRegistered = false;
+let downloadAlarmListenerRegistered = false;
 const ALLOWED_KINDS = new Set([
   "monitor-active", "monitor-started", "navigation",
   "fetch-start", "fetch-response", "fetch-error", "fetch-stall",
   "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
   "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability",
-  "download-start", "download-progress", "download-complete", "download-failed"
+  "download-start", "download-progress", "download-complete", "download-failed", "download-stall"
 ]);
 
 function cleanHost(value) {
@@ -112,8 +116,12 @@ function registerDownloadListeners() {
   if (downloadListenersRegistered || !chrome.downloads) return;
   downloadListenersRegistered = true;
   chrome.downloads.onCreated.addListener((item) => {
-    downloadStartedAt.set(item.id, Date.now());
+    const now = Date.now();
+    downloadStartedAt.set(item.id, now);
     downloadLastPercent.set(item.id, 0);
+    downloadLastProgressAt.set(item.id, now);
+    downloadLastBytes.set(item.id, Number(item.bytesReceived) || 0);
+    downloadStallNotified.delete(item.id);
     emitDownload("download-start", item);
   });
   chrome.downloads.onChanged.addListener((delta) => {
@@ -124,6 +132,9 @@ function registerDownloadListeners() {
         if (item) emitDownload("download-complete", item);
         downloadStartedAt.delete(id);
         downloadLastPercent.delete(id);
+        downloadLastProgressAt.delete(id);
+        downloadLastBytes.delete(id);
+        downloadStallNotified.delete(id);
       });
       return;
     }
@@ -133,6 +144,9 @@ function registerDownloadListeners() {
         if (item) emitDownload("download-failed", item, { errorType: String(delta.error && delta.error.current || "INTERRUPTED").slice(0, 60) });
         downloadStartedAt.delete(id);
         downloadLastPercent.delete(id);
+        downloadLastProgressAt.delete(id);
+        downloadLastBytes.delete(id);
+        downloadStallNotified.delete(id);
       });
       return;
     }
@@ -140,7 +154,14 @@ function registerDownloadListeners() {
       chrome.downloads.search({ id }, (items) => {
         const item = items && items[0];
         if (!item || !item.totalBytes || item.totalBytes <= 0) return;
-        const percent = Math.round(item.bytesReceived / item.totalBytes * 100);
+        const now = Date.now();
+        const bytes = Number(item.bytesReceived) || 0;
+        if (bytes !== (downloadLastBytes.get(id) ?? 0)) {
+          downloadLastBytes.set(id, bytes);
+          downloadLastProgressAt.set(id, now);
+          downloadStallNotified.delete(id);
+        }
+        const percent = Math.round(bytes / item.totalBytes * 100);
         const last = downloadLastPercent.get(id) ?? 0;
         if (percent >= last + 10 || percent >= 100) {
           downloadLastPercent.set(id, percent);
@@ -151,10 +172,48 @@ function registerDownloadListeners() {
   });
 }
 
+function registerDownloadAlarm() {
+  if (!chrome.alarms || downloadAlarmListenerRegistered) return;
+  downloadAlarmListenerRegistered = true;
+  chrome.alarms.onAlarm.addListener((alarm) => {
+    if (alarm.name !== "openguin-download-stall-watch" || !chrome.downloads) return;
+    chrome.downloads.search({ state: "in_progress" }, (items) => {
+      const now = Date.now();
+      for (const item of items || []) {
+        const id = item.id;
+        const bytes = Number(item.bytesReceived) || 0;
+        const previousBytes = downloadLastBytes.get(id);
+        const lastAt = downloadLastProgressAt.get(id) ?? (downloadStartedAt.get(id) || now);
+        if (previousBytes === undefined || previousBytes !== bytes) {
+          downloadLastBytes.set(id, bytes);
+          downloadLastProgressAt.set(id, now);
+          downloadStallNotified.delete(id);
+          continue;
+        }
+        if (now - lastAt >= 60000 && !downloadStallNotified.has(id)) {
+          downloadStallNotified.add(id);
+          emitDownload("download-stall", item, { gapMs: now - lastAt });
+        }
+      }
+    });
+  });
+}
+
+async function startDownloadAlarmIfPermitted() {
+  if (!chrome.permissions || !chrome.alarms) return;
+  const granted = await chrome.permissions.contains({ permissions: ["downloads", "alarms"] }).catch(() => false);
+  if (granted) chrome.alarms.create("openguin-download-stall-watch", { periodInMinutes: 0.5 });
+}
+
 registerDownloadListeners();
+registerDownloadAlarm();
+void startDownloadAlarmIfPermitted();
 if (chrome.permissions && chrome.permissions.onAdded) {
   chrome.permissions.onAdded.addListener((permissions) => {
-    if (permissions.permissions && permissions.permissions.includes("downloads")) registerDownloadListeners();
+    const granted = permissions.permissions || [];
+    if (granted.includes("downloads")) registerDownloadListeners();
+    if (granted.includes("alarms")) registerDownloadAlarm();
+    if (granted.includes("downloads") || granted.includes("alarms")) void startDownloadAlarmIfPermitted();
   });
 }
 
