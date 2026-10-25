@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "Openguin Network Watch",
+  "version": "0.1.0",
+  "description": "Opt-in, local-only diagnostics for page requests, resource failures, JavaScript errors, and long response gaps.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "optional_host_permissions": [
+    "https://chatgpt.com/*",
+    "https://chat.openai.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Openguin Network Watch",
+    "default_popup": "popup.html"
+  }
+}
