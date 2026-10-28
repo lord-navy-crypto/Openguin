@@ -21,6 +21,7 @@ const observedPendingNode=document.getElementById("observedPending");
 const observabilityQuality=document.getElementById("observabilityQuality");
 const observabilityNotes=document.getElementById("observabilityNotes");
 const observabilityJson=document.getElementById("observabilityJson");
+const observabilityScope=document.getElementById("observabilityScope");
 function supportedPersistentOrigin(tabUrl) {
   try {
     const url = new URL(tabUrl);
@@ -250,12 +251,13 @@ async function render() {
     row.textContent = new Date(event.at).toLocaleString() + " · " + String(event.host || "") + " · " + String(event.kind || "");
     journalPreview.appendChild(row);
   }
+  const scopeOptions=observabilityScope.value==="current"?{tabId:tab?.id??-1}:{};
   const dashboard=globalThis.OpenguinObservability.summarize({
     events:Array.isArray(stored.events)?stored.events:[],
     quality:{droppedEvents:stored.droppedEvents,
       duplicateEventsSuppressed:stored.duplicateEventsSuppressed,
       eventCapReached:stored.droppedEvents>0}
-  });
+  },scopeOptions);
   const diagnoses=dashboard.symptoms;
   observedResponsesNode.textContent=String(dashboard.responseCount);
   observedErrorsNode.textContent=String(
@@ -271,9 +273,11 @@ async function render() {
     " · 失败/卡顿信号 "+diagnoses.stalls+
     " · 采集丢弃 "+dashboard.capture.droppedEvents+
     " · 去重 "+dashboard.capture.duplicateEventsSuppressed;
-  observabilityNotes.textContent=dashboard.capture.notices.length?
-    dashboard.capture.notices.join("；"):
-    "基于已捕获事件，不读取网页文本、密码、Cookie 或请求正文。";
+  observabilityNotes.textContent=(dashboard.scope==="selected-active-tab"?
+    "仅当前标签页；":"全部手动采集记录；")+
+    (dashboard.capture.notices.length?dashboard.capture.notices.join("；"):
+    "不读取网页正文、密码、Cookie 或请求内容。")+
+    " 截断和去重数量是整个本地缓存的统计。";
   const labEvidence=globalThis.OpenguinLabCompat.toLabEvidence({
     events:Array.isArray(stored.events)?stored.events:[],
     quality:{droppedEvents:stored.droppedEvents,
@@ -467,14 +471,20 @@ async function downloadDiagnosticReport(format) {
   }
 }
 
+observabilityScope.addEventListener("change",()=>{void render();});
 observabilityJson.addEventListener("click",async()=>{
   try{
-    const report=await buildDiagnosticReport();
-    const summary=globalThis.OpenguinObservability.summarize(report);
+    const [tab,saved]=await Promise.all([activeTab(),chrome.storage.local.get({
+      events:[],droppedEvents:0,duplicateEventsSuppressed:0
+    })]);
+    const options=observabilityScope.value==="current"?{tabId:tab?.id??-1}:{};
+    const summary=globalThis.OpenguinObservability.summarize({
+      events:saved.events,quality:saved
+    },options);
     const stamp=new Date().toISOString().replace(/[:.]/g,"-");
     downloadReport("openguin-observability-v18-"+stamp+".json",
       JSON.stringify({source:"openguin-network-watch",formatVersion:1,
-        generatedAt:report.generatedAt,observability:summary,
+        generatedAt:new Date().toISOString(),observability:summary,
         privacy:{localOnly:true,noPageContent:true,noCredentials:true,
           noCookies:true,noRequestBodies:true,noFullUrls:true}},null,2),
       "application/json;charset=utf-8");
