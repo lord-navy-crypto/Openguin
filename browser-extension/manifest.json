@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Openguin Network Watch",
-  "version": "0.6.0",
-  "description": "Opt-in active-tab diagnostics with strict monitoring-session isolation, reliable stop, and local browser evidence.",
+  "version": "0.7.0",
+  "description": "Opt-in browser diagnostics with clean Stop lifecycle and honest cross-origin Resource Timing visibility guidance.",
   "permissions": [
     "activeTab",
     "scripting",
