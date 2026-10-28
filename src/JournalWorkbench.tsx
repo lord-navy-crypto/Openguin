@@ -12,7 +12,7 @@ const signalName:Record<EventSignal,string>={
 };
 const fmtDate=(at:number|null)=>at===null?"—":new Date(at).toLocaleString();
 const fmtMs=(ms:number|null)=>ms===null?"—":ms.toFixed(0)+" ms";
-export default function JournalWorkbench(){
+export default function JournalWorkbench({onJournalChange}:{onJournalChange?:(journal:BrowserJournal|null)=>void}){
   const [journal,setJournal]=useState<BrowserJournal|null>(null);
   const [raw,setRaw]=useState("");
   const [error,setError]=useState("");
@@ -31,7 +31,7 @@ export default function JournalWorkbench(){
   function accept(text:string){
     try{
       const parsed=parseBrowserJournal(text);
-      setJournal(parsed);setRaw("");setError("");setHost("all");setKind("all");setTerm("");setLimit(50);setCopyStatus("");
+      setJournal(parsed);onJournalChange?.(parsed);setRaw("");setError("");setHost("all");setKind("all");setTerm("");setLimit(50);setCopyStatus("");
     }catch(e){setError(e instanceof Error?e.message:"无法读取日志");}
   }
   async function importFile(file:File|undefined){
@@ -77,7 +77,7 @@ export default function JournalWorkbench(){
     </label>
     <div className="journal-buttons">
       <button disabled={!raw.trim()} onClick={()=>accept(raw)}>解析粘贴内容</button>
-      <button disabled={!journal} onClick={()=>{setJournal(null);setRaw("");setError("");setCopyStatus("");}}>卸载当前日志</button>
+      <button disabled={!journal} onClick={()=>{setJournal(null);onJournalChange?.(null);setRaw("");setError("");setCopyStatus("");}}>卸载当前日志</button>
     </div>
     {error&&<p className="journal-error" role="alert">{error}</p>}
     {!review&&<p className="journal-note">导入后会显示日志完整性、异常事件分布和网站性能分组。它与旧的 300 条 Browser Incident Report 是两种不同格式。</p>}
