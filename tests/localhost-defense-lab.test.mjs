@@ -278,3 +278,71 @@ test("workbench does not relax CSP for member, admin or other pages",async t=>{
   assert(!csp.includes("script-src 'self'"));
   assert(!csp.includes("connect-src 'self'"));
 });
+
+
+test("fictional record ownership is enforced by default for members",async t=>{
+  const {url}=await setup(t);
+  assert.equal((await get(url+"/ownership-lab")).status,401);
+  assert.equal((await get(url+"/record-other")).status,401);
+  const s=await session(url,"member");
+  const head={Cookie:s.cookie};
+  const lab=await get(url+"/ownership-lab",{headers:head});
+  assert.equal(lab.status,200);
+  assert((await lab.text()).includes("OWNER CHECK ENABLED"));
+  assert.equal((await get(url+"/record-own",{headers:head})).status,200);
+  assert.equal((await get(url+"/record-other",{headers:head})).status,403);
+});
+test("opt-in educational missing-owner-check mode changes only fictional record response",async t=>{
+  const {url}=await setup(t);
+  const s=await session(url,"member");
+  const headers={Cookie:s.cookie};
+  const change=(mode)=>get(url+"/ownership-mode",{method:"POST",
+    headers:{...headers,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:s.token,mode}).toString()});
+  assert.equal((await change("invalid")).status,422);
+  assert.equal((await change("training")).status,303);
+  const exposed=await get(url+"/record-other",{headers});
+  assert.equal(exposed.status,200);
+  assert.equal(exposed.headers.get("x-openguin-lab-mode"),"deliberately-unprotected-fake-record");
+  const body=await exposed.text();
+  assert(body.includes("DEMO RECORD B"));
+  assert(!body.includes("password"));
+  assert.equal((await get(url+"/admin",{headers})).status,403);
+  assert.equal((await change("protected")).status,303);
+  const repaired=await get(url+"/record-other",{headers});
+  assert.equal(repaired.status,403);
+  assert.equal(repaired.headers.get("x-openguin-lab-mode"),null);
+});
+test("ownership teaching mode is per-session and cannot be enabled without local CSRF",async t=>{
+  const {url}=await setup(t);
+  const first=await session(url,"member"),second=await session(url,"member");
+  const activate=()=>get(url+"/ownership-mode",{method:"POST",
+    headers:{Cookie:first.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:first.token,mode:"training"}).toString()});
+  assert.equal((await activate()).status,303);
+  assert.equal((await get(url+"/record-other",{headers:{Cookie:first.cookie}})).status,200);
+  assert.equal((await get(url+"/record-other",{headers:{Cookie:second.cookie}})).status,403);
+  const noCsrf=await get(url+"/ownership-mode",{method:"POST",
+    headers:{Cookie:second.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:"mode=training"});
+  assert.equal(noCsrf.status,403);
+  assert.equal((await get(url+"/record-other",{headers:{Cookie:second.cookie}})).status,403);
+  assert.equal((await get(url+"/ownership-lab?target=other.example")).status,400);
+});
+test("synthetic owner check produces real but sanitized Apache evidence",async t=>{
+  const {url}=await setup(t);
+  const s=await session(url,"member");
+  const headers={Cookie:s.cookie};
+  assert.equal((await get(url+"/record-other",{headers})).status,403);
+  assert.equal((await get(url+"/ownership-mode",{method:"POST",
+    headers:{...headers,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:s.token,mode:"training"}).toString()})).status,303);
+  assert.equal((await get(url+"/record-other",{headers})).status,200);
+  const log=await (await get(url+"/access-log")).text();
+  const parsed=analyzeAccessLog(log);
+  assert.equal(parsed.ignoredLines,0);
+  assert(log.includes('GET /record-other HTTP/1.1" 403'));
+  assert(log.includes('GET /record-other HTTP/1.1" 200'));
+  assert(!log.includes(s.token));
+  assert(!log.includes("lab_session="));
+});
