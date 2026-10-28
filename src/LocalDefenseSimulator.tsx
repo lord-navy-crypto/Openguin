@@ -1,7 +1,7 @@
 import {useMemo,useState} from "react";
 import {
   DEFAULT_POLICY,LEARNING_BASELINE,SCENARIOS,simulateDefense,compareDefensePolicies,
-  exportSimulationSummary,type DefensePolicy,type SimulationScenario
+  exportSimulationSummary,virtualAccessLog,virtualBrowserJournal,type DefensePolicy,type SimulationScenario
 } from "./local-defense-simulator";
 import {downloadDiagnosticText} from "./diagnostic-export";
 import "./local-defense-simulator.css";
@@ -98,6 +98,15 @@ export default function LocalDefenseSimulator(){
   <div className="sim-actions sim-run-controls">
    <button className="sim-run" onClick={run}>运行虚拟防御演练</button>
    <button disabled={!summary} onClick={exportResult}>导出合成分析报告 JSON</button>
+   <button disabled={!current} onClick={()=>{
+    if(!current)return;
+    downloadDiagnosticText(virtualAccessLog(current),"openguin-virtual-access.log","text/plain;charset=utf-8");
+   }}>导出虚拟服务器 access.log</button>
+   <button disabled={!current} onClick={()=>{
+    if(!current)return;
+    downloadDiagnosticText(JSON.stringify(virtualBrowserJournal(current),null,2),
+      "openguin-virtual-browser-journal.json","application/json;charset=utf-8");
+   }}>导出虚拟浏览器日志</button>
    <button disabled={!summary} onClick={()=>{setCurrent(null);setMessage("");}}>清空结果</button>
   </div>
   {error&&<p className="sim-error" role="alert">{error}</p>}
@@ -155,7 +164,7 @@ export default function LocalDefenseSimulator(){
   </div>}
   <div className="sim-guidance">
    <strong>怎样将演练用到你自己的站点？</strong>
-   <p>先在这里验证防御策略的逻辑，再从你自己的开发者工具或服务器日志中导入真实的正常访问记录，核查是否出现对应的 401、403、429 和 5xx。不要把这个模拟器的结果当成真实负载测试或漏洞利用测试。</p>
+   <p>先在这里验证防御策略的逻辑，再把上方导出的<strong>虚拟服务器日志</strong>和<strong>虚拟浏览器日志</strong>分别导入本页下方现有的两个日志分析器，练习观察 401、403、429 和各时间段的分布。之后可以对你自己网站的正常访问日志做同样的被动分析。不要把这个模拟器的结果当成真实负载测试或漏洞利用测试。</p>
   </div>
  </section>;
 }
