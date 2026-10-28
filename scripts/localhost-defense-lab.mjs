@@ -253,7 +253,7 @@ export function createLocalDefenseLab(options={}){
           "<p>With owner checks enabled, reading /record-other returns 403. "+
           "After deliberately turning the check off, the same single manual request returns 200. "+
           "Turn the check back on and repeat to verify the repair.</p>"+
-          '<p><a href="/access-log">Download sanitized log</a> to compare recorded statuses.</p>"));
+          '<p><a href="/access-log">Download sanitized log</a> to compare recorded statuses.</p>'));
         return;
       }
       if(req.method==="GET"&&route==="/record-own"){
