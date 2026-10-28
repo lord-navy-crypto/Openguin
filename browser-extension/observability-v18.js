@@ -24,7 +24,9 @@ function pctl(xs,p){
 }
 function summarize(raw,options={}){
   const now=Number.isFinite(options.now)?options.now:Date.now();
-  const events=(Array.isArray(raw?.events)?raw.events:[]).slice(0,MAX_EVENTS).filter(validEvent);
+  const tabOnly=Number.isInteger(options.tabId)?options.tabId:null;
+  const events=(Array.isArray(raw?.events)?raw.events:[]).slice(0,MAX_EVENTS)
+    .filter(e=>validEvent(e)&&(tabOnly===null||e.tabId===tabOnly));
   const counts={"2xx":0,"3xx":0,"4xx":0,"5xx":0};
   let unauthorized=0,forbidden=0,throttled=0,transportErrors=0,stalls=0,
     scriptErrors=0,slowResponses=0;
@@ -75,6 +77,7 @@ function summarize(raw,options={}){
   return {
     schema:"openguin-observability-summary-v18",
     evidenceOnly:true,source:"bounded-browser-events",
+    scope:tabOnly===null?"all-manually-recorded-events":"selected-active-tab",
     eventCount:events.length,responseCount:Object.values(counts).reduce((a,b)=>a+b,0),
     statusFamilies:counts,symptoms,
     medianResponseMs:pctl(times,0.5),
