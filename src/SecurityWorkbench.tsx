@@ -1,6 +1,6 @@
 import {useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
-import {auditHttpResponseHeaders,exportHeaderAudit,type HeaderAudit} from "./defensive-header-audit";
+import {auditHttpResponseHeaders,compareHeaderAudits,exportHeaderAudit,type HeaderAudit} from "./defensive-header-audit";
 import {downloadDiagnosticText} from "./diagnostic-export";
 import "./security-workbench.css";
 
@@ -19,6 +19,7 @@ export default function SecurityWorkbench(){
   const [appError,setAppError]=useState("");
   const [headers,setHeaders]=useState("");
   const [audit,setAudit]=useState<HeaderAudit|null>(null);
+  const [baseline,setBaseline]=useState<HeaderAudit|null>(null);
   const [headerNotice,setHeaderNotice]=useState("");
   const [showAll,setShowAll]=useState(false);
   async function sampleApps(){
@@ -34,6 +35,7 @@ export default function SecurityWorkbench(){
     setHeaderNotice(next.parsedHeaderCount?"已读取 "+next.parsedHeaderCount+" 条响应头；没有向网站发送请求。":"请粘贴有效的 HTTP 响应头。");
   }
   const appPreview=showAll?snapshot?.processes:snapshot?.processes.slice(0,15);
+  const delta=baseline&&audit?compareHeaderAudits(baseline,audit):null;
   return <div className="security-workbench">
     <section className="v07-card security-tool-card">
       <div className="security-tool-head"><div><span className="eyebrow">DEFENSIVE TOOLBOX · LOCAL DEVICE</span>
@@ -62,6 +64,7 @@ export default function SecurityWorkbench(){
       </label>
       <div className="security-actions"><button disabled={!headers.trim()} onClick={analyzeHeaders}>离线审计响应头</button>
         <button disabled={!audit||!audit.parsedHeaderCount} onClick={()=>{if(audit)secureDownload("header-review",exportHeaderAudit(audit));}}>导出安全建议 JSON</button>
+        <button disabled={!audit||!audit.parsedHeaderCount} onClick={()=>{if(audit)setBaseline(audit);}}>保存本次为比较基线</button>
         <button onClick={()=>{setHeaders("");setAudit(null);setHeaderNotice("");}}>清空输入</button>
       </div>
       {headerNotice&&<p className="security-message" role="status">{headerNotice}</p>}
@@ -71,6 +74,7 @@ export default function SecurityWorkbench(){
         <span>已有信号：<b>{audit.summary.pass}</b></span>
       </div>
       {audit.errors.map((error,i)=><p key={i} className="security-warning">{error}</p>)}
+      {delta&&<div className="security-delta"><b>与之前保存的基线比较</b><p>已消除的配置提醒：{delta.resolved.length} · 新出现的配置提醒：{delta.introduced.length} · 仍需关注：{delta.remaining.length}</p><small>{delta.caution}</small></div>}
       <div className="security-findings">{audit.findings.map(f=><article className={f.severity} key={f.id}>
         <strong>{f.severity==="review"?"需复核":f.severity==="recommendation"?"建议":"已观察到"} · {f.title}</strong>
         <p>{f.reason}</p><small>下一步：{f.remedy}</small>
