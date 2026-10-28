@@ -38,6 +38,11 @@
     </div>
     <section class="panel" aria-label="Browser network observability">
       <h2>网页运行概况 · v18</h2>
+      <label class="muted" for="observabilityScope">数据范围</label>
+      <select id="observabilityScope" aria-label="Browser health capture scope" style="margin-top:5px;width:100%;background:#122b40;color:#e8f1fb;border:1px solid #37506c;border-radius:7px;padding:7px">
+        <option value="current" selected>当前标签页记录</option>
+        <option value="all">全部已手动采集记录</option>
+      </select>
       <div class="overview-grid" id="overviewGrid" aria-live="polite">
         <div><span>已观察响应</span><strong id="observedResponses">—</strong></div>
         <div><span>HTTP 4xx / 5xx</span><strong id="observedErrors">—</strong></div>
