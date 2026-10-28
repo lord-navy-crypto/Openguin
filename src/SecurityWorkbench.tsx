@@ -2,6 +2,7 @@ import {useEffect,useRef,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {auditHttpResponseHeaders,compareHeaderAudits,exportHeaderAudit,type HeaderAudit} from "./defensive-header-audit";
 import {downloadDiagnosticText} from "./diagnostic-export";
+import JournalWorkbench from "./JournalWorkbench";
 import "./security-workbench.css";
 
 type AppRow={pid:number;process:string;observedSockets:number};
@@ -46,6 +47,7 @@ export default function SecurityWorkbench(){
   const appPreview=showAll?snapshot?.processes:snapshot?.processes.slice(0,15);
   const delta=baseline&&audit?compareHeaderAudits(baseline,audit):null;
   return <div className="security-workbench">
+    <JournalWorkbench/>
     <section className="v07-card security-tool-card">
       <div className="security-tool-head"><div><span className="eyebrow">DEFENSIVE TOOLBOX · LOCAL DEVICE</span>
         <h3>应用级连接观察 · App Socket Observatory</h3>
