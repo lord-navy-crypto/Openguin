@@ -106,3 +106,17 @@ Future research: user-selected periodic health checks with clear cancellation, l
 6. Fix known configuration or application issues on your own system, then repeat the observation. Do not infer attackers, VPN routing or security effectiveness from these logs alone.
 
 Independent data sources should not be linked to named persons or interpreted as proof of wrongdoing; this tool does not collect visitor identities or implement active penetration testing.
+
+
+## Added: cross-source evidence correlation
+
+- Open Security Lab and import two local sources: an opt-in browser journal JSON and an Apache/Nginx access-log sample from a site you administer.
+- Explicitly choose the browser hostname corresponding to the access log and confirm that the sources refer to a website you are authorized to inspect. The server log does not itself identify its virtual host.
+- The analyzer aligns observed metadata in UTC one-minute windows, counts browser 5xx/transport/stall signals alongside server 5xx/429 signals, and shows days/minutes with only one side or both sides reporting issues.
+- Co-occurrence is **not** packet-level matching, request identity, proof of wrongdoing, attack detection, or validation of VPN routing. CDN/caching, different logs and clock skew introduce significant uncertainty.
+- The downloadable summary includes counts, named domain, UTC days and aggregate overlaps but explicitly **excludes** raw source rows and minute-level timelines. Share only after reviewing domain names and activity dates.
+- Both source models and all correlation results stay in the Security Lab session memory; unloading a source clears it from the correlation view.
+
+### Current tests and verification
+
+The CI workflow now includes deterministic tests for journal summary exports, private server access-log aggregation, and cross-source overlap. A previously failing test incorrectly prohibited the legitimate aggregate field `hosts[].events`; the assertion was corrected to prohibit a top-level raw event timeline instead. The latest revision still needs its own full CI run before distribution.
