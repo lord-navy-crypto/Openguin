@@ -71,11 +71,13 @@ export function createLocalDefenseLab(options={}){
      !Number.isFinite(sessionTtlMs)||sessionTtlMs<100||sessionTtlMs>3600000||
      typeof now!=="function")throw Error("Invalid local-only lab configuration");
   const sessions=new Map();
+  const csrfTokens=new Map();
   const events=[];
   const limiter=new Map();
   let activePort=port;
   const record=(route,status)=>{
-    events.push({at:new Date(now()).toISOString(),route,status});
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events"]);
+    events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",status});
     if(events.length>MAX_LOGS)events.shift();
   };
   const server=http.createServer(async(req,res)=>{
@@ -100,6 +102,9 @@ export function createLocalDefenseLab(options={}){
     try{url=new URL(req.url??"/",origin)}
     catch{send(400,"Malformed request.","text/plain; charset=utf-8");return;}
     route=url.pathname;
+    if(url.origin!==origin&&url.origin!=="http://localhost:"+activePort){
+      send(400,"Unexpected absolute request target.","text/plain; charset=utf-8");return;
+    }
     if(url.search || url.hash || url.username || url.password || !/^\/[a-z-]*$/.test(route)){
       send(400,page("Invalid lab request","<p>This training site accepts only fixed routes without query parameters.</p>"));return;
     }
@@ -113,15 +118,20 @@ export function createLocalDefenseLab(options={}){
     const role=authenticated?session.role:"guest";
     if(session&&!authenticated)sessions.delete(cookies.get("lab_session"));
     const csrfCookie=cookies.get("lab_csrf");
-    const csrf=typeof csrfCookie==="string"&&/^[a-f0-9]{48}$/.test(csrfCookie)?csrfCookie:cleanToken();
-    if(!csrfCookie||csrf!==csrfCookie)
+    const issuedCsrf=typeof csrfCookie==="string"&&/^[a-f0-9]{48}$/.test(csrfCookie)&&
+      (csrfTokens.get(csrfCookie)??0)>now();
+    const csrf=issuedCsrf?csrfCookie:cleanToken();
+    if(!issuedCsrf){
+      csrfTokens.set(csrf,now()+10*60*1000);
+      if(csrfTokens.size>128)csrfTokens.delete(csrfTokens.keys().next().value);
       headers["Set-Cookie"]="lab_csrf="+csrf+"; HttpOnly; SameSite=Strict; Path=/";
+    }
     const authorized=(required)=>{
       if(role==="guest"){send(401,page("Login required","<p>This area requires an invented member session. Visit Home and select a demo role.</p>"));return false;}
       if(required==="admin"&&role!=="admin"){send(403,page("Permission denied","<p>Demo member accounts cannot access the admin-only resource.</p>"));return false;}
       return true;
     };
-    const verifyCsrf=(params)=>safeEqual(csrfCookie,params.get("csrf"));
+    const verifyCsrf=(params)=>issuedCsrf&&safeEqual(csrfCookie,params.get("csrf"));
     if(req.method==="HEAD" && route!=="/health"){
       send(405,"HEAD is only supported on /health.","text/plain; charset=utf-8");return;
     }
