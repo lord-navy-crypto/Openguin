@@ -7,6 +7,7 @@
 import http from "node:http";
 import {randomBytes,timingSafeEqual} from "node:crypto";
 import {pathToFileURL} from "node:url";
+import {readFileSync} from "node:fs";
 import {createManualExerciseState} from "./manual-defense-exercises.mjs";
 
 export const LAB_HOST="127.0.0.1";
@@ -22,6 +23,7 @@ const COMMON_HEADERS={
   "Cross-Origin-Resource-Policy":"same-origin",
   "X-Lab-Notice":"LOCALHOST-TRAINING-ONLY"
 };
+const fixedWorkbenchClient=readFileSync(new URL("./localhost-http-workbench.js",import.meta.url),"utf8");
 const cleanToken=()=>randomBytes(24).toString("hex");
 const safeEqual=(a,b)=>{
   if(typeof a!=="string"||typeof b!=="string"||a.length!==b.length||a.length<32)return false;
@@ -48,7 +50,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -78,7 +80,7 @@ export function createLocalDefenseLab(options={}){
   const exercises=createManualExerciseState({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -203,6 +205,48 @@ export function createLocalDefenseLab(options={}){
         send(422,page("Input rejected","<p>The fictional note label did not satisfy the server-side input rule.</p>"));return;
       }
       send(200,page("Validated","<p>The invented form passed origin and field checks. The submitted content was discarded.</p>"));return;
+    }
+    if(req.method==="GET"&&route==="/workbench-client"){
+      send(200,fixedWorkbenchClient,"text/javascript; charset=utf-8");return;
+    }
+    if(req.method==="GET"&&route==="/workbench"){
+      // Only this page may load the local, fixed-source inspector script.
+      // It can connect only to its own same-origin localhost server.
+      headers["Content-Security-Policy"]=
+        "default-src 'none'; script-src 'self'; connect-src 'self'; "+
+        "style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+      const actions=[
+        ["health","Health 检查","单次 GET，确认本机服务"],
+        ["member","会员权限","检查 401 或 200"],
+        ["admin","管理权限","检查 401、403 或 200"],
+        ["form","表单页面","验证会话允许访问"],
+        ["rate","手动限流检查","每次点击只请求一次"],
+        ["csrf","缺失表单校验","需要演练成员身份"],
+        ["validation","字段格式检查","仅提交固定示例文本"],
+        ["ordinary","合法表单示例","输入会被服务器丢弃"]
+      ];
+      const cards=actions.map(([id,title,description])=>
+        '<button type="button" data-lab-action="'+id+'" style="text-align:left;'+
+        'background:#18465c;color:#eef8fc;border:1px solid #426e86;'+
+        'border-radius:10px;padding:12px;min-height:68px;cursor:pointer">'+
+        '<strong style="display:block">'+title+'</strong>'+
+        '<small>'+description+'</small></button>').join("");
+      const body='<p>从下方选择一次手动 HTTP 检查，浏览器会向本机固定路由发送一条请求。'+
+        '没有目标地址输入框、自动重复、密码尝试、漏洞攻击或流量生成。</p>'+
+        '<p>当前虚构角色：<strong>'+escapeHtml(role)+
+        '</strong>。如需改变角色，请在 <a href="/">首页</a> 手动选择 Demo member / administrator。</p>'+
+        '<input type="hidden" id="wb-csrf" value="'+escapeHtml(csrf)+'">'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px">'+cards+'</div>'+
+        '<section aria-live="polite"><h3>本次请求结果</h3>'+
+        '<p id="wb-current">选择一项检查，浏览器会显示真实的本机 HTTP 响应状态与有限的安全响应头。</p></section>'+
+        '<section><h3>手动检查记录</h3><p id="wb-summary">尚未开始。</p>'+
+        '<ol id="wb-history" style="padding-left:24px;max-height:350px;overflow:auto"></ol>'+
+        '<button type="button" id="wb-export">导出脱敏结果 JSON</button> '+
+        '<button type="button" id="wb-clear">清空当前浏览器记录</button></section>'+
+        '<p>每次最多保留 30 条本浏览器页面内的结果。不会导出 Cookie、CSRF 令牌、请求正文或响应正文。'+
+        '完整服务器侧结果可通过 <a href="/access-log">脱敏 access.log</a> 分析。</p>'+
+        '<script src="/workbench-client" defer></script>';
+      send(200,page("Manual HTTP Workbench",body));return;
     }
     if(req.method==="GET"&&route==="/manual-console"){
       const state=exercises.snapshot(csrf);
