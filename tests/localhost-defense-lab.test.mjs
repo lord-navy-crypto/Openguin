@@ -1,4 +1,5 @@
 import test from "node:test";
+import http from "node:http";
 import assert from "node:assert/strict";
 import {createLocalDefenseLab,LAB_HOST} from "../scripts/localhost-defense-lab.mjs";
 
@@ -10,6 +11,16 @@ async function setup(t,opts={}){
 }
 async function get(url,options={}){
   return fetch(url,{redirect:"manual",...options});
+}
+async function rawGet(url,hostHeader){
+  return new Promise((resolve,reject)=>{
+    const req=http.request(url,{method:"GET",headers:{Host:hostHeader}},res=>{
+      const chunks=[];
+      res.on("data",chunk=>chunks.push(chunk));
+      res.on("end",()=>resolve({status:res.statusCode,body:Buffer.concat(chunks).toString("utf8")}));
+    });
+    req.once("error",reject);req.end();
+  });
 }
 function cookieHeader(response,name){
   const value=response.headers.get("set-cookie")??"";
@@ -50,7 +61,7 @@ test("lab binds exclusively to IPv4 loopback and carries security headers",async
 });
 test("untrusted Host, Origin and unsupported methods are refused",async t=>{
   const {url}=await setup(t);
-  const host=await get(url+"/health",{headers:{"Host":"attacker.example"}});
+  const host=await rawGet(url+"/health","attacker.example");
   assert.equal(host.status,400);
   const origin=await get(url+"/",{headers:{"Origin":"https://unrelated.example"}});
   assert.equal(origin.status,403);
@@ -130,4 +141,13 @@ test("unexpected role, path and body are bounded and never executed",async t=>{
     body:"a".repeat(2100)});
   assert.equal(long.status,413);
   assert.equal((await get(url+"/admin/../member?x=1")).status,400);
+});
+
+test("invented client-side CSRF cookie does not bypass server-issued verification",async t=>{
+  const {url}=await setup(t);
+  const forged="a".repeat(48);
+  const r=await get(url+"/session",{method:"POST",
+    headers:{"Cookie":"lab_csrf="+forged,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:forged,role:"admin"}).toString()});
+  assert.equal(r.status,403);
 });
