@@ -346,3 +346,68 @@ test("synthetic owner check produces real but sanitized Apache evidence",async t
   assert(!log.includes(s.token));
   assert(!log.includes("lab_session="));
 });
+
+
+test("v13 defense studio renders bounded offline models in the real localhost server",async t=>{
+  const {url}=await setup(t);
+  const response=await get(url+"/defense-studio");
+  assert.equal(response.status,200);
+  const html=await response.text();
+  assert(html.includes('action="/defense-studio"'));
+  assert(html.includes('action="/defense-studio-export"'));
+  assert(html.includes('name="rateLimit"'));
+  assert(html.includes("Protected versus teaching contrast"));
+  assert(html.includes("None are network requests"));
+  assert(!html.includes('name="target"'));
+  assert(!html.includes('name="password"'));
+});
+test("v13 offline model options change teaching results without any target requests",async t=>{
+  const {url}=await setup(t);
+  const init=await initialContext(url);
+  const send=(values,route="/defense-studio")=>get(url+route,{
+    method:"POST",headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:init.token,...values}).toString()
+  });
+  const a=await send({profile:"burst",rateLimit:"4",serviceCapacity:"4",mode:"protected"});
+  const b=await send({profile:"steady",rateLimit:"2",serviceCapacity:"6",mode:"teaching"});
+  assert.equal(a.status,200);assert.equal(b.status,200);
+  const pa=await a.text(),pb=await b.text();
+  assert(pa.includes("Protection enabled"));
+  assert(pa.includes("OWASP / NIST Defense Studio"));
+  assert(pb.includes("稳定业务访问"));
+  assert(!pb.includes("POST /remote"));
+});
+test("v13 only accepts fixed educational policy choices and valid CSRF",async t=>{
+  const {url}=await setup(t);
+  const init=await initialContext(url);
+  const r=(values,cookie=init.cookie)=>get(url+"/defense-studio",{
+    method:"POST",headers:{"Cookie":cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams(values).toString()
+  });
+  const c={csrf:init.token,profile:"burst",rateLimit:"999",serviceCapacity:"4",mode:"protected"};
+  assert.equal((await r(c)).status,422);
+  assert.equal((await r({...c,profile:"https://remote.example",rateLimit:"4"})).status,422);
+  assert.equal((await r({...c,rateLimit:"4",mode:"attack"})).status,422);
+  assert.equal((await r({...c,rateLimit:"4",csrf:"fake"})).status,403);
+  assert.equal((await get(url+"/defense-studio?target=localhost")).status,400);
+  assert.equal((await get(url+"/defense-studio",{headers:{Origin:"https://other.example"}})).status,403);
+  assert.equal((await get(url+"/defense-studio-export")).status,405);
+});
+test("v13 CSV export contains only preinstalled virtual counts, no secrets or links",async t=>{
+  const {url}=await setup(t);
+  const init=await initialContext(url);
+  const r=await get(url+"/defense-studio-export",{
+    method:"POST",headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:init.token,profile:"recovery",
+      rateLimit:"6",serviceCapacity:"2",mode:"protected"}).toString()
+  });
+  assert.equal(r.status,200);
+  assert((r.headers.get("content-type")??"").includes("text/csv"));
+  assert((r.headers.get("content-disposition")??"").includes("attachment"));
+  const body=await r.text();
+  assert.equal(body.trim().split("\n").length,9);
+  assert(body.startsWith("time_slot,incoming,accepted,throttled,unavailable"));
+  assert(!body.includes(init.token));
+  assert(!body.includes("password"));
+  assert(!body.includes("127.0.0.1"));
+});
