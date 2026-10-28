@@ -57,6 +57,8 @@ jobs:
           node --test tests/network-observatory.test.mjs
           ./node_modules/.bin/esbuild src/network-security-analysis.ts --bundle --platform=node --format=esm --outfile=.network-test/network-security-analysis.mjs
           node --test tests/network-security-analysis.test.mjs
+          ./node_modules/.bin/esbuild src/network-journal.ts --bundle --platform=node --format=esm --outfile=.network-test/network-journal.mjs
+          node --test tests/network-journal.test.mjs
           ./node_modules/.bin/esbuild src/defensive-header-audit.ts --bundle --platform=node --format=esm --outfile=.network-test/defensive-header-audit.mjs
           node --test tests/defensive-header-audit.test.mjs
           ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
