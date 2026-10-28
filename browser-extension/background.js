@@ -100,7 +100,12 @@ function appendEvent(record, expectedGeneration=null) {
       state.monitoring!==true||
       state.activeTabId!==record.tabId||
       (expectedGeneration!==null&&
-        (Number(state.captureGeneration)||0)!==expectedGeneration)
+        (Number(state.captureGeneration)||0)!==expectedGeneration)||
+      // Page-originated event timestamps can be spoofed. This guard only
+      // excludes clearly old observations; it is not source authentication.
+      (Number.isFinite(record.sourceAt)&&
+        Number.isFinite(state.captureStartedAt)&&state.captureStartedAt>0&&
+        record.sourceAt < state.captureStartedAt-500)
     ))return;
     const events = Array.isArray(state.events) ? state.events : [];
     const droppedEvents = Number(state.droppedEvents) || 0;
