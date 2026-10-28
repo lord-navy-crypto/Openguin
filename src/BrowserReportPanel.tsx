@@ -86,7 +86,8 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       browser:report?{
         source:report.source,formatVersion:report.formatVersion,generatedAt:report.generatedAt,
         eventCount:report.events.length,quality:report.quality??null,
-        labCompatibility:report.labCompatibility??null,findings,eventCounts:counts,requestLifecycles,events:report.events
+        labCompatibility:report.labCompatibility??null,
+        captureSession:report.captureSession??null,findings,eventCounts:counts,requestLifecycles,events:report.events
       }:null,
       crossLayer:correlation,
       networkSecurityReview:securityReview?buildSecurityReviewExport(securityReview):null,
@@ -154,6 +155,22 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <p><b>建议：</b>{item.nextStep}</p>
         </article>)}
       </div>}
+      {report.captureSession&&<section className="browser-correlation" aria-label="Browser capture session evidence">
+        <div className="browser-correlation-head">
+          <h4>采集完整性 · v19</h4>
+          <span>{report.captureSession.monitoringAtExport?"导出时标记为正在监测":"导出时已停止"}</span>
+        </div>
+        <p>扩展声明的本次会话收件数为 <strong>{report.captureSession.observedCount}</strong>；
+          本次报告实际包含 <strong>{report.events.length}</strong> 条事件。
+          两者可能因 300 条缓存上限、清理记录及可选下载事件而不同，不代表流量丢包。</p>
+        <p>开始时间：{report.captureSession.startedAt===null?"不可用":
+          new Date(report.captureSession.startedAt).toLocaleString()} ·
+          最近一次接收：{report.captureSession.lastObservedAt===null?"无确认事件":
+          new Date(report.captureSession.lastObservedAt).toLocaleString()}</p>
+        {report.captureSession.stopReason&&<p>采集终止原因：{report.captureSession.stopReason}</p>}
+        <p className="muted">这些是扩展本地元数据，未独立验证网页真实性；
+          页面事件可能被遗漏或伪造，不应单独用来认定网站遭受攻击。</p>
+      </section>}
       {report.labCompatibility&&<section className="browser-correlation" aria-label="OpenPenguin localhost extension v17 lab summary">
         <div className="browser-correlation-head"><h4>Localhost Lab · 浏览器监测与防御实验室</h4>
           <span>v17 匹配</span></div>

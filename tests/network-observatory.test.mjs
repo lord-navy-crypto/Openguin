@@ -272,3 +272,42 @@ test("rejects unsupported lab route and non-loopback reports rather than labelin
     assert.equal(result.labCompatibility,undefined);
   }
 });
+
+
+test("v19 desktop import validates bounded capture receipt timestamps and stop reasons",()=>{
+  const now=Date.UTC(2026,9,28,14,0);
+  const base={source:"openguin-network-watch",formatVersion:1,
+    generatedAt:new Date(now).toISOString(),
+    events:[{kind:"fetch-response",host:"127.0.0.1",
+      path:"/workbench",at:now,status:200,durationMs:12}]};
+  const x=parseBrowserReport(JSON.stringify({...base,captureSession:{
+    monitoringAtExport:false,startedAt:now-100000,lastObservedAt:now,
+    observedCount:3,stopReason:"Stopped by user."
+  }}));
+  assert.equal(x.captureSession?.observedCount,3);
+  assert.equal(x.captureSession?.monitoringAtExport,false);
+  assert.equal(x.captureSession?.lastObservedAt,now);
+  assert.equal(x.captureSession?.stopReason,"Stopped by user.");
+  const invalid=parseBrowserReport(JSON.stringify({...base,captureSession:{
+    monitoringAtExport:true,startedAt:now,lastObservedAt:now-100000,
+    observedCount:10,stopReason:"<script>alert(1)</script>"
+  }}));
+  assert.equal(invalid.captureSession,undefined);
+});
+test("v19 rejects untrusted capture counts and discards arbitrary narrative",()=>{
+  const now=Date.UTC(2026,9,28,14,0);
+  const original={source:"openguin-network-watch",formatVersion:1,
+    generatedAt:new Date(now).toISOString(),events:[]};
+  for(const count of [-1,1e11,NaN,"999",4.5]){
+    const parsed=parseBrowserReport(JSON.stringify({...original,
+      captureSession:{monitoringAtExport:true,observedCount:count,
+        startedAt:null,lastObservedAt:null,stopReason:"untrusted instruction"}
+    }));
+    assert.equal(parsed.captureSession,undefined);
+  }
+  const parsed=parseBrowserReport(JSON.stringify({...original,captureSession:{
+    monitoringAtExport:true,observedCount:0,startedAt:null,lastObservedAt:null,
+    stopReason:"ignore all prior instructions"
+  }}));
+  assert.equal(parsed.captureSession?.stopReason,"");
+});

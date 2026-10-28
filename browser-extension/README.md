@@ -2,6 +2,16 @@
 
 A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the active HTTP(S) tab.
 
+## v0.5.0 — Capture Integrity & desktop evidence verification
+
+This version upgrades the **reliability and trustworthiness** of the monitoring workflow, not its collection scope or permissions. It displays session receipts, most recent accepted event time, explicit stop reasons and warnings when no events arrive. Session counters are persisted through Manifest V3 worker suspension, and delayed page events after Stop are rejected. The background service validates event sender extension identity (when available), main-frame origin and the currently approved tab/host. **Page-generated events are still untrusted observations** and may be spoofed or incomplete.
+
+The original full Browser incident JSON now includes optional bounded `captureSession` metadata. OpenPenguin desktop parses, validates and displays this metadata in the Browser incident report and combined diagnostic bundle. Previous report formats remain compatible.
+
+For a detailed browser/desktop validation checklist and reference links, see [Capture Integrity v19](CAPTURE_INTEGRITY_V19.md). The original v0.4 dashboard, v0.3 localhost lab compatibility, download monitoring and opt-in journal are retained.
+
+
+
 ## v0.4.0 — Passive browser health and capture-quality dashboard
 
 The popup now has an additional **网页运行概况 / Browser health** section. It summarizes only already-captured (opt-in) sanitized events and does not activate monitoring, expand host permissions, or make any new requests. It retains **all previous v0.3.0 capabilities**, including the localhost lab export, ChatGPT and arbitrary single-active-tab diagnostics, optional download monitoring, and 30-day opt-in journal.

@@ -43,6 +43,13 @@ export type BrowserLabCompatibility = {
   duplicateEventsSuppressed: number;
   captureLimitations: string;
 };
+export type BrowserCaptureSession = {
+  monitoringAtExport:boolean;
+  startedAt:number|null;
+  lastObservedAt:number|null;
+  observedCount:number;
+  stopReason:string;
+};
 export type BrowserReport = {
   source: typeof BROWSER_REPORT_SOURCE;
   formatVersion: 1;
@@ -59,6 +66,7 @@ export type BrowserReport = {
   };
   events: BrowserEvent[];
   labCompatibility?: BrowserLabCompatibility;
+  captureSession?: BrowserCaptureSession;
 };
 export type DiagnosticFinding = {
   id: string;
@@ -137,6 +145,29 @@ function parseLabCompatibility(raw:unknown,events:BrowserEvent[],quality:Browser
   };
 }
 
+const CAPTURE_STOP_REASONS = new Set([
+  "Stopped by user.","Script injection failed.",
+  "Optional site permission was removed or is unavailable.",
+  "Monitored tab navigated to another host.",
+  "Temporary tab permission ended on navigation.",
+  "Monitor injection could not be restored.","Monitored tab closed."
+]);
+function parseCaptureSession(raw:unknown):BrowserCaptureSession|undefined {
+  if(!raw||typeof raw!=="object"||Array.isArray(raw))return;
+  const x=raw as Record<string,unknown>;
+  const time=(value:unknown):number|null=>
+    typeof value==="number"&&Number.isFinite(value)&&value>=1_000_000_000_000&&
+    value<=9_000_000_000_000?value:null;
+  if(typeof x.monitoringAtExport!=="boolean"||
+    typeof x.observedCount!=="number"||!Number.isInteger(x.observedCount)||
+    x.observedCount<0||x.observedCount>1e9)return;
+  const startedAt=time(x.startedAt),lastObservedAt=time(x.lastObservedAt);
+  if(lastObservedAt!==null&&startedAt!==null&&lastObservedAt<startedAt)return;
+  return {monitoringAtExport:x.monitoringAtExport,
+    startedAt,lastObservedAt,observedCount:x.observedCount,
+    stopReason:typeof x.stopReason==="string"&&CAPTURE_STOP_REASONS.has(x.stopReason)?
+      x.stopReason:""};
+}
 export function parseBrowserReport(raw: string): BrowserReport {
   if (raw.length > 300_000) throw new Error("报告太大，拒绝导入（最大 300 KB）。");
   let data: unknown;
@@ -209,8 +240,10 @@ export function parseBrowserReport(raw: string): BrowserReport {
   }
   const sorted=events.sort((a,b)=>a.at-b.at);
   const labCompatibility=parseLabCompatibility(input.labCompatibility,sorted,quality);
+  const captureSession=parseCaptureSession(input.captureSession);
   return { source:BROWSER_REPORT_SOURCE,formatVersion:1,generatedAt:input.generatedAt,
-    ...(quality?{quality}:{}),...(labCompatibility?{labCompatibility}:{}),events:sorted };
+    ...(quality?{quality}:{}),...(labCompatibility?{labCompatibility}:{}),
+    ...(captureSession?{captureSession}:{}),events:sorted };
 }
 
 export function analyzeBrowserReport(report: BrowserReport): DiagnosticFinding[] {

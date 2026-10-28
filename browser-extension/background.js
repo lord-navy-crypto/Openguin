@@ -91,8 +91,12 @@ function appendEvent(record) {
   eventWriteQueue = eventWriteQueue.catch(() => {}).then(async () => {
     const state = await chrome.storage.local.get({
       events: [], droppedEvents: 0, journalEnabled: false,
-      journalEvents: [], journalDropped: 0
+      journalEvents: [], journalDropped: 0,
+      monitoring:false, activeTabId:null, captureObservedCount:0
     });
+    // Drop delayed page records once explicit monitoring has ended.
+    if(Number.isInteger(record.tabId) &&
+      (state.monitoring!==true||state.activeTabId!==record.tabId))return;
     const events = Array.isArray(state.events) ? state.events : [];
     const droppedEvents = Number(state.droppedEvents) || 0;
     const nextDropped = events.length >= MAX_EVENTS ? Math.min(1e9, droppedEvents + 1) : droppedEvents;
@@ -100,6 +104,14 @@ function appendEvent(record) {
       events: [record, ...events].slice(0, MAX_EVENTS),
       droppedEvents: nextDropped
     };
+    // Session receipt counters are stored with the events. They survive MV3
+    // worker suspension and exclude optional browser-wide download events.
+    if (Number.isInteger(record.tabId) && state.monitoring===true &&
+        state.activeTabId===record.tabId) {
+      updates.captureObservedCount=Math.min(1e9,Math.max(0,
+        Number(state.captureObservedCount)||0)+1);
+      updates.captureLastEventAt=record.at;
+    }
     if (state.journalEnabled === true) {
       const cutoff = Date.now() - JOURNAL_RETENTION_MS;
       const older = Array.isArray(state.journalEvents) ? state.journalEvents : [];
@@ -138,6 +150,10 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (!message || message.type !== "openguin-network-event") return;
   const tabId = sender.tab && sender.tab.id;
   if (!Number.isInteger(tabId)) return;
+  // Chrome identifies the extension and main frame. Reject cross-frame and
+  // other-extension messages even if their page event looks plausible.
+  if (chrome.runtime.id && sender.id !== chrome.runtime.id) return;
+  if (Number.isInteger(sender.frameId) && sender.frameId!==0) return;
   // Events must originate from the tab the user explicitly activated.
   // Do not accept unrelated tabs/frames or events after monitoring was stopped.
   void chrome.storage.local.get({ monitoring: false, activeTabId: null, activeHost: "" }).then(state => {
@@ -189,7 +205,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (navigatedAway ||
       (state.monitorMode === "active-tab" && changeInfo.status === "loading")) {
     await chrome.storage.local.set({
-      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab",
+      captureStopReason:navigatedAway?"Monitored tab navigated to another host.":"Temporary tab permission ended on navigation."
     });
     return;
   }
@@ -199,13 +216,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   const origin = approvedPersistentOrigin(tab && tab.url, state.activeHost);
   if (!origin || !(await chrome.permissions.contains({ origins: [origin] }))) {
     await chrome.storage.local.set({monitoring:false,activeTabId:null,
-      activeHost:"",monitorMode:"active-tab"});
+      activeHost:"",monitorMode:"active-tab",
+      captureStopReason:"Optional site permission was removed or is unavailable."});
     return;
   }
   try { await injectMonitor(tabId); } catch {
     // The user should not see a misleading active state if reattachment failed.
     await chrome.storage.local.set({
-      monitoring:false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+      monitoring:false,activeTabId:null,activeHost:"",monitorMode:"active-tab",
+      captureStopReason:"Monitor injection could not be restored."
     });
   }
 });
@@ -348,14 +367,31 @@ async function configureDownloadAlarm() {
   }
 }
 void configureDownloadAlarm().catch(() => {});
+async function reconcileReloadMonitoringPermission() {
+  const state=await chrome.storage.local.get({
+    monitoring:false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+  });
+  if(!state.monitoring||!["chatgpt-persistent","site-persistent"].includes(state.monitorMode))return;
+  const host=state.activeHost;
+  const origin=CHATGPT_HOSTS.has(host)?"https://"+host+"/*":
+    LOOPBACK_HOSTS.has(host)?"http://"+host+"/*":"";
+  if(origin&&await chrome.permissions.contains({origins:[origin]}))return;
+  await chrome.storage.local.set({monitoring:false,activeTabId:null,
+    activeHost:"",monitorMode:"active-tab",
+    captureStopReason:"Optional site permission was removed or is unavailable."});
+}
 if (chrome.permissions) {
   chrome.permissions.onAdded.addListener(() => { void configureDownloadAlarm().catch(() => {}); });
-  chrome.permissions.onRemoved.addListener(() => { void configureDownloadAlarm().catch(() => {}); });
+  chrome.permissions.onRemoved.addListener(() => {
+    void configureDownloadAlarm().catch(() => {});
+    void reconcileReloadMonitoringPermission().catch(() => {});
+  });
 }
 
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const state = await chrome.storage.local.get({ activeTabId: null });
   if (state.activeTabId === tabId) {
-    await chrome.storage.local.set({ monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab" });
+    await chrome.storage.local.set({ monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab",
+      captureStopReason:"Monitored tab closed." });
   }
 });
