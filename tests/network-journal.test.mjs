@@ -101,6 +101,8 @@ test("summary export has no raw event timeline or resource identifiers",()=>{
   const report=JSON.stringify(exportJournalSummary(reviewBrowserJournal(journal,now)));
   assert.equal(report.includes("private"),false);
   assert.equal(report.includes("requestId"),false);
-  assert.equal(report.includes('"events"'),false);
+  const decoded=JSON.parse(report);
+  assert.equal(Object.hasOwn(decoded,"events"),false);
+  assert.equal(decoded.hosts[0].events,1); // aggregate count is allowed
   assert.equal(report.includes("safe.example"),true);
 });
