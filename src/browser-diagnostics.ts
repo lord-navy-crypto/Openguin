@@ -32,6 +32,17 @@ export type BrowserEvent = {
   readyState?: string;
   bodyChildCount?: number;
 };
+export type BrowserLabCompatibility = {
+  schema: "openguin-localhost-extension-v17";
+  observedResponses: number;
+  statusCounts: Record<string,number>;
+  medianObservedMs: number|null;
+  p95ObservedMs: number|null;
+  latencySamples: number;
+  lostEvents: number;
+  duplicateEventsSuppressed: number;
+  captureLimitations: string;
+};
 export type BrowserReport = {
   source: typeof BROWSER_REPORT_SOURCE;
   formatVersion: 1;
@@ -47,6 +58,7 @@ export type BrowserReport = {
     eventCounts: Record<string, number>;
   };
   events: BrowserEvent[];
+  labCompatibility?: BrowserLabCompatibility;
 };
 export type DiagnosticFinding = {
   id: string;
@@ -82,6 +94,48 @@ function sanitizedPath(value: unknown): string | undefined {
 const bounded = (value: unknown): number | undefined =>
   typeof value === "number" && Number.isFinite(value)
     ? Math.min(1e9, Math.max(0, value)) : undefined;
+
+const LOOPBACK_LAB_HOSTS = new Set(["127.0.0.1","localhost"]);
+const LAB_RESPONSE_KINDS = new Set(["fetch-response","xhr-response"]);
+const ALLOWED_LAB_PATHS = new Set([
+  "/","/health","/session","/logout","/member","/admin","/form","/rate-check",
+  "/events","/access-log","/manual-console","/manual-attempt","/manual-capacity",
+  "/manual-reset","/workbench","/workbench-client","/audit-core","/ownership-lab",
+  "/ownership-mode","/record-own","/record-other","/defense-studio",
+  "/defense-studio-export","/drills","/drill-step","/drill-policy","/drill-reset",
+  "/drill-report","/defense-engine","/defense-engine-export"
+]);
+function parseLabCompatibility(raw:unknown,events:BrowserEvent[],quality:BrowserReport["quality"]):
+  BrowserLabCompatibility|undefined {
+  if(!raw||typeof raw!=="object"||Array.isArray(raw)||!events.length)return;
+  const entry=raw as Record<string,unknown>;
+  if(entry.schema!=="openguin-localhost-extension-v17"||
+    events.some(e=>!LOOPBACK_LAB_HOSTS.has(e.host)||!e.path||!ALLOWED_LAB_PATHS.has(e.path)))return;
+  // Never trust third-party supplied counts or classifications. Recalculate
+  // from already-sanitized, fixed-route browser events.
+  const responses=events.filter(e=>LAB_RESPONSE_KINDS.has(e.kind)&&
+    typeof e.status==="number"&&Number.isInteger(e.status)&&e.status>=100&&e.status<=599);
+  const counts:Record<string,number>={};
+  const times:number[]=[];
+  for(const event of responses){
+    const code=String(event.status);
+    counts[code]=(counts[code]??0)+1;
+    if(typeof event.durationMs==="number"&&Number.isFinite(event.durationMs)&&
+      event.durationMs>=0&&event.durationMs<=60000)times.push(event.durationMs);
+  }
+  times.sort((a,b)=>a-b);
+  const at=(p:number)=>times.length?times[Math.max(0,Math.ceil(times.length*p)-1)]:null;
+  return {
+    schema:"openguin-localhost-extension-v17",observedResponses:responses.length,
+    statusCounts:counts,
+    medianObservedMs:at(0.5),
+    p95ObservedMs:times.length>=3?at(0.95):null,
+    latencySamples:times.length,
+    lostEvents:quality?.droppedEvents??0,
+    duplicateEventsSuppressed:quality?.duplicateEventsSuppressed??0,
+    captureLimitations:"只观察手动开启监测时的 Fetch/XHR；普通 HTML 表单跳转状态可能漏采，应与本机服务器 access.log 对照。"
+  };
+}
 
 export function parseBrowserReport(raw: string): BrowserReport {
   if (raw.length > 300_000) throw new Error("报告太大，拒绝导入（最大 300 KB）。");
@@ -153,7 +207,10 @@ export function parseBrowserReport(raw: string): BrowserReport {
       eventCounts
     };
   }
-  return { source: BROWSER_REPORT_SOURCE, formatVersion: 1, generatedAt: input.generatedAt, ...(quality ? { quality } : {}), events: events.sort((a,b) => a.at-b.at) };
+  const sorted=events.sort((a,b)=>a.at-b.at);
+  const labCompatibility=parseLabCompatibility(input.labCompatibility,sorted,quality);
+  return { source:BROWSER_REPORT_SOURCE,formatVersion:1,generatedAt:input.generatedAt,
+    ...(quality?{quality}:{}),...(labCompatibility?{labCompatibility}:{}),events:sorted };
 }
 
 export function analyzeBrowserReport(report: BrowserReport): DiagnosticFinding[] {
