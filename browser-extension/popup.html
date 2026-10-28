@@ -36,6 +36,17 @@
       <div id="quality" class="muted" aria-live="polite">Capture quality will appear here.</div>
       <div class="buttons" style="margin-top:10px"><button id="exportReport" class="primary">Copy diagnostic report</button><button id="clear">Clear events</button><button id="downloadJson">Download JSON report</button><button id="downloadCsv">Download CSV table</button></div>
     </section>
+    <section class="panel">
+      <h2>Opt-in 30-day event journal</h2>
+      <div id="journalState" class="muted">Journal is off. Recording requires explicit tab/download monitoring.</div>
+      <div id="journalPreview" class="events" style="max-height:90px;margin:9px 0"></div>
+      <div class="buttons">
+        <button id="journalToggle" class="primary wide">Enable local journal</button>
+        <button id="journalJson">Export journal JSON</button>
+        <button id="journalCsv">Export journal CSV</button>
+        <button id="journalClear" class="wide">Stop and clear journal</button>
+      </div>
+    </section>
     <div class="privacy">Privacy: page monitoring captures timing, status codes, sanitized host/path metadata, and error categories. Optional file-download monitoring requires separate downloads/alarms permissions and records download host, coarse progress, byte counts, duration, 60-second stalls, and failure category—not filenames or full URLs. Nothing is uploaded.</div>
   </main>
   <script src="popup.js"></script>
