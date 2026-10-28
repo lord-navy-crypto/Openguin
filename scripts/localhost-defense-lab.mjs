@@ -75,10 +75,10 @@ export function createLocalDefenseLab(options={}){
   const events=[];
   const limiter=new Map();
   let activePort=port;
-  const record=(route,status)=>{
+  const record=(route,status,method)=>{
     const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
-      method:["GET","POST","HEAD"].includes(req.method)?req.method:"OTHER",status});
+      method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
   };
   const server=http.createServer(async(req,res)=>{
@@ -89,7 +89,7 @@ export function createLocalDefenseLab(options={}){
     const send=(status,body,kind="text/html; charset=utf-8",extra={})=>{
       res.writeHead(status,{"Content-Type":kind,...headers,...extra});
       res.end(req.method==="HEAD"?"":body);
-      record(route,status);
+      record(route,status,req.method);
     };
     let route="unknown";
     if(!validHosts.has(host)){
