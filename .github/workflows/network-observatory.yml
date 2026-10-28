@@ -11,12 +11,14 @@ on:
       - feature/network-security-lab-v2
       - feature/security-toolbox-journal-app-monitor-v3
       - feature/defensive-mini-tools-v4
+      - feature/defensive-mini-tools-v5
   pull_request:
     branches:
       - main
       - feature/browser-network-diagnostics
       - feature/network-security-lab-v2
       - feature/security-toolbox-journal-app-monitor-v3
+      - feature/defensive-mini-tools-v4
   workflow_dispatch:
 
 jobs:
@@ -71,6 +73,8 @@ jobs:
           node --test tests/defense-action-plan.test.mjs
           ./node_modules/.bin/esbuild src/defensive-mini-tools.ts --bundle --platform=node --format=esm --outfile=.network-test/defensive-mini-tools.mjs
           node --test tests/defensive-mini-tools.test.mjs
+          ./node_modules/.bin/esbuild src/defensive-auditors-v5.ts --bundle --platform=node --format=esm --outfile=.network-test/defensive-auditors-v5.mjs
+          node --test tests/defensive-auditors-v5.test.mjs
           ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
           node --test tests/network-one-click.test.mjs
           ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
