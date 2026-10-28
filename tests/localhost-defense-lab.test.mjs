@@ -169,3 +169,76 @@ test("real localhost outcomes export an anonymized Apache-compatible access.log"
   assert(!text.includes("attacker.example"));
   assert(text.includes("127.0.0.1"));
 });
+
+
+test("manual console renders a browser operated, no-password defense workflow",async t=>{
+  const {url}=await setup(t);
+  const r=await get(url+"/manual-console");
+  assert.equal(r.status,200);
+  const html=await r.text();
+  assert(html.includes('action="/manual-attempt"'));
+  assert(html.includes('action="/manual-capacity"'));
+  assert(html.includes('action="/manual-reset"'));
+  assert(!html.includes('name="password"'));
+  assert(!html.includes('targetHost'));
+});
+test("single-click synthetic identity failures demonstrate 401 then 429 without a password",async t=>{
+  const {url,lab}=await setup(t);
+  const s=await initialContext(url);
+  const post=()=>get(url+"/manual-attempt",{
+    method:"POST",headers:{"Cookie":s.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:s.token}).toString()
+  });
+  for(let i=0;i<3;i++)assert.equal((await post()).status,401);
+  const limited=await post();
+  assert.equal(limited.status,429);
+  assert.equal(limited.headers.get("retry-after"),"60");
+  const records=lab.getAggregates();
+  assert.equal(records.statusCounts["429"],1);
+  assert(!JSON.stringify(records).includes(s.token));
+});
+test("single-click capacity simulation returns conceptual 503 without allocating real load",async t=>{
+  const {url}=await setup(t);
+  const s=await initialContext(url);
+  const post=()=>get(url+"/manual-capacity",{
+    method:"POST",headers:{"Cookie":s.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:s.token}).toString()
+  });
+  for(let i=0;i<3;i++)assert.equal((await post()).status,200);
+  for(let i=0;i<2;i++)assert.equal((await post()).status,503);
+  const clear=await get(url+"/manual-reset",{method:"POST",
+    headers:{"Cookie":s.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:s.token}).toString()});
+  assert.equal(clear.status,200);
+  assert.equal((await post()).status,200);
+});
+test("manual controls require a server-issued CSRF token and never accept arbitrary destinations",async t=>{
+  const {url}=await setup(t);
+  const fake="d".repeat(48);
+  const r=await get(url+"/manual-attempt",{method:"POST",
+    headers:{"Cookie":"lab_csrf="+fake,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:fake}).toString()});
+  assert.equal(r.status,403);
+  assert.equal((await get(url+"/manual-capacity")).status,404);
+  assert.equal((await get(url+"/manual-console?target=https://example.org")).status,400);
+  const s=await initialContext(url);
+  const missing=await get(url+"/manual-reset",{method:"POST",
+    headers:{"Cookie":s.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:"not-a-csrf=value"});
+  assert.equal(missing.status,403);
+});
+test("manual results are retained only as bounded sanitized route/status events",async t=>{
+  const {url}=await setup(t);
+  const s=await initialContext(url);
+  await get(url+"/manual-attempt",{method:"POST",
+    headers:{"Cookie":s.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+    body:new URLSearchParams({csrf:s.token}).toString()});
+  const raw=await get(url+"/access-log");
+  const text=await raw.text();
+  assert.equal(raw.status,200);
+  assert(text.includes("POST /manual-attempt HTTP/1.1"));
+  assert(!text.includes("lab_csrf"));
+  assert(!text.includes(s.token));
+  assert(!text.includes("Content-Type"));
+  assert.equal(analyzeAccessLog(text).ignoredLines,0);
+});

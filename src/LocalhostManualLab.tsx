@@ -71,6 +71,7 @@ export default function LocalhostManualLab(){
     <a href={url} target="_blank" rel="noopener noreferrer">{url}</a>
     <small>这个地址只指向当前电脑。不能从其他电脑、手机或线上网站访问，不支持自定义目标地址。</small>
     <a href="http://127.0.0.1:19090/access-log" target="_blank" rel="noopener noreferrer">下载本机练习日志 access.log</a>
+    <a href="http://127.0.0.1:19090/manual-console" target="_blank" rel="noopener noreferrer">打开 v10 手动防御控制台（独立本地网页）</a>
    </div>
   </div>
   <div className="localhost-lab-info">

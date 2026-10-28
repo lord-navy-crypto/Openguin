@@ -16,6 +16,7 @@ on:
       - feature/local-defense-simulator-v7
       - feature/virtual-site-builder-v8
       - feature/localhost-manual-defense-lab-v9
+      - feature/manual-defense-console-v10
   pull_request:
     branches:
       - main
@@ -27,6 +28,7 @@ on:
       - feature/defensive-mini-tools-v6
       - feature/local-defense-simulator-v7
       - feature/virtual-site-builder-v8
+      - feature/localhost-manual-defense-lab-v9
   workflow_dispatch:
 
 jobs:
@@ -101,7 +103,7 @@ jobs:
           node --test tests/diagnostic-export.test.mjs
 
       - name: Test isolated manual localhost HTTP lab
-        run: node --test tests/localhost-defense-lab.test.mjs
+        run: node --test tests/manual-defense-exercises.test.mjs tests/localhost-defense-lab.test.mjs
 
       - name: Build frontend
         run: npm run build
