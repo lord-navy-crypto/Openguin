@@ -11,6 +11,7 @@ import DefensiveAuditorsV5 from "./DefensiveAuditorsV5";
 import DefensiveLintsV6 from "./DefensiveLintsV6";
 import LocalDefenseSimulator from "./LocalDefenseSimulator";
 import VirtualSiteBuilderV8 from "./VirtualSiteBuilderV8";
+import LocalhostManualLab from "./LocalhostManualLab";
 import type {BrowserJournal} from "./network-journal";
 import type {AccessAudit} from "./server-access-log";
 import "./security-workbench.css";
@@ -59,6 +60,7 @@ export default function SecurityWorkbench(){
   const appPreview=showAll?snapshot?.processes:snapshot?.processes.slice(0,15);
   const delta=baseline&&audit?compareHeaderAudits(baseline,audit):null;
   return <div className="security-workbench">
+    <LocalhostManualLab/>
     <VirtualSiteBuilderV8/>
     <LocalDefenseSimulator/>
     <DefensiveMiniToolbox/>
