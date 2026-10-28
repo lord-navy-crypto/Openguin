@@ -11,6 +11,12 @@ const downloadCsvButton = document.getElementById("downloadCsv");
 const eventsNode = document.getElementById("events");
 const qualityNode = document.getElementById("quality");
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
+const journalToggle = document.getElementById("journalToggle");
+const journalClear = document.getElementById("journalClear");
+const journalJson = document.getElementById("journalJson");
+const journalCsv = document.getElementById("journalCsv");
+const journalState = document.getElementById("journalState");
+const journalPreview = document.getElementById("journalPreview");
 
 async function activeTab() {
   const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -186,7 +192,8 @@ async function render() {
     activeTab(),
     chrome.storage.local.get({
       events: [], monitoring: false, activeTabId: null, activeHost: "",
-      duplicateEventsSuppressed: 0, droppedEvents: 0
+      duplicateEventsSuppressed: 0, droppedEvents: 0,
+      journalEnabled: false, journalEvents: [], journalDropped: 0
     }),
     chrome.permissions.contains({ permissions: ["downloads"] }).catch(() => false)
   ]);
@@ -211,6 +218,22 @@ async function render() {
     droppedCount ? "Older events omitted after the 300-event cap: " + droppedCount : "",
     !duplicateCount && !droppedCount ? "Capture quality: no duplicate or overflow events recorded." : ""
   ].filter(Boolean).join(" ");
+  // The long-term journal is deliberately separate from the 300-event report.
+  const archived = Array.isArray(stored.journalEvents) ? stored.journalEvents : [];
+  const capped = Math.max(0, Number(stored.journalDropped) || 0);
+  journalToggle.textContent = stored.journalEnabled ? "Pause journal (keep saved events)" : "Enable 30-day local journal";
+  journalState.textContent = (stored.journalEnabled ? "Recording enabled when tab/download monitoring is active. " : "Recording paused. ") +
+    archived.length + " bounded records saved (max 2500 / 30 days)." +
+    (capped ? " " + capped + " older records replaced at capacity." : "");
+  journalJson.disabled = archived.length === 0;
+  journalCsv.disabled = archived.length === 0;
+  journalPreview.replaceChildren();
+  for (const event of archived.slice(0,5)) {
+    const row = document.createElement("div");
+    row.className = "event";
+    row.textContent = new Date(event.at).toLocaleString() + " · " + String(event.host || "") + " · " + String(event.kind || "");
+    journalPreview.appendChild(row);
+  }
   const hasEvents = Array.isArray(stored.events) && stored.events.length > 0;
   exportButton.disabled = !hasEvents;
   downloadJsonButton.disabled = !hasEvents;
@@ -399,5 +422,63 @@ clearButton.addEventListener("click", async () => {
   await chrome.storage.local.set({ events: [], duplicateEventsSuppressed: 0, droppedEvents: 0 });
   await render();
 });
+
+journalToggle.addEventListener("click", async () => {
+  const current = await chrome.storage.local.get({journalEnabled:false});
+  await chrome.storage.local.set({journalEnabled:current.journalEnabled!==true});
+  await render();
+});
+journalClear.addEventListener("click", async () => {
+  await chrome.storage.local.set({journalEnabled:false,journalEvents:[],journalDropped:0});
+  await render();
+});
+async function buildLongTermJournal() {
+  const saved = await chrome.storage.local.get({journalEvents:[],journalDropped:0,journalEnabled:false});
+  const allowedKinds = new Set([
+    "monitor-active","monitor-started","navigation","render-summary","render-stability",
+    "fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response","xhr-error","xhr-stall",
+    "stream-gap","stream-gap-resolved","stream-error","stream-end","body-read-complete","body-read-error",
+    "resource-error","slow-resource","javascript-error","unhandled-rejection","long-task",
+    "download-start","download-progress","download-complete","download-failed","download-stall"
+  ]);
+  const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+  const events = (Array.isArray(saved.journalEvents) ? saved.journalEvents : [])
+    .slice(0,2500)
+    .filter(e => e && typeof e === "object" && Number.isFinite(e.at) && e.at >= cutoff
+      && typeof e.host === "string" && /^[a-z0-9.-]{1,120}$/i.test(e.host)
+      && allowedKinds.has(e.kind))
+    .map(e => ({
+      at:e.at,host:e.host.toLowerCase(),kind:e.kind,
+      status:Number.isFinite(e.status)?Math.max(0,Math.min(999,e.status)):null,
+      durationMs:Number.isFinite(e.durationMs)?Math.max(0,Math.min(1e9,e.durationMs)):null
+    }));
+  return {
+    schema:"openguin-browser-journal-v1",createdAt:new Date().toISOString(),
+    retentionDays:30,capacity:2500,recordCount:events.length,
+    capacityDropped:Math.max(0,Number(saved.journalDropped)||0),
+    recordingEnabled:saved.journalEnabled===true,
+    completeness:"May omit events outside active monitoring, expired records, or records lost to capacity.",
+    privacy:{localOnly:true,autoUpload:false,excluded:["URL paths","queries","request IDs","prompts","responses","cookies","headers","tokens","download filenames","packet content"]},
+    events
+  };
+}
+async function exportJournal(format) {
+  try {
+    const report = await buildLongTermJournal();
+    const stamp = new Date().toISOString().replace(/[:.]/g,"-");
+    if (format === "json") {
+      downloadReport("openguin-browser-journal-"+stamp+".json",JSON.stringify(report,null,2),"application/json;charset=utf-8");
+    } else {
+      const columns=["at","host","kind","status","durationMs"];
+      const csv = "\uFEFF" + [columns.join(","),...report.events.map(e => columns.map(k => csvCell(e[k])).join(","))].join("\r\n") + "\r\n";
+      downloadReport("openguin-browser-journal-"+stamp+".csv",csv,"text/csv;charset=utf-8");
+    }
+    status.textContent = "Local long-term journal export started. Review domains and times before sharing.";
+  } catch(e) {
+    status.textContent = "Journal export failed: " + String(e).slice(0,120);
+  }
+}
+journalJson.addEventListener("click",()=>{void exportJournal("json");});
+journalCsv.addEventListener("click",()=>{void exportJournal("csv");});
 chrome.storage.onChanged.addListener(() => { void render(); });
 void render();
