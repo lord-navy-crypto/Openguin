@@ -60,8 +60,13 @@ export function checkCache(raw:string):Report{
  "静态响应头检查，无法证实 CDN 是否缓存了私有内容。");
 }
 function attr(tag:string,name:string):string|null{
- const r=new RegExp("(?:^|[\\\\s])"+name+"(?:\\\\s*=\\\\s*(?:\\\"([^\\\"]*)\\\"|'([^']*)'|([^\\\\s>]+)))?(?=[\\\\s>]|$)","i");
- const m=r.exec(tag);return m?(m[1]??m[2]??m[3]??""):null;
+ // An intentionally conservative tag-attribute tokenizer, not an HTML parser.
+ const body=tag.replace(/^<\s*[a-z][a-z0-9-]*\b/i,"");
+ const regex=/([a-z][a-z0-9:-]*)\s*(?:=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'=<>]+)))?/gi;
+ for(const m of body.matchAll(regex)){
+  if(m[1].toLowerCase()===name)return m[2]??m[3]??m[4]??"";
+ }
+ return null;
 }
 function sriValid(raw:string){
  return raw.trim().split(/\s+/).some(s=>{
