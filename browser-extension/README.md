@@ -2,6 +2,37 @@
 
 A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the active HTTP(S) tab.
 
+## v0.4.0 — Passive browser health and capture-quality dashboard
+
+The popup now has an additional **网页运行概况 / Browser health** section. It summarizes only already-captured (opt-in) sanitized events and does not activate monitoring, expand host permissions, or make any new requests. It retains **all previous v0.3.0 capabilities**, including the localhost lab export, ChatGPT and arbitrary single-active-tab diagnostics, optional download monitoring, and 30-day opt-in journal.
+
+The new panel shows:
+
+- Observed Fetch/XHR HTTP response counts, with 2xx/3xx/4xx/5xx family grouping and specific denied/limited signals (401, 403, 429).
+- Human-observed browser median/P95 request timings; P95 requires at least three valid response samples. These numbers are **not measured server capacity or load-test results**.
+- Requests that have a recorded start but no recorded terminal event, distinguishing recently-started work from starts older than 15 seconds. Missing terminal events can simply reflect navigations, missed capture or buffer truncation; this is **not proof of a server hang**.
+- Local evidence-quality context: dropped events, deduplicated events, and warnings if the fixed 300-event cache may be truncated.
+- Capture scope defaults to **current active tab**. An explicit selector can show all previously captured (still opt-in) events. The same scope applies to the aggregate export; cache-wide truncation counts are identified as global.
+- A separate **Download privacy-limited health summary** button. This aggregate-only JSON contains no hostnames, URL paths, cookies, credentials, headers, payloads or exact per-event timestamps. It is for independent review/sharing; it is **not** the Desktop Browser incident report format.
+- For the desktop application's **Browser incident report**, continue using the original **Copy diagnostic report** or **Download JSON report** buttons. The v17 localhost-lab JSON is also supported, and the desktop app recalculates its local HTTP metrics.
+
+This feature follows Chrome MV3 official guidance on [activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), [permission declarations](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions) and [service-worker lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/service-workers/lifecycle), and [OWASP browser extension vulnerabilities](https://cheatsheetseries.owasp.org/cheatsheets/Browser_Extension_Vulnerabilities_Cheat_Sheet.html).
+
+**Security and privacy tradeoff:** the monitor collects only metadata on tabs where the user explicitly starts it; the page bridge involves untrusted page-originated events. Results are clues, not independently authenticated network evidence. Do not infer that missing errors prove a site is secure or that a status code alone indicates an attack. The extension does not provide credential guessing, exploit payloads, traffic generation or passive collection of other people's private content.
+
+### v18 validation checklist
+
+1. Load the extension from the updated `browser-extension` directory and open any ordinary user-controlled website or local lab.
+2. Click **Start this tab**; perform ordinary interactions, and observe that new HTTP-response and timing figures appear after reopening the popup.
+   Keep **当前标签页记录** selected for this tab's data, or explicitly switch to **全部已手动采集记录** to compare multiple opted-in sessions.
+3. Perform a few single-click Fetch/XHR requests in the OpenPenguin localhost Workbench; compare the popup's 401/403/429/503 observations with the localhost report and server access.log.
+4. Use **Stop monitoring** and confirm that subsequent page interactions do not increase the page's captured events.
+5. Try reloading with and without individually granted optional loopback permission, and confirm the monitor does not follow unrelated navigation.
+6. Export the aggregate health summary. Confirm it contains only numeric counts/timings and quality notices, not hosts or paths. Import a **separate standard diagnostic JSON** for a complete desktop browser incident investigation.
+7. The source CI validates JavaScript syntax, v17 permission boundaries, v18 telemetry bounds and privacy, macOS build, and ZIP contents.
+
+---
+
 ## v0.3.0 — Match the OpenPenguin v9–v16 localhost defense labs
 
 This version preserves all previous page, ChatGPT, download and optional 30-day journal diagnostics. It adds a dedicated **OpenPenguin Localhost Lab** panel and an **opt-in** reload permission limited to `http://127.0.0.1/*` and `http://localhost/*`. There is no broad `<all_urls>` host access, and no cookie, request-body, or response-body monitoring.
