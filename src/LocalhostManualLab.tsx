@@ -72,7 +72,7 @@ export default function LocalhostManualLab(){
     <small>这个地址只指向当前电脑。不能从其他电脑、手机或线上网站访问，不支持自定义目标地址。</small>
     <a href="http://127.0.0.1:19090/access-log" target="_blank" rel="noopener noreferrer">下载本机练习日志 access.log</a>
     <a href="http://127.0.0.1:19090/manual-console" target="_blank" rel="noopener noreferrer">打开 v10 手动防御控制台（独立本地网页）</a>
-    <a href="http://127.0.0.1:19090/workbench" target="_blank" rel="noopener noreferrer">打开 v11 手动 HTTP 测试工作台</a>
+    <a href="http://127.0.0.1:19090/workbench" target="_blank" rel="noopener noreferrer">打开 v16 手动 HTTP 响应头审计与计时工作台</a>
     <a href="http://127.0.0.1:19090/ownership-lab" target="_blank" rel="noopener noreferrer">打开 v12 权限漏洞与修复实验室</a>
     <a href="http://127.0.0.1:19090/defense-studio" target="_blank" rel="noopener noreferrer">打开 v13 OWASP/NIST 认证与流量防御教学实验室</a>
     <a href="http://127.0.0.1:19090/drills" target="_blank" rel="noopener noreferrer">打开 v14 三轨道手动攻防练习台</a>
