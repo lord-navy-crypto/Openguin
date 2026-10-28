@@ -1,4 +1,9 @@
 const MAX_EVENTS = 300;
+// Prevent extension content scripts from directly reading locally retained
+// diagnostic/journal data. The trusted popup and service worker keep access.
+if (typeof chrome.storage.local.setAccessLevel === "function") {
+  void chrome.storage.local.setAccessLevel({accessLevel:"TRUSTED_CONTEXTS"}).catch(() => {});
+}
 // Optional, user-initiated, bounded long-term journal.
 // Records coarse metadata only and never restarts monitoring on its own.
 const JOURNAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
