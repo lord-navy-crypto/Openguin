@@ -497,3 +497,71 @@ test("v14 drill history is token-scoped, and real access logs remain anonymized"
  assert(!log.includes(a.token));
  assert(!log.includes(b.token));
 });
+
+
+test("v15 localhost page exposes 16-slot defensive control model and fixed choices",async t=>{
+ const {url}=await setup(t);
+ const r=await get(url+"/defense-engine");
+ assert.equal(r.status,200);
+ const html=await r.text();
+ assert(html.includes('action="/defense-engine"'));
+ assert(html.includes('action="/defense-engine-export"'));
+ assert(html.includes('name="capacity"'));
+ assert(html.includes('name="queue"'));
+ assert(html.includes('name="throttle"'));
+ assert(html.includes('name="lockout"'));
+ assert(html.includes('name="pattern"'));
+ assert(html.includes('虚拟延迟单位不是毫秒'));
+ assert(!html.includes('name="password"'));
+ assert(!html.includes('name="target"'));
+});
+test("v15 changing only one bounded capacity variable changes offline outcome without generating traffic",async t=>{
+ const {url}=await setup(t),init=await initialContext(url);
+ const post=(data)=>get(url+"/defense-engine",{method:"POST",
+  headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+  body:new URLSearchParams({csrf:init.token,pattern:"release",capacity:"3",
+   queue:"5",throttle:"5",lockout:"3",...data}).toString()});
+ const low=await post({capacity:"3"});
+ const high=await post({capacity:"8"});
+ assert.equal(low.status,200);assert.equal(high.status,200);
+ const a=await low.text(),b=await high.text();
+ assert(a.includes("16 个虚拟时间片"));
+ assert(b.includes("16 个虚拟时间片"));
+ assert(a.includes("防护与教学对照"));
+ assert(b.includes("防护与教学对照"));
+ assert.notEqual(a,b);
+});
+test("v15 rejects unsupported pattern, out-of-range capacity, forged token and remote targets",async t=>{
+ const {url}=await setup(t),init=await initialContext(url);
+ const submit=(data)=>get(url+"/defense-engine",{method:"POST",
+  headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+  body:new URLSearchParams({csrf:init.token,pattern:"release",capacity:"5",
+   queue:"5",throttle:"5",lockout:"3",...data}).toString()});
+ assert.equal((await submit({capacity:"999999"})).status,422);
+ assert.equal((await submit({pattern:"https://outside.example"})).status,422);
+ assert.equal((await submit({lockout:"0"})).status,422);
+ assert.equal((await submit({csrf:"invalid"})).status,403);
+ assert.equal((await get(url+"/defense-engine?target=localhost")).status,400);
+ assert.equal((await get(url+"/defense-engine-export")).status,405);
+ assert.equal((await get(url+"/defense-engine",{headers:{Origin:"https://outside.example"}})).status,403);
+});
+test("v15 offline CSV contains sixteen numeric rows but no personal/network data",async t=>{
+ const {url}=await setup(t),init=await initialContext(url);
+ const csvResponse=await get(url+"/defense-engine-export",{method:"POST",
+  headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+  body:new URLSearchParams({csrf:init.token,pattern:"restoration",capacity:"3",
+   queue:"2",throttle:"8",lockout:"4"}).toString()});
+ assert.equal(csvResponse.status,200);
+ assert((csvResponse.headers.get("content-disposition")??"").includes("attachment"));
+ assert((csvResponse.headers.get("content-type")??"").includes("text/csv"));
+ const csv=await csvResponse.text();
+ assert.equal(csv.trim().split("\n").length,17);
+ assert(csv.includes("contrastUnavailable"));
+ assert(!csv.includes(init.token));
+ assert(!csv.includes("lab_session"));
+ assert(!csv.includes("password"));
+ assert(!csv.includes("http://"));
+ const log=await (await get(url+"/access-log")).text();
+ assert(log.includes('POST /defense-engine-export HTTP/1.1" 200'));
+ assert.equal(analyzeAccessLog(log).ignoredLines,0);
+});
