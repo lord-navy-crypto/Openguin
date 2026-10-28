@@ -242,3 +242,39 @@ test("manual results are retained only as bounded sanitized route/status events"
   assert(!text.includes("Content-Type"));
   assert.equal(analyzeAccessLog(text).ignoredLines,0);
 });
+
+
+test("HTTP workbench is served only from loopback with same-origin-only CSP",async t=>{
+  const {url}=await setup(t);
+  const r=await get(url+"/workbench");
+  assert.equal(r.status,200);
+  const csp=r.headers.get("content-security-policy")??"";
+  assert(csp.includes("connect-src 'self'"));
+  assert(csp.includes("script-src 'self'"));
+  assert(csp.includes("default-src 'none'"));
+  const page=await r.text();
+  for(const id of ["health","member","admin","form","rate","csrf","validation","ordinary"])
+    assert(page.includes('data-lab-action="'+id+'"'));
+  assert(page.includes('src="/workbench-client"'));
+  assert(!page.includes('name="password"'));
+  assert(!page.includes('name="host"'));
+  const client=await get(url+"/workbench-client");
+  assert.equal(client.status,200);
+  assert((client.headers.get("content-type")??"").includes("javascript"));
+  assert((await client.text()).includes("credentials:\"same-origin\""));
+});
+test("HTTP inspector cannot choose remote hosts, query parameters or arbitrary methods",async t=>{
+  const {url}=await setup(t);
+  assert.equal((await get(url+"/workbench?target=https://example.net")).status,400);
+  assert.equal((await get(url+"/workbench",{method:"POST",
+    headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"target=remote"})).status,404);
+  assert.equal((await get(url+"/workbench-client",{headers:{"Origin":"https://outside.example"}})).status,403);
+});
+test("workbench does not relax CSP for member, admin or other pages",async t=>{
+  const {url}=await setup(t);
+  const r=await get(url+"/");
+  const csp=r.headers.get("content-security-policy")??"";
+  assert(csp.includes("default-src 'none'"));
+  assert(!csp.includes("script-src 'self'"));
+  assert(!csp.includes("connect-src 'self'"));
+});
