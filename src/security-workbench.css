@@ -30,3 +30,7 @@
 .security-checklist b{font-size:12px}
 .security-checklist span{font-size:11px;color:#9db5c6;line-height:1.5}
 @media(max-width:750px){.security-tool-head{flex-direction:column}.security-findings,.security-checklist{grid-template-columns:1fr}}
+
+.security-delta{padding:12px;border:1px solid #487b89;border-radius:10px;background:rgba(34,78,94,.24)}
+.security-delta b{font-size:12px}
+.security-delta p{font-size:12px;color:#c0d6e2}
