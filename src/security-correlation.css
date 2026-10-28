@@ -1,0 +1,24 @@
+.security-correlation{display:grid;gap:14px}
+.correlation-head{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.correlation-head h3{font-size:17px;margin:5px 0}
+.correlation-head p,.correlation-hint{font-size:12px;line-height:1.6;color:#a7bfd0}
+.correlation-local{border:1px solid #517c86;color:#b1d5dc;border-radius:30px;padding:7px 10px;white-space:nowrap;font-size:11px}
+.correlation-sources{display:flex;flex-wrap:wrap;gap:10px;font-size:12px}
+.correlation-sources span{padding:9px 11px;border-radius:9px;background:rgba(14,45,63,.5);border:1px solid rgba(156,192,210,.16)}
+.correlation-select{display:grid;gap:8px;color:#a9c4d3;font-size:12px}
+.correlation-select select{padding:10px;background:#0c2739;color:#ecf6fd;border:1px solid #416378;border-radius:9px}
+.correlation-confirm{display:flex;align-items:flex-start;gap:9px;max-width:830px;color:#b5c9d5;font-size:12px;line-height:1.6}
+.correlation-confirm input{margin-top:3px;accent-color:#6aafc3}
+.correlation-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.correlation-stats div{padding:11px;background:rgba(16,48,68,.5);border:1px solid rgba(150,197,220,.14);border-radius:10px;display:grid;gap:5px}
+.correlation-stats small{font-size:11px;color:#a6bccd}
+.correlation-stats b{font-size:19px;font-variant-numeric:tabular-nums}
+.correlation-table-wrap{overflow:auto;max-height:280px}
+.correlation-table-wrap table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+.correlation-table-wrap th{text-align:left;color:#a5bbca;border-bottom:1px solid #38576d;padding:10px}
+.correlation-table-wrap td{padding:9px;border-bottom:1px solid rgba(255,255,255,.09);font-variant-numeric:tabular-nums}
+.correlation-details{max-height:350px}
+.security-correlation button{background:#1b5264;border:1px solid #46839a;color:#e2f5fc;border-radius:9px;padding:9px 13px;cursor:pointer;font-size:12px;width:max-content;max-width:100%}
+.security-correlation button:hover{background:#317083}
+.security-correlation details summary{cursor:pointer;color:#aec9d8;font-size:12px}
+@media(max-width:760px){.correlation-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.correlation-head{flex-direction:column}}
