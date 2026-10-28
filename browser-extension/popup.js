@@ -14,6 +14,13 @@ const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
 const labSummaryNode = document.getElementById("labSummary");
 const labJsonButton = document.getElementById("labJson");
+const observedResponsesNode=document.getElementById("observedResponses");
+const observedErrorsNode=document.getElementById("observedErrors");
+const observedP95Node=document.getElementById("observedP95");
+const observedPendingNode=document.getElementById("observedPending");
+const observabilityQuality=document.getElementById("observabilityQuality");
+const observabilityNotes=document.getElementById("observabilityNotes");
+const observabilityJson=document.getElementById("observabilityJson");
 function supportedPersistentOrigin(tabUrl) {
   try {
     const url = new URL(tabUrl);
@@ -243,6 +250,30 @@ async function render() {
     row.textContent = new Date(event.at).toLocaleString() + " · " + String(event.host || "") + " · " + String(event.kind || "");
     journalPreview.appendChild(row);
   }
+  const dashboard=globalThis.OpenguinObservability.summarize({
+    events:Array.isArray(stored.events)?stored.events:[],
+    quality:{droppedEvents:stored.droppedEvents,
+      duplicateEventsSuppressed:stored.duplicateEventsSuppressed,
+      eventCapReached:stored.droppedEvents>0}
+  });
+  const diagnoses=dashboard.symptoms;
+  observedResponsesNode.textContent=String(dashboard.responseCount);
+  observedErrorsNode.textContent=String(
+    dashboard.statusFamilies["4xx"]+dashboard.statusFamilies["5xx"]);
+  observedErrorsNode.classList.toggle("alert",
+    dashboard.statusFamilies["5xx"]>0||diagnoses.transportErrors>0);
+  observedP95Node.textContent=dashboard.p95ResponseMs===null?
+    (dashboard.timingSamples?"样本不足":"—"):dashboard.p95ResponseMs+" ms";
+  observedPendingNode.textContent=String(diagnoses.unfinished);
+  observedPendingNode.classList.toggle("alert",diagnoses.unfinished>0);
+  observabilityQuality.textContent="错误事件 "+diagnoses.transportErrors+
+    " · 限流 429 "+diagnoses.throttled+
+    " · 失败/卡顿信号 "+diagnoses.stalls+
+    " · 采集丢弃 "+dashboard.capture.droppedEvents+
+    " · 去重 "+dashboard.capture.duplicateEventsSuppressed;
+  observabilityNotes.textContent=dashboard.capture.notices.length?
+    dashboard.capture.notices.join("；"):
+    "基于已捕获事件，不读取网页文本、密码、Cookie 或请求正文。";
   const labEvidence=globalThis.OpenguinLabCompat.toLabEvidence({
     events:Array.isArray(stored.events)?stored.events:[],
     quality:{droppedEvents:stored.droppedEvents,
@@ -435,6 +466,23 @@ async function downloadDiagnosticReport(format) {
     status.textContent = "Could not export report: " + String(error).slice(0, 130);
   }
 }
+
+observabilityJson.addEventListener("click",async()=>{
+  try{
+    const report=await buildDiagnosticReport();
+    const summary=globalThis.OpenguinObservability.summarize(report);
+    const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+    downloadReport("openguin-observability-v18-"+stamp+".json",
+      JSON.stringify({source:"openguin-network-watch",formatVersion:1,
+        generatedAt:report.generatedAt,observability:summary,
+        privacy:{localOnly:true,noPageContent:true,noCredentials:true,
+          noCookies:true,noRequestBodies:true,noFullUrls:true}},null,2),
+      "application/json;charset=utf-8");
+    status.textContent="导出本地只读运行摘要；不包含原始网页内容。";
+  }catch(error){
+    status.textContent="运行概况导出失败："+String(error).slice(0,110);
+  }
+});
 
 labJsonButton.addEventListener("click",async()=>{
   try {
