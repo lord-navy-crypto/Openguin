@@ -9,7 +9,9 @@
     "preview": "vite preview",
     "desktop:prepare": "python3 scripts/apply-build-fixes.py && python3 scripts/apply-full-logs.py && python3 scripts/apply-observatory.py && python3 scripts/apply-performance09.py && python3 scripts/apply-task-center.py && python3 scripts/apply-expansion010.py && python3 scripts/apply-openguin-brand.py && python3 scripts/ensure-app-icon.py && python3 scripts/apply-network-observatory.py && bash scripts/prepare-ollama-sidecar.sh",
     "desktop:dev": "npm run desktop:prepare && tauri dev",
-    "desktop:build": "npm run desktop:prepare && tauri build"
+    "desktop:build": "npm run desktop:prepare && tauri build",
+    "security:lab": "node scripts/localhost-defense-lab.mjs",
+    "security:lab:test": "node --test tests/localhost-defense-lab.test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
