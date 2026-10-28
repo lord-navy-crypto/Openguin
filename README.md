@@ -167,3 +167,10 @@ The separate Security Lab now includes a manual macOS application socket snapsho
 Everything is user-initiated and intentionally defensive. Existing AI Model Lab, Ollama/LabBridge, browser incident review, network speed tests and VPN comparison features remain in place. Security review exports omit sensitive HTTP header contents, browsing paths, cookies and request bodies.
 
 See [Security Toolbox v3 documentation](docs/SECURITY_TOOLBOX_V3.md) and [Browser Extension Guide](browser-extension/README.md). This is an unmerged preview; native app and CI validation should be verified before distribution.
+
+
+## Defensive Mini Tools v4 (feature preview)
+
+The Security Lab now includes six more **local-first, user-triggered** defensive utilities: CSP policy linting, RFC 9116 security.txt review, pasted DNS record configuration checks, URL structure/privacy review, robots.txt access-control education, and local SHA-256 file integrity verification with a user-provided expected hash. No remote scanning or vulnerability exploitation. Results are observational and should not be treated as a security certification.
+
+The existing AI Model Lab, Ollama, Network Doctor, Security Lab browser/server event analysis and response plan remain intact. See [Defensive Mini Tools v4](docs/DEFENSIVE_MINI_TOOLS_V4.md). This branch is not yet merged and requires its own CI checks and desktop manual QA.

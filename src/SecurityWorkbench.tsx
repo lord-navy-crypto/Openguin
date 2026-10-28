@@ -6,6 +6,7 @@ import JournalWorkbench from "./JournalWorkbench";
 import ServerAccessLogWorkbench from "./ServerAccessLogWorkbench";
 import EvidenceCorrelationWorkbench from "./EvidenceCorrelationWorkbench";
 import DefenseActionPlan from "./DefenseActionPlan";
+import DefensiveMiniToolbox from "./DefensiveMiniToolbox";
 import type {BrowserJournal} from "./network-journal";
 import type {AccessAudit} from "./server-access-log";
 import "./security-workbench.css";
@@ -54,6 +55,7 @@ export default function SecurityWorkbench(){
   const appPreview=showAll?snapshot?.processes:snapshot?.processes.slice(0,15);
   const delta=baseline&&audit?compareHeaderAudits(baseline,audit):null;
   return <div className="security-workbench">
+    <DefensiveMiniToolbox/>
     <JournalWorkbench onJournalChange={setBrowserJournal}/>
     <ServerAccessLogWorkbench onAuditChange={setServerAudit}/>
     <EvidenceCorrelationWorkbench browser={browserJournal} server={serverAudit}/>
