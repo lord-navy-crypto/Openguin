@@ -240,6 +240,7 @@
         }
         if (entry.duration < 1500) continue;
         const meta = safeUrl(entry.name);
+        if(crossOrigin)meta.path="/:cross-origin";
         const initiatorType = String(entry.initiatorType || "resource").toLowerCase().slice(0, 20);
         const responseStatus = Number(entry.responseStatus);
         emit(Object.assign({
