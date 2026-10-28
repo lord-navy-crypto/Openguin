@@ -5,7 +5,7 @@ import {
 import {downloadDiagnosticText} from "./diagnostic-export";
 import "./server-access-log.css";
 
-export default function ServerAccessLogWorkbench(){
+export default function ServerAccessLogWorkbench({onAuditChange}:{onAuditChange?:(audit:AccessAudit|null)=>void}){
   const [raw,setRaw]=useState("");
   const [audit,setAudit]=useState<AccessAudit|null>(null);
   const [error,setError]=useState("");
@@ -25,7 +25,7 @@ export default function ServerAccessLogWorkbench(){
   function analyze(text:string){
     try{
       const result=analyzeAccessLog(text);
-      setAudit(result);setRaw("");setError("");
+      setAudit(result);onAuditChange?.(result);setRaw("");setError("");
       setStatus("已本地分析并从输入框清除原始日志。");
     }catch(e){setError(e instanceof Error?e.message:"无法解析日志。");}
   }
@@ -63,7 +63,7 @@ export default function ServerAccessLogWorkbench(){
     <div className="access-actions">
       <button disabled={!raw.trim()} onClick={()=>analyze(raw)}>本地分析日志</button>
       <button disabled={!audit} onClick={download}>导出聚合安全报告 JSON</button>
-      <button disabled={!audit} onClick={()=>{setAudit(null);setStatus("");}}>清除分析结果</button>
+      <button disabled={!audit} onClick={()=>{setAudit(null);onAuditChange?.(null);setStatus("");}}>清除分析结果</button>
     </div>
     {error&&<p className="access-error" role="alert">{error}</p>}
     {status&&<p className="access-status" role="status">{status}</p>}
