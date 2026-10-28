@@ -9,6 +9,7 @@ import {randomBytes,timingSafeEqual} from "node:crypto";
 import {pathToFileURL} from "node:url";
 import {readFileSync} from "node:fs";
 import {createManualExerciseState} from "./manual-defense-exercises.mjs";
+import {DEFAULT_STUDIO_CONFIG,STUDIO_PROFILES,STUDIO_LEVELS,validateStudioConfig,evaluateDefenseStudio,compareStudioConfig,exportStudioCsv} from "./defense-studio-v13.mjs";
 
 export const LAB_HOST="127.0.0.1";
 export const LAB_PORT=19090;
@@ -50,7 +51,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a> · <a href="/defense-studio">Defense Studio</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -80,7 +81,7 @@ export function createLocalDefenseLab(options={}){
   const exercises=createManualExerciseState({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -272,6 +273,94 @@ export function createLocalDefenseLab(options={}){
           "<p>This response demonstrates a missing object-ownership check "+
           "in an isolated lesson. Restore the owner check in the Ownership Lab.</p>"));return;
       }
+    }
+    if(["/defense-studio","/defense-studio-export"].includes(route)){
+      let config={...DEFAULT_STUDIO_CONFIG};
+      if(req.method==="POST"){
+        let params;
+        try{params=await bodyParams(req)}
+        catch(e){send(e.status??400,"Invalid local training form.","text/plain; charset=utf-8");return;}
+        if(!verifyCsrf(params)){
+          send(403,page("Studio form validation","<p>Use a valid server-issued localhost training form.</p>"));return;
+        }
+        try{config=validateStudioConfig({
+          profile:params.get("profile"),
+          rateLimit:Number(params.get("rateLimit")),
+          serviceCapacity:Number(params.get("serviceCapacity")),
+          mode:params.get("mode")
+        })}
+        catch{
+          send(422,page("Unsupported training option",
+            "<p>Choose only the limited, preinstalled simulation options.</p>"));return;
+        }
+      }else if(req.method!=="GET"||route==="/defense-studio-export"){
+        send(405,page("Form required","<p>Use the training page's manual form buttons.</p>"));return;
+      }
+      const result=evaluateDefenseStudio(config);
+      if(route==="/defense-studio-export"){
+        send(200,exportStudioCsv(result),"text/csv; charset=utf-8",
+          {"Content-Disposition":'attachment; filename="openguin-offline-defense-studio.csv"'});
+        return;
+      }
+      const comparison=compareStudioConfig(config);
+      const option=(value,text,selected)=>'<option value="'+value+'"'+
+        (selected===value?" selected":"")+'>'+escapeHtml(text)+'</option>';
+      const profiles=Object.entries(STUDIO_PROFILES).map(([id,info])=>
+        option(id,info.label,config.profile)).join("");
+      const numbers=(value)=>STUDIO_LEVELS.map(n=>
+        option(String(n),String(n)+" virtual events / slot",String(value))).join("");
+      const modes=option("protected","Protection enabled",config.mode)+
+        option("teaching","Teaching contrast (checks disabled)",config.mode);
+      const formFields=
+        '<label>Virtual event pattern <select name="profile">'+profiles+'</select></label> '+
+        '<label>Throttle threshold <select name="rateLimit">'+numbers(config.rateLimit)+'</select></label> '+
+        '<label>Virtual capacity <select name="serviceCapacity">'+numbers(config.serviceCapacity)+'</select></label> '+
+        '<label>Model mode <select name="mode">'+modes+'</select></label> ';
+      const form=(action,button)=>
+        '<form method="post" action="'+action+'" style="display:grid;gap:9px;'+
+        'padding:10px;border:1px solid #35566a;border-radius:8px">'+field(csrf)+
+        formFields+'<button type="submit">'+button+'</button></form>';
+      const row=(cells)=>'<tr>'+cells.map(x=>'<td style="border-bottom:1px solid #46657a;'+
+        'padding:6px">'+escapeHtml(x)+'</td>').join("")+'</tr>';
+      const slotRows=result.perSlot.map(x=>row([
+        String(x.frame),String(x.incoming),String(x.accepted),
+        String(x.throttled),String(x.unavailable)
+      ])).join("");
+      const compareRows=[
+        ["Virtual traffic accepted","accepted"],
+        ["Virtual throttled responses 429","throttled"],
+        ["Virtual capacity responses 503","virtualUnavailable"],
+        ["Virtual account protections","accountProtected"],
+        ["Mock ownership denies","ownershipDenied"]
+      ].map(([label,key])=>row([
+        label,String(comparison.protected[key]),String(comparison.teaching[key])
+      ])).join("");
+      const explain='<p>Inspired by NIST SP 800-63B-4 and OWASP Authentication / API Security guidance. '+
+        'This is a deterministic mathematical model, not a live website load test. '+
+        'No passwords, usernames, attack strings, network traffic, target addresses, or HTTP probes are generated by the engine.</p>';
+      send(200,page("OWASP / NIST Defense Studio",
+        "<p>Change one of the bounded, preinstalled parameters and click "+
+        "Run one offline comparison. One local form POST calculates synthetic events "+
+        "in memory; it does not send event requests anywhere.</p>"+
+        form("/defense-studio","Run one offline comparison")+
+        form("/defense-studio-export","Export virtual event counts (CSV)")+
+        "<h3>Current simulation: "+escapeHtml(STUDIO_PROFILES[config.profile].label)+
+        " · "+escapeHtml(config.mode)+"</h3>"+
+        "<p>Simulated events: "+result.virtualEvents+
+        ". None are network requests. Profiles are fixed; the model cannot target a server.</p>"+
+        "<table><caption>Virtual events by time slot</caption><thead><tr>"+
+        "<th>Slot</th><th>Incoming</th><th>Accepted</th><th>429</th><th>503</th>"+
+        "</tr></thead><tbody>"+slotRows+"</tbody></table>"+
+        "<h3>Protected versus teaching contrast</h3>"+
+        "<table><thead><tr><th>Metric</th><th>Protected</th><th>Teaching</th>"+
+        "</tr></thead><tbody>"+compareRows+"</tbody></table>"+
+        "<h3>What these outcomes mean</h3><p>401: fictional credential failure; "+
+        "403: mock ownership blocked; 429: conceptual throttle / lockout; "+
+        "503: conceptual capacity unavailable. No password checks, exploit "+
+        "execution, networking tools or pressure on the computer.</p>"+
+        explain+
+        "<p><a href='/manual-console'>Manual HTTP defense checks</a> · "+
+        "<a href='/ownership-lab'>Object ownership exercise</a></p>"));return;
     }
     if(req.method==="GET"&&route==="/workbench-client"){
       send(200,fixedWorkbenchClient,"text/javascript; charset=utf-8");return;
