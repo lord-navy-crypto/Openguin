@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Openguin Network Watch",
-  "version": "0.3.0",
-  "description": "Opt-in, local-only browser request lifecycle diagnostics with fixed localhost lab compatibility and redacted exports.",
+  "version": "0.4.0",
+  "description": "Opt-in active-tab diagnostics: request status, timing, local lab evidence, and privacy-limited browser health summaries.",
   "permissions": [
     "activeTab",
     "scripting",
