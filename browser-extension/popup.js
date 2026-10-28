@@ -132,7 +132,12 @@ async function stopMonitoring() {
       await chrome.scripting.executeScript({
         target: { tabId: stored.activeTabId },
         world: "MAIN",
-        func: () => window.postMessage({ source: "openguin-netwatch-control", action: "stop" }, "*")
+        // Dispatch synchronously in MAIN world so Stop has completed before
+        // another Start can inject the next session on the same document.
+        func: () => window.dispatchEvent(new MessageEvent("message", {
+          source: window,
+          data: { source: "openguin-netwatch-control", action: "stop" }
+        }))
       });
     } catch { /* The tab may have navigated or closed. */ }
   }
