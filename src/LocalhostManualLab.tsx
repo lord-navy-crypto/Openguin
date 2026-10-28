@@ -75,6 +75,7 @@ export default function LocalhostManualLab(){
     <a href="http://127.0.0.1:19090/workbench" target="_blank" rel="noopener noreferrer">打开 v11 手动 HTTP 测试工作台</a>
     <a href="http://127.0.0.1:19090/ownership-lab" target="_blank" rel="noopener noreferrer">打开 v12 权限漏洞与修复实验室</a>
     <a href="http://127.0.0.1:19090/defense-studio" target="_blank" rel="noopener noreferrer">打开 v13 OWASP/NIST 认证与流量防御教学实验室</a>
+    <a href="http://127.0.0.1:19090/drills" target="_blank" rel="noopener noreferrer">打开 v14 三轨道手动攻防练习台</a>
    </div>
   </div>
   <div className="localhost-lab-info">

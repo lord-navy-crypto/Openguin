@@ -411,3 +411,89 @@ test("v13 CSV export contains only preinstalled virtual counts, no secrets or li
   assert(!body.includes("password"));
   assert(!body.includes("127.0.0.1"));
 });
+
+
+test("v14 manual three-track page exposes explicit single-step local forms",async t=>{
+ const {url}=await setup(t);
+ const response=await get(url+"/drills");
+ assert.equal(response.status,200);
+ const html=await response.text();
+ for(const path of ["/drill-step","/drill-policy","/drill-reset"])
+  assert(html.includes('action="'+path+'"'));
+ for(const key of ["identity","ownership","capacity"])
+  assert(html.includes('name="track" value="'+key+'"'));
+ assert(html.includes('href="/drill-report"'));
+ assert(!html.includes('name="password"'));
+ assert(!html.includes('name="target"'));
+ assert(!html.includes("https://example.com"));
+});
+test("v14 identity one-click POST actually returns 401 then 429 and reset remains safe",async t=>{
+ const {url}=await setup(t);const init=await initialContext(url);
+ const post=(endpoint,values)=>get(url+endpoint,{method:"POST",
+  headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+  body:new URLSearchParams({csrf:init.token,...values}).toString()});
+ for(let i=0;i<3;i++)assert.equal((await post("/drill-step",{track:"identity"})).status,401);
+ const deny=await post("/drill-step",{track:"identity"});
+ assert.equal(deny.status,429);
+ assert.equal(deny.headers.get("retry-after"),"60");
+ assert.equal((await post("/drill-policy",{track:"identity",mode:"teaching"})).status,200);
+ assert.equal((await post("/drill-step",{track:"identity"})).status,401);
+ assert.equal((await post("/drill-reset",{track:"identity"})).status,200);
+ const report=await get(url+"/drill-report",{headers:{Cookie:init.cookie}});
+ assert.equal(report.status,200);
+ const text=await report.text();
+ assert(!text.includes(init.token));
+ assert(!text.includes("Cookie"));
+ assert(!text.includes("http://"));
+});
+test("v14 ownership and capacity contrasts produce real localhost 403/200 and 429/503",async t=>{
+ const {url}=await setup(t);const init=await initialContext(url);
+ const post=(endpoint,track,mode)=>get(url+endpoint,{method:"POST",
+   headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+   body:new URLSearchParams({csrf:init.token,track,...(mode?{mode}:{})}).toString()});
+ assert.equal((await post("/drill-step","ownership")).status,403);
+ assert.equal((await post("/drill-policy","ownership","teaching")).status,200);
+ assert.equal((await post("/drill-step","ownership")).status,200);
+ assert.equal((await post("/drill-policy","ownership","protected")).status,200);
+ assert.equal((await post("/drill-step","ownership")).status,403);
+ for(let n=0;n<3;n++)assert.equal((await post("/drill-step","capacity")).status,200);
+ assert.equal((await post("/drill-step","capacity")).status,429);
+ assert.equal((await post("/drill-policy","capacity","teaching")).status,200);
+ for(let n=0;n<3;n++)assert.equal((await post("/drill-step","capacity")).status,200);
+ assert.equal((await post("/drill-step","capacity")).status,503);
+});
+test("v14 rejects forged tokens, remote targets and invalid track or mode",async t=>{
+ const {url}=await setup(t);const init=await initialContext(url);
+ const forged=await get(url+"/drill-step",{method:"POST",
+   headers:{"Cookie":"lab_csrf="+("a".repeat(48)),
+    "Content-Type":"application/x-www-form-urlencoded"},
+   body:new URLSearchParams({csrf:"a".repeat(48),track:"identity"}).toString()});
+ assert.equal(forged.status,403);
+ const act=(endpoint,values)=>get(url+endpoint,{method:"POST",
+  headers:{"Cookie":init.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+  body:new URLSearchParams({csrf:init.token,...values}).toString()});
+ assert.equal((await act("/drill-step",{track:"unknown"})).status,422);
+ assert.equal((await act("/drill-policy",{track:"ownership",mode:"arbitrary"})).status,422);
+ assert.equal((await act("/drill-reset",{track:"http://remote.example"})).status,422);
+ assert.equal((await get(url+"/drills?remote=1")).status,400);
+ assert.equal((await get(url+"/drill-step")).status,405);
+ assert.equal((await get(url+"/drills",{headers:{Origin:"https://outside.example"}})).status,403);
+});
+test("v14 drill history is token-scoped, and real access logs remain anonymized",async t=>{
+ const {url}=await setup(t);const a=await initialContext(url);
+ const b=await initialContext(url);
+ const run=await get(url+"/drill-step",{method:"POST",
+  headers:{"Cookie":a.cookie,"Content-Type":"application/x-www-form-urlencoded"},
+  body:new URLSearchParams({csrf:a.token,track:"ownership"}).toString()});
+ assert.equal(run.status,403);
+ const reportA=await (await get(url+"/drill-report",{headers:{Cookie:a.cookie}})).json();
+ const reportB=await (await get(url+"/drill-report",{headers:{Cookie:b.cookie}})).json();
+ assert.equal(reportA.history.length,1);
+ assert.equal(reportB.history.length,0);
+ assert.equal(reportA.generatedNetworkEvents,0);
+ const log=await (await get(url+"/access-log")).text();
+ assert(log.includes('POST /drill-step HTTP/1.1" 403'));
+ assert.equal(analyzeAccessLog(log).ignoredLines,0);
+ assert(!log.includes(a.token));
+ assert(!log.includes(b.token));
+});

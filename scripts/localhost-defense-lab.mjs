@@ -9,6 +9,7 @@ import {randomBytes,timingSafeEqual} from "node:crypto";
 import {pathToFileURL} from "node:url";
 import {readFileSync} from "node:fs";
 import {createManualExerciseState} from "./manual-defense-exercises.mjs";
+import {createManualDrills,DRILL_TRACKS,DRILL_MODES,exportManualDrills} from "./manual-drills-v14.mjs";
 import {DEFAULT_STUDIO_CONFIG,STUDIO_PROFILES,STUDIO_LEVELS,validateStudioConfig,evaluateDefenseStudio,compareStudioConfig,exportStudioCsv} from "./defense-studio-v13.mjs";
 
 export const LAB_HOST="127.0.0.1";
@@ -51,7 +52,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a> · <a href="/defense-studio">Defense Studio</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a> · <a href="/defense-studio">Defense Studio</a> · <a href="/drills">Hands-on Drills</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -79,9 +80,10 @@ export function createLocalDefenseLab(options={}){
   const events=[];
   const limiter=new Map();
   const exercises=createManualExerciseState({now});
+  const drills=createManualDrills({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export","/drills","/drill-step","/drill-policy","/drill-reset","/drill-report"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -361,6 +363,97 @@ export function createLocalDefenseLab(options={}){
         explain+
         "<p><a href='/manual-console'>Manual HTTP defense checks</a> · "+
         "<a href='/ownership-lab'>Object ownership exercise</a></p>"));return;
+    }
+    if(["/drills","/drill-step","/drill-policy","/drill-reset","/drill-report"].includes(route)){
+      if(req.method==="GET"&&route==="/drill-report"){
+        const report=exportManualDrills(drills.snapshot(csrf));
+        send(200,JSON.stringify(report,null,2),"application/json; charset=utf-8",
+          {"Content-Disposition":'attachment; filename="openguin-manual-drills-v14.json"'});
+        return;
+      }
+      if(req.method==="POST"&&["/drill-step","/drill-policy","/drill-reset"].includes(route)){
+        let params;
+        try{params=await bodyParams(req)}
+        catch(e){send(e.status??400,"Invalid training form.","text/plain; charset=utf-8");return;}
+        if(!verifyCsrf(params)){
+          send(403,page("Form rejected",
+            "<p>Use the local single-step exercise buttons with a server-issued form token.</p>"));
+          return;
+        }
+        const track=params.get("track");
+        if(!DRILL_TRACKS.includes(track)){
+          send(422,page("Unsupported exercise","<p>Select a preinstalled local training track.</p>"));
+          return;
+        }
+        const mode=params.get("mode");
+        if(route==="/drill-policy"&&!DRILL_MODES.includes(mode)){
+          send(422,page("Unsupported defense mode",
+            "<p>Only protected or educational-contrast modes are available.</p>"));return;
+        }
+        const answer=route==="/drill-policy"?
+          drills.selectMode(csrf,track,mode):
+          route==="/drill-reset"?drills.reset(csrf,track):drills.step(csrf,track);
+        const msg=route==="/drill-policy"?
+          "已切换该虚拟训练轨道的规则并清空轨道计数。":
+          route==="/drill-reset"?"该虚拟轨道的计数已清空。":answer.note;
+        const reply='<p>'+escapeHtml(msg)+'</p>'+
+          '<p>Actual localhost HTTP response: <strong>'+answer.status+'</strong>.</p>'+
+          '<p><a href="/drills">Return to three-track exercises</a> · '+
+          '<a href="/access-log">Download safe access log</a></p>';
+        const extra=answer.status===429?{"Retry-After":"60"}:{};
+        send(answer.status,page("One manual defensive drill step",reply),
+          "text/html; charset=utf-8",extra);
+        return;
+      }
+      if(req.method!=="GET"||route!=="/drills"){
+        send(405,page("Manual form required",
+          "<p>Use the visible training buttons. No automatic sequences are provided.</p>"));
+        return;
+      }
+      const current=drills.snapshot(csrf);
+      const tracks=[
+        {id:"identity",title:"身份失败与锁定",detail:
+          "每次点击代表一次不包含用户名或密码的虚构失败事件。保护模式在三次失败后返回 429；对照模式保持 401。"},
+        {id:"ownership",title:"对象权限检查",detail:
+          "每次点击只检查一个固定的虚构记录。保护模式返回 403，对照模式返回 200；没有真实私有数据。"},
+        {id:"capacity",title:"虚拟积压与限流",detail:
+          "每次点击增加一个数字计数。保护模式达到阈值后返回 429；对照模式返回概念性 503，不会制造流量。"}
+      ];
+      const action=(route,track,label,mode="")=>
+        '<form method="post" action="'+route+'">'+field(csrf)+
+        '<input type="hidden" name="track" value="'+track+'">'+
+        (mode?'<input type="hidden" name="mode" value="'+mode+'">':"")+
+        '<button type="submit">'+escapeHtml(label)+'</button></form>';
+      const cards=tracks.map(d=>
+        '<section style="border-color:#557c91">'+
+        '<h3>'+escapeHtml(d.title)+'</h3><p>'+escapeHtml(d.detail)+'</p>'+
+        '<p>当前规则：<strong>'+escapeHtml(current.modes[d.id])+
+        '</strong> · 模拟计数：<strong>'+current.counts[d.id]+'</strong></p>'+
+        '<div style="display:flex;gap:8px;flex-wrap:wrap">'+
+        action("/drill-step",d.id,"手动执行一次虚构事件")+
+        action("/drill-policy",d.id,"开启防御","protected")+
+        action("/drill-policy",d.id,"教学对照规则","teaching")+
+        action("/drill-reset",d.id,"重置本轨道")+'</div></section>'
+      ).join("");
+      const rows=current.history.slice().reverse().map(e=>
+        '<tr><td>'+e.order+'</td><td>'+escapeHtml(e.track)+
+        '</td><td>'+escapeHtml(e.kind)+'</td><td>'+
+        escapeHtml(e.policy)+'</td><td>'+e.status+'</td></tr>'
+      ).join("");
+      send(200,page("Three-Track Manual Defense Drills",
+        "<p>手动扮演安全测试人员：一次点击对应一次真实 localhost 表单请求，"+
+        "服务端只处理一件虚构事件。切换保护/对照规则，再复测并观察状态码。"+
+        "不存在密码尝试、漏洞利用载荷、网络发包或流量生成器。</p>"+
+        cards+
+        "<h3>本次手动操作记录（最多 30 条）</h3>"+
+        '<table><thead><tr><th>序号</th><th>轨道</th><th>操作</th>'+
+        "<th>规则</th><th>HTTP</th></tr></thead><tbody>"+
+        rows+"</tbody></table>"+
+        '<p><a href="/drill-report">下载脱敏虚构演练报告 JSON</a> · '+
+        '<a href="/access-log">下载真实 localhost 脱敏 HTTP 日志</a></p>'+
+        "<p>注意：报告中虚拟事件数不等于网络请求数；每次手动操作仅发送一个"+
+        "本机 HTTP 请求。练习不评估任何真实网站的安全性。</p>"));
+      return;
     }
     if(req.method==="GET"&&route==="/workbench-client"){
       send(200,fixedWorkbenchClient,"text/javascript; charset=utf-8");return;
