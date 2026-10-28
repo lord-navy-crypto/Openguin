@@ -1,5 +1,6 @@
 const currentPage = document.getElementById("currentPage");
 const status = document.getElementById("status");
+const captureAudit=document.getElementById("captureAudit");
 const startButton = document.getElementById("start");
 const stopButton = document.getElementById("stop");
 const permissionButton = document.getElementById("chatgptPermission");
@@ -68,7 +69,9 @@ async function startMonitoring() {
       monitoring: true,
       activeTabId: tab.id,
       activeHost: host,
-      monitorMode: persistent ? "site-persistent" : "active-tab"
+      monitorMode: persistent ? "site-persistent" : "active-tab",
+      captureStartedAt:Date.now(),captureLastEventAt:null,
+      captureObservedCount:0,captureStopReason:""
     });
     await inject(tab.id);
     status.textContent = persistent
@@ -78,7 +81,8 @@ async function startMonitoring() {
     // A blocked/script-ineligible tab must not leave monitoring marked as active.
     // Otherwise the popup appears to monitor successfully but no page events arrive.
     await chrome.storage.local.set({
-      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab",
+      captureStopReason:"Script injection failed."
     });
     status.textContent = "Could not inject monitor: " + String(error).slice(0, 180);
   }
@@ -129,7 +133,8 @@ async function stopMonitoring() {
       });
     } catch { /* The tab may have navigated or closed. */ }
   }
-  await chrome.storage.local.set({ monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab" });
+  await chrome.storage.local.set({ monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab",
+    captureStopReason:"Stopped by user." });
   status.textContent = "Monitoring stopped.";
   await render();
 }
@@ -207,7 +212,9 @@ async function render() {
     chrome.storage.local.get({
       events: [], monitoring: false, activeTabId: null, activeHost: "",
       duplicateEventsSuppressed: 0, droppedEvents: 0,
-      journalEnabled: false, journalEvents: [], journalDropped: 0
+      journalEnabled: false, journalEvents: [], journalDropped: 0,
+      captureStartedAt:null,captureLastEventAt:null,captureObservedCount:0,
+      captureStopReason:""
     }),
     chrome.permissions.contains({ permissions: ["downloads"] }).catch(() => false)
   ]);
@@ -227,6 +234,23 @@ async function render() {
   } else if (stored.monitoring) {
     status.textContent = "Another tab is being monitored. Stop it before switching.";
   }
+  const captureCount=Math.max(0,Number(stored.captureObservedCount)||0);
+  const latest=Number(stored.captureLastEventAt);
+  const started=Number(stored.captureStartedAt);
+  const elapsed=Number.isFinite(latest)&&latest>0?Math.max(0,Date.now()-latest):null;
+  const ageText=elapsed===null?"无确认事件":
+    elapsed<60000?"最近事件 "+Math.floor(elapsed/1000)+" 秒前":
+    "最近事件 "+Math.floor(elapsed/60000)+" 分钟前";
+  const active=stored.monitoring===true;
+  const matched=active&&stored.activeTabId===tab?.id;
+  captureAudit.textContent=(active?(matched?"当前标签页已请求监测":"正在监测另一个标签页"):
+    "监测已关闭")+
+    " · 本次会话已接收 "+captureCount+" 条 · "+ageText+
+    (started>0?" · 记录开始于 "+new Date(started).toLocaleTimeString():"")+
+    (!active&&stored.captureStopReason?" · 停止原因："+stored.captureStopReason:"")+
+    (matched&&captureCount===0?" · 尚未收到页面监测事件；并不代表没有网页活动。":"")+
+    (matched&&elapsed!==null&&elapsed>120000?
+      " · 长时间无新事件，可能是页面空闲、监测失效或页面导航。":"");
   const events = Array.isArray(stored.events) ? stored.events.slice(0, 12) : [];
   const duplicateCount = Math.max(0, Number(stored.duplicateEventsSuppressed) || 0);
   const droppedCount = Math.max(0, Number(stored.droppedEvents) || 0);
@@ -340,7 +364,9 @@ function safeExportPath(value) {
 
 async function buildDiagnosticReport() {
   const stored = await chrome.storage.local.get({
-    events: [], duplicateEventsSuppressed: 0, droppedEvents: 0
+    events: [], duplicateEventsSuppressed: 0, droppedEvents: 0,
+    monitoring:false,captureStartedAt:null,captureLastEventAt:null,
+    captureObservedCount:0,captureStopReason:""
   });
   const allowedKinds = new Set([
     "monitor-active","monitor-started","navigation","render-summary","render-stability",
@@ -392,6 +418,17 @@ async function buildDiagnosticReport() {
       firstEventAt: cleanEvents.length ? Math.min(...cleanEvents.map(event => event.at)) : null,
       lastEventAt: cleanEvents.length ? Math.max(...cleanEvents.map(event => event.at)) : null,
       eventCounts
+    },
+    captureSession:{
+      monitoringAtExport:stored.monitoring===true,
+      startedAt:Number.isFinite(stored.captureStartedAt)&&stored.captureStartedAt>0?
+        stored.captureStartedAt:null,
+      lastObservedAt:Number.isFinite(stored.captureLastEventAt)&&stored.captureLastEventAt>0?
+        stored.captureLastEventAt:null,
+      observedCount:Math.max(0,Math.min(1e9,Math.floor(Number(stored.captureObservedCount)||0))),
+      stopReason:["Stopped by user.","Script injection failed.",
+        "Optional site permission was removed or is unavailable."].includes(stored.captureStopReason)?
+        stored.captureStopReason:""
     },
     privacy: {
       localOnly: true,
