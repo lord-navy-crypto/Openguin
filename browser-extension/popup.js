@@ -11,6 +11,18 @@ const downloadCsvButton = document.getElementById("downloadCsv");
 const eventsNode = document.getElementById("events");
 const qualityNode = document.getElementById("quality");
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
+const labSummaryNode = document.getElementById("labSummary");
+const labJsonButton = document.getElementById("labJson");
+function supportedPersistentOrigin(tabUrl) {
+  try {
+    const url = new URL(tabUrl);
+    if (CHATGPT_HOSTS.has(url.hostname) && url.protocol === "https:") return "https://" + url.hostname + "/*";
+    if (LOOPBACK_HOSTS.has(url.hostname) && url.protocol === "http:") return "http://" + url.hostname + "/*";
+  } catch {}
+  return "";
+}
+
 const journalToggle = document.getElementById("journalToggle");
 const journalClear = document.getElementById("journalClear");
 const journalJson = document.getElementById("journalJson");
@@ -27,9 +39,6 @@ function isChatGPT(host) {
   return CHATGPT_HOSTS.has(host);
 }
 
-function permissionPattern(host) {
-  return "https://" + host + "/*";
-}
 
 async function inject(tabId) {
   // Install the isolated bridge first so early page events are not dropped.
@@ -44,17 +53,18 @@ async function startMonitoring() {
     return;
   }
   const host = new URL(tab.url).hostname;
-  const persistent = isChatGPT(host) && await chrome.permissions.contains({ origins: [permissionPattern(host)] });
+  const approved = supportedPersistentOrigin(tab.url);
+  const persistent = Boolean(approved) && await chrome.permissions.contains({ origins: [approved] });
   try {
     await chrome.storage.local.set({
       monitoring: true,
       activeTabId: tab.id,
       activeHost: host,
-      monitorMode: persistent ? "chatgpt-persistent" : "active-tab"
+      monitorMode: persistent ? "site-persistent" : "active-tab"
     });
     await inject(tab.id);
     status.textContent = persistent
-      ? "Monitoring this ChatGPT tab; approved permission allows re-attachment after reload."
+      ? "Monitoring this approved site; optional permission permits same-site reload reattachment."
       : "Monitoring this tab until it navigates away. No page text or request bodies are stored.";
   } catch (error) {
     // A blocked/script-ineligible tab must not leave monitoring marked as active.
@@ -67,21 +77,17 @@ async function startMonitoring() {
   await render();
 }
 
-async function enableChatGPTReloadMonitoring() {
+async function enableApprovedReloadMonitoring() {
   const tab = await activeTab();
-  if (!tab || !tab.url) {
-    status.textContent = "Open ChatGPT first.";
-    return;
-  }
-  const host = new URL(tab.url).hostname;
-  if (!isChatGPT(host)) {
-    status.textContent = "This permission is only for chatgpt.com or chat.openai.com.";
+  const pattern = supportedPersistentOrigin(tab?.url);
+  if (!pattern) {
+    status.textContent = "Reload monitoring is optional and limited to approved ChatGPT or loopback pages.";
     return;
   }
   try {
-    const granted = await chrome.permissions.request({ origins: [permissionPattern(host)] });
+    const granted = await chrome.permissions.request({ origins: [pattern] });
     if (!granted) {
-      status.textContent = "Permission was not granted. You can still monitor the current tab manually.";
+      status.textContent = "Permission not granted. You may still start this tab manually.";
       return;
     }
     await startMonitoring();
@@ -202,7 +208,10 @@ async function render() {
   currentPage.textContent = host ? "Active tab: " + host : "Active tab URL unavailable";
   startButton.disabled = Boolean(stored.monitoring);
   stopButton.disabled = !stored.monitoring;
-  permissionButton.hidden = !isChatGPT(host);
+  const reloadPattern = supportedPersistentOrigin(tab?.url);
+  permissionButton.hidden = !reloadPattern;
+  permissionButton.textContent = LOOPBACK_HOSTS.has(host)
+    ? "Allow localhost reload monitoring" : "Allow ChatGPT reload monitoring";
   downloadPermissionButton.disabled = downloadPermission;
   downloadPermissionButton.textContent = downloadPermission ? "Download + timeout monitoring enabled" : "Enable download + timeout monitoring";
   if (stored.monitoring && stored.activeTabId === (tab && tab.id)) {
@@ -268,7 +277,7 @@ async function render() {
 
 startButton.addEventListener("click", () => { void startMonitoring(); });
 stopButton.addEventListener("click", () => { void stopMonitoring(); });
-permissionButton.addEventListener("click", () => { void enableChatGPTReloadMonitoring(); });
+permissionButton.addEventListener("click", () => { void enableApprovedReloadMonitoring(); });
 downloadPermissionButton.addEventListener("click", () => { void enableDownloadMonitoring(); });
 function safeExportPath(value) {
   if (typeof value !== "string") return "";
