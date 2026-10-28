@@ -8,6 +8,7 @@ import EvidenceCorrelationWorkbench from "./EvidenceCorrelationWorkbench";
 import DefenseActionPlan from "./DefenseActionPlan";
 import DefensiveMiniToolbox from "./DefensiveMiniToolbox";
 import DefensiveAuditorsV5 from "./DefensiveAuditorsV5";
+import DefensiveLintsV6 from "./DefensiveLintsV6";
 import type {BrowserJournal} from "./network-journal";
 import type {AccessAudit} from "./server-access-log";
 import "./security-workbench.css";
@@ -58,6 +59,7 @@ export default function SecurityWorkbench(){
   return <div className="security-workbench">
     <DefensiveMiniToolbox/>
     <DefensiveAuditorsV5/>
+    <DefensiveLintsV6/>
     <JournalWorkbench onJournalChange={setBrowserJournal}/>
     <ServerAccessLogWorkbench onAuditChange={setServerAudit}/>
     <EvidenceCorrelationWorkbench browser={browserJournal} server={serverAudit}/>
