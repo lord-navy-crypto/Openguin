@@ -150,7 +150,7 @@ jobs:
         run: |
           mkdir -p release-artifacts
           cd browser-extension
-          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js lab-compat.js observability-v18.js background.js monitor-bridge.js monitor-main.js README.md CAPTURE_INTEGRITY_V19.md
+          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js lab-compat.js observability-v18.js background.js monitor-bridge.js monitor-main.js README.md CAPTURE_INTEGRITY_V19.md SESSION_ISOLATION_V20.md
 
       - name: Upload browser extension package
         uses: actions/upload-artifact@v4
