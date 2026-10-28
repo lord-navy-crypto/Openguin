@@ -600,6 +600,7 @@ test("v16 same-origin audit asset never accepts target URLs, foreign origins or 
  assert.equal((await get(url+"/audit-core?target=https://example.net")).status,400);
  assert.equal((await get(url+"/audit-core",{headers:{Origin:"https://outside.example"}})).status,403);
  assert.equal((await get(url+"/audit-core",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"x=y"})).status,404);
+ assert.equal((await get(url+"/audit-core")).status,200);
  const home=await get(url+"/");
  assert(!(home.headers.get("content-security-policy")??"").includes("script-src 'self'"));
  const log=await (await get(url+"/access-log")).text();
