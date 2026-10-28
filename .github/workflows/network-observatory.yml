@@ -18,6 +18,7 @@ on:
       - feature/localhost-manual-defense-lab-v9
       - feature/manual-defense-console-v10
       - feature/manual-http-workbench-v11
+      - feature/ownership-security-lab-v12
   pull_request:
     branches:
       - main
@@ -31,6 +32,7 @@ on:
       - feature/virtual-site-builder-v8
       - feature/localhost-manual-defense-lab-v9
       - feature/manual-defense-console-v10
+      - feature/manual-http-workbench-v11
   workflow_dispatch:
 
 jobs:
