@@ -1,4 +1,6 @@
 import {useMemo,useState} from "react";
+import NetworkSecurityLab from "./NetworkSecurityLab";
+import {buildNetworkSecurityReview,buildSecurityReviewExport} from "./network-security-analysis";
 import {analyzeBrowserReport,eventCounts,parseBrowserReport,summarizeBrowserEndpoints,summarizeBrowserRequests,summarizeBrowserTelemetry,type BrowserReport} from "./browser-diagnostics";
 import {correlateBrowserWithOneClick} from "./network-correlation";
 import {diagnosticBundleToCsv,downloadDiagnosticText} from "./diagnostic-export";
@@ -46,6 +48,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
   const [error,setError]=useState("");
   const [copied,setCopied]=useState(false);
   const findings=useMemo(()=>report?analyzeBrowserReport(report):[],[report]);
+  const securityReview=useMemo(()=>report?buildNetworkSecurityReview(report):null,[report]);
   const counts=useMemo(()=>report?eventCounts(report):[],[report]);
   const telemetry=useMemo(()=>report?summarizeBrowserTelemetry(report):null,[report]);
   const endpoints=useMemo(()=>report?summarizeBrowserEndpoints(report):[],[report]);
@@ -85,6 +88,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
         eventCount:report.events.length,quality:report.quality??null,findings,eventCounts:counts,requestLifecycles,events:report.events
       }:null,
       crossLayer:correlation,
+      networkSecurityReview:securityReview?buildSecurityReviewExport(securityReview):null,
       privacy:{
         localOnly:true,
         excludes:["page text","prompts and model answers","cookies and headers","request/response bodies","proxy addresses and credentials","full URLs and query strings","download filenames","local file paths"],
@@ -228,6 +232,7 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <span>{e.host}{e.path||""}{e.method?" · "+e.method:""}{e.requestId?" · req "+e.requestId:""}</span><small>{e.status?"HTTP "+e.status:e.errorType||(e.bodyReadDurationMs!==undefined?"body "+metric(e.bodyReadDurationMs,"ms"):metric(e.durationMs,"ms"))}{e.headersToBodyReadMs!==undefined?" · before read "+metric(e.headersToBodyReadMs,"ms"):""}{e.bridgeDelayMs!==undefined?" · capture delay "+metric(e.bridgeDelayMs,"ms"):""}</small>
         </div>)}
       </div>
+      <NetworkSecurityLab report={report} vpnSamples={vpnSamples} networkSnapshot={networkSnapshot}/>
       <p className="browser-report-note">隐私与可信度：导出包含事件类别、时间、域名、脱敏路径/方法、HTTP 状态、耗时和粗粒度下载/渲染指标；不含提示词、回答正文、Cookie、请求/响应正文、完整网址、查询参数或文件名。网页注入得到的事件可能不完整或被网页脚本影响，不能独立证明某个服务器或 VPN 出错。分享前请检查报告内容。</p>
     </>}
   </section>;
