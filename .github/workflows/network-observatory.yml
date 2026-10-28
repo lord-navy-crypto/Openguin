@@ -23,6 +23,7 @@ on:
       - feature/manual-three-track-drills-v14
       - feature/defense-capacity-lab-v15
       - feature/manual-audit-evidence-v16
+      - feature/browser-extension-local-lab-v17
   pull_request:
     branches:
       - main
@@ -41,6 +42,7 @@ on:
       - feature/offline-defense-studio-v13
       - feature/manual-three-track-drills-v14
       - feature/defense-capacity-lab-v15
+      - feature/manual-audit-evidence-v16
   workflow_dispatch:
 
 jobs:
@@ -132,15 +134,16 @@ jobs:
           node --check browser-extension/background.js
           node --check browser-extension/monitor-bridge.js
           node --check browser-extension/monitor-main.js
+          node --check browser-extension/lab-compat.js
           node --check browser-extension/popup.js
-          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs tests/extension-monitor.test.mjs tests/extension-journal.test.mjs
+          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs tests/extension-monitor.test.mjs tests/extension-journal.test.mjs tests/extension-local-lab-v17.test.mjs
           python3 -m json.tool browser-extension/manifest.json > /dev/null
 
       - name: Package browser extension
         run: |
           mkdir -p release-artifacts
           cd browser-extension
-          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js background.js monitor-bridge.js monitor-main.js README.md
+          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js lab-compat.js background.js monitor-bridge.js monitor-main.js README.md
 
       - name: Upload browser extension package
         uses: actions/upload-artifact@v4

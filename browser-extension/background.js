@@ -18,6 +18,16 @@ function journalRecord(record) {
   };
 }
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1"]);
+function approvedPersistentOrigin(tabUrl, host) {
+  try {
+    const url = new URL(tabUrl);
+    if (url.hostname !== host) return "";
+    if (CHATGPT_HOSTS.has(host) && url.protocol === "https:") return "https://" + host + "/*";
+    if (LOOPBACK_HOSTS.has(host) && url.protocol === "http:") return "http://" + host + "/*";
+  } catch {}
+  return "";
+}
 // Page events carry their own timestamp. A duplicate bridge listener forwards
 // the same timestamp and payload, which lets us suppress duplicates safely.
 const recentPageEvents = new Map();
@@ -183,11 +193,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
     });
     return;
   }
-  if (changeInfo.status !== "complete" || state.monitorMode !== "chatgpt-persistent") return;
-  if (!CHATGPT_HOSTS.has(state.activeHost) || !currentHost ||
-      currentHost !== state.activeHost) return;
-  const origin = "https://" + state.activeHost + "/*";
-  if (!(await chrome.permissions.contains({ origins: [origin] }))) return;
+  if (changeInfo.status !== "complete" ||
+      !["chatgpt-persistent", "site-persistent"].includes(state.monitorMode)) return;
+  if (!currentHost || currentHost !== state.activeHost) return;
+  const origin = approvedPersistentOrigin(tab && tab.url, state.activeHost);
+  if (!origin || !(await chrome.permissions.contains({ origins: [origin] }))) {
+    await chrome.storage.local.set({monitoring:false,activeTabId:null,
+      activeHost:"",monitorMode:"active-tab"});
+    return;
+  }
   try { await injectMonitor(tabId); } catch {
     // The user should not see a misleading active state if reattachment failed.
     await chrome.storage.local.set({

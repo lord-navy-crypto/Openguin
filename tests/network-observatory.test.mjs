@@ -227,3 +227,48 @@ test("reports incomplete evidence rather than inventing a root cause", () => {
   ]));
   assert.deepEqual(analyzeBrowserReport(parsed), []);
 });
+
+
+test("imports v17 localhost report and recalculates status metrics from fixed safe events",()=>{
+  const time=Date.UTC(2026,9,28,12);
+  const input={
+    source:"openguin-network-watch",formatVersion:1,
+    generatedAt:new Date(time).toISOString(),
+    labCompatibility:{
+      schema:"openguin-localhost-extension-v17",
+      observedResponses:99999,statusCounts:{"200":99999},
+      medianObservedMs:1,p95ObservedMs:1
+    },
+    events:[
+      {kind:"fetch-response",host:"127.0.0.1",path:"/health",at:time,status:200,durationMs:10},
+      {kind:"xhr-response",host:"localhost",path:"/admin",at:time+1,status:403,durationMs:20},
+      {kind:"fetch-response",host:"127.0.0.1",path:"/rate-check",at:time+2,status:429,durationMs:30},
+      {kind:"navigation",host:"127.0.0.1",path:"/drills",at:time+3,status:503}
+    ]
+  };
+  const parsed=parseBrowserReport(JSON.stringify(input));
+  const lab=parsed.labCompatibility;
+  assert(lab);
+  assert.equal(lab.observedResponses,3);
+  assert.deepEqual(lab.statusCounts,{"200":1,"403":1,"429":1});
+  assert.equal(lab.medianObservedMs,20);
+  assert.equal(lab.p95ObservedMs,30);
+  assert.equal(lab.latencySamples,3);
+  assert.match(lab.captureLimitations,/access\.log/);
+  assert(!JSON.stringify(parsed).includes("99999"));
+});
+test("rejects unsupported lab route and non-loopback reports rather than labeling remote pages as local",()=>{
+  const time=Date.UTC(2026,9,28,12);
+  for(const [host,path] of [
+    ["example.com","/health"],
+    ["127.0.0.1","/arbitrary-secret-private-route"]
+  ]){
+    const result=parseBrowserReport(JSON.stringify({
+      source:"openguin-network-watch",formatVersion:1,
+      generatedAt:new Date(time).toISOString(),
+      labCompatibility:{schema:"openguin-localhost-extension-v17",statusCounts:{"200":500}},
+      events:[{kind:"fetch-response",host,path,at:time,status:200,durationMs:10}]
+    }));
+    assert.equal(result.labCompatibility,undefined);
+  }
+});

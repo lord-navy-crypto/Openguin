@@ -85,7 +85,8 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
       networkHistory:networkHistory.slice(0,12),
       browser:report?{
         source:report.source,formatVersion:report.formatVersion,generatedAt:report.generatedAt,
-        eventCount:report.events.length,quality:report.quality??null,findings,eventCounts:counts,requestLifecycles,events:report.events
+        eventCount:report.events.length,quality:report.quality??null,
+        labCompatibility:report.labCompatibility??null,findings,eventCounts:counts,requestLifecycles,events:report.events
       }:null,
       crossLayer:correlation,
       networkSecurityReview:securityReview?buildSecurityReviewExport(securityReview):null,
@@ -153,6 +154,21 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <p><b>建议：</b>{item.nextStep}</p>
         </article>)}
       </div>}
+      {report.labCompatibility&&<section className="browser-correlation" aria-label="OpenPenguin localhost extension v17 lab summary">
+        <div className="browser-correlation-head"><h4>Localhost Lab · 浏览器监测与防御实验室</h4>
+          <span>v17 匹配</span></div>
+        <p>仅汇总固定本机实验路由，状态码由导入的浏览器事件重新计算，不直接信任扩展报告自带的统计字段。</p>
+        <div className="browser-report-stats">
+          <div><span>观察到的响应</span><strong>{report.labCompatibility.observedResponses}</strong></div>
+          <div><span>响应时间中位数</span><strong>{report.labCompatibility.medianObservedMs===null?"—":report.labCompatibility.medianObservedMs+" ms"}</strong></div>
+          <div><span>浏览器观察 P95</span><strong>{report.labCompatibility.p95ObservedMs===null?"样本不足":report.labCompatibility.p95ObservedMs+" ms"}</strong></div>
+          <div><span>可能丢失事件</span><strong>{report.labCompatibility.lostEvents}</strong></div>
+        </div>
+        <p>状态码分布：{Object.entries(report.labCompatibility.statusCounts).length?
+          Object.entries(report.labCompatibility.statusCounts).sort(([a],[b])=>Number(a)-Number(b)).map(([code,count])=>"HTTP "+code+" · "+count).join(" / "):
+          "未观察到 Fetch/XHR 响应"}</p>
+        <p className="muted">{report.labCompatibility.captureLimitations}</p>
+      </section>}
       {report.quality&&<div className="browser-report-stats">
         <div><span>已抑制重复事件</span><strong>{report.quality.duplicateEventsSuppressed}</strong></div>
         <div><span>已丢弃的旧事件</span><strong>{report.quality.droppedEvents}</strong></div>

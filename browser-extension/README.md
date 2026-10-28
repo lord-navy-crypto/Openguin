@@ -2,6 +2,25 @@
 
 A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the active HTTP(S) tab.
 
+## v0.3.0 — Match the OpenPenguin v9–v16 localhost defense labs
+
+This version preserves all previous page, ChatGPT, download and optional 30-day journal diagnostics. It adds a dedicated **OpenPenguin Localhost Lab** panel and an **opt-in** reload permission limited to `http://127.0.0.1/*` and `http://localhost/*`. There is no broad `<all_urls>` host access, and no cookie, request-body, or response-body monitoring.
+
+1. Launch the real local practice server from the v16 source checkout with `npm run security:lab`. It stays on `127.0.0.1:19090`.
+2. Open **http://127.0.0.1:19090/workbench** in the browser, then click the extension icon and **Start this tab**. This is an explicit, temporary `activeTab` permission; the extension does not start recording on its own.
+3. If you want monitoring to survive reload on that specific loopback host, click **Allow localhost reload monitoring** and approve the optional browser prompt. This does not grant monitoring of other sites. You can decline and simply start the tab again after reload.
+4. Perform normal single-click **Fetch/XHR** checks in the lab workbench. Reopen the extension popup to see the local HTTP status summary. The extension counts observed responses from the preinstalled lab routes only, including 200, 401, 403, 422, 429 and 503.
+5. Use **Download lab-only JSON for OpenPenguin**. The report uses `source: openguin-network-watch` and `formatVersion: 1`, retaining the desktop app's existing Browser incident report format while adding a `labCompatibility` section.
+6. In the desktop OpenPenguin **Browser incident report**, import this JSON as you would any other extension report. The desktop app now reads the usual `events`, recalculates the v17 `labCompatibility` response counts from its sanitized, allowlisted localhost events, and displays a dedicated Localhost Lab summary with HTTP status distribution and observed median/P95; it does not blindly trust unverified summary numbers.
+
+**Important capture scope:** monitoring hooks into the page's Fetch and XMLHttpRequest activity; a regular HTML form submission that navigates the whole tab may not expose its HTTP response status to these hooks. For the v12–v15 form-only exercises, use the lab's own redacted `/access-log` as the authoritative status evidence, or use v11/v16 Workbench buttons that issue Fetch. This extension does not run a broad, background `webRequest` capture or any load test.
+
+**Privacy:** the lab-only export excludes all non-loopback domains, routes outside the fixed training allowlist, cookies, credentials, headers, bodies, query strings, arbitrary URL parameters and tab IDs. It preserves only a maximum of 300 already-sanitized local events and coarse status/timing metadata. Captures are on-device; there is no automatic upload.
+
+**Authoritative design references:** [Chrome activeTab](https://developer.chrome.com/docs/extensions/develop/concepts/activeTab), [Chrome extension permissions](https://developer.chrome.com/docs/extensions/develop/concepts/declare-permissions), [Chrome webRequest](https://developer.chrome.com/docs/extensions/reference/api/webRequest), and [OWASP Browser Extension Security Vulnerabilities Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Browser_Extension_Vulnerabilities_Cheat_Sheet.html). In Manifest V3, request blocking with `webRequestBlocking` is unavailable to most extensions, and this diagnostic extension has no need for it.
+
+
+
 ## Install in Chrome, Edge, Brave, or another Chromium browser
 
 1. Download the dedicated **Openguin-Network-Watch.zip** artifact from the repository's latest successful **Network Observatory checks** workflow, then extract it. The extracted folder should contain `manifest.json` directly. Alternatively, download/clone the full source repository and select its `browser-extension` subfolder.
