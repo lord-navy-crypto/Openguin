@@ -56,3 +56,13 @@ test("wildcard origin with credentials is review, not verified exploit",()=>{
   assert(result.findings.some(f=>f.id==="cors"&&f.severity==="review"));
   assert(!JSON.stringify(result).toLowerCase().includes("exploitable"));
 });
+
+
+test("before-and-after observations distinguish fixed advice from newly raised advice",async()=>{
+  const {compareHeaderAudits}=await import("../.network-test/defensive-header-audit.mjs");
+  const before=auditHttpResponseHeaders("Content-Type: text/html");
+  const after=auditHttpResponseHeaders("Content-Security-Policy: default-src 'self'; frame-ancestors 'none'\nStrict-Transport-Security: max-age=31536000\nX-Content-Type-Options: nosniff\nReferrer-Policy: strict-origin-when-cross-origin\nPermissions-Policy: camera=()");
+  const change=compareHeaderAudits(before,after);
+  assert(change.resolved.length>=3);
+  assert.equal(change.introduced.length,0);
+});
