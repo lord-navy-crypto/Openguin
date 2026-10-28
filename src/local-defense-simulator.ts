@@ -179,3 +179,43 @@ export function exportSimulationSummary(run:SimulationResult){
     explanation:"In-memory mock evaluation; not an actual penetration test or website load test."
   };
 }
+
+
+/**
+ * Create synthetic, bounded evidence files compatible with the existing
+ * browser journal and Apache/Nginx access-log analyzers. No connections occur.
+ * Every line has only loopback IP and invented routes.
+ */
+const SIMULATED_START=Date.UTC(2026,9,28,0,0,0);
+const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+function apacheStamp(time:number):string{
+  const d=new Date(time);
+  const pad=(n:number)=>String(n).padStart(2,"0");
+  return pad(d.getUTCDate())+"/"+months[d.getUTCMonth()]+"/"+d.getUTCFullYear()+
+    ":"+pad(d.getUTCHours())+":"+pad(d.getUTCMinutes())+":"+pad(d.getUTCSeconds())+" +0000";
+}
+export function virtualAccessLog(run:SimulationResult):string{
+  if(run.rows.length>100)throw new Error("合成记录超过本地演练上限。");
+  const paths:Record<SimKind,string>={
+    browse:"/",login:"/login",admin:"/admin",change:"/account"
+  };
+  return run.rows.map(r=>{
+    const method=r.kind==="login"||r.kind==="change"?"POST":"GET";
+    return '127.0.0.1 - - ['+apacheStamp(SIMULATED_START+r.atMs)+'] "'+
+      method+" "+paths[r.kind]+' HTTP/1.1" '+r.responseStatus+
+      ' 96 "-" "OpenPenguin-VirtualLab"';
+  }).join("\n")+"\n";
+}
+export function virtualBrowserJournal(run:SimulationResult){
+  if(run.rows.length>100)throw new Error("合成记录超过本地演练上限。");
+  return {
+    schema:"openguin-browser-journal-v1",
+    createdAt:new Date(SIMULATED_START+15*60000).toISOString(),
+    retentionDays:30,capacity:2500,capacityDropped:0,recordingEnabled:false,
+    recordCount:run.rows.length,
+    events:run.rows.map(r=>({
+      at:SIMULATED_START+r.atMs,host:"virtual.local",kind:"fetch-response",
+      status:r.responseStatus,durationMs:25+(r.id*7)%90
+    }))
+  };
+}
