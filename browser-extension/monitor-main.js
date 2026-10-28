@@ -324,9 +324,11 @@
     if (state.renderObserver) state.renderObserver.disconnect();
     if (state.renderTimer) clearTimeout(state.renderTimer);
     // These listeners otherwise accumulate across Stop/Start on one document.
-    window.removeEventListener("error",onWindowError,true);
-    window.removeEventListener("unhandledrejection",onUnhandledRejection);
-    window.removeEventListener("message",onControlMessage);
+    if (typeof window.removeEventListener==="function") {
+      window.removeEventListener("error",onWindowError,true);
+      window.removeEventListener("unhandledrejection",onUnhandledRejection);
+      window.removeEventListener("message",onControlMessage);
+    }
   };
   window.addEventListener("message",onControlMessage);
 
