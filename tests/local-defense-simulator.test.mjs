@@ -2,8 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   DEFAULT_POLICY,LEARNING_BASELINE,SCENARIOS,generateVirtualRequests,simulateDefense,
+  virtualAccessLog,virtualBrowserJournal,
   validatePolicy,compareDefensePolicies,exportSimulationSummary
 } from "../.network-test/local-defense-simulator.mjs";
+import {analyzeAccessLog} from "../.network-test/server-access-log.mjs";
+import {parseBrowserJournal,reviewBrowserJournal} from "../.network-test/network-journal.mjs";
 
 test("all available scenarios create bounded deterministic synthetic-only events",()=>{
   for(const scenario of SCENARIOS){
@@ -86,4 +89,27 @@ test("exports have aggregate counts and explicit no-network/no-credentials decla
   assert(!txt.includes("http://"));
   assert(!txt.includes("https://"));
   assert(result.summary.total<=60);
+});
+
+test("synthetic Apache access.log is compatible with existing server log analyzer",()=>{
+ const sim=simulateDefense("login-volume",DEFAULT_POLICY);
+ const log=virtualAccessLog(sim);
+ const audit=analyzeAccessLog(log);
+ assert.equal(audit.parsedLines,sim.summary.total);
+ assert.equal(audit.rateLimitedResponses,sim.summary.byReason["rate-limit"]);
+ assert.equal(audit.clientResponses,sim.summary.blocked);
+ assert(log.includes("127.0.0.1"));
+ assert(!log.includes("password"));
+ assert(!log.includes("https://"));
+});
+test("synthetic browser journal imports into existing journal analyzer",()=>{
+ const sim=simulateDefense("mixed",DEFAULT_POLICY);
+ const fixture=virtualBrowserJournal(sim);
+ const journal=parseBrowserJournal(JSON.stringify(fixture));
+ assert.equal(journal.events.length,sim.summary.total);
+ assert(journal.events.every(e=>e.host==="virtual.local"));
+ const summary=reviewBrowserJournal(journal);
+ assert.equal(summary.httpResponses,sim.summary.total);
+ assert.equal(summary.clientResponses,sim.summary.blocked);
+ assert.equal(summary.transportErrors,0);
 });
