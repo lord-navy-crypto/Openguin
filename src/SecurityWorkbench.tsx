@@ -1,4 +1,4 @@
-import {useState} from "react";
+import {useEffect,useRef,useState} from "react";
 import {invoke} from "@tauri-apps/api/core";
 import {auditHttpResponseHeaders,compareHeaderAudits,exportHeaderAudit,type HeaderAudit} from "./defensive-header-audit";
 import {downloadDiagnosticText} from "./diagnostic-export";
@@ -16,6 +16,9 @@ function secureDownload(name:string,content:unknown){
 export default function SecurityWorkbench(){
   const [snapshot,setSnapshot]=useState<AppSnapshot|null>(null);
   const [appBusy,setAppBusy]=useState(false);
+  const appInFlight=useRef(false);
+  const [live,setLive]=useState(false);
+  const [history,setHistory]=useState<Array<{at:number;processes:number;sockets:number}>>([]);
   const [appError,setAppError]=useState("");
   const [headers,setHeaders]=useState("");
   const [audit,setAudit]=useState<HeaderAudit|null>(null);
@@ -23,12 +26,18 @@ export default function SecurityWorkbench(){
   const [headerNotice,setHeaderNotice]=useState("");
   const [showAll,setShowAll]=useState(false);
   async function sampleApps(){
-    if(appBusy)return;
-    setAppBusy(true);setAppError("");
-    try{setSnapshot(await invoke<AppSnapshot>("sample_app_connections"))}
+    if(appInFlight.current)return;
+    appInFlight.current=true;setAppBusy(true);setAppError("");
+    try{const next=await invoke<AppSnapshot>("sample_app_connections");setSnapshot(next);
+      setHistory(prev=>[...prev,{at:next.capturedAtMs,processes:next.processCount,sockets:next.observedSockets}].slice(-120));}
     catch(e){setAppError(String(e).slice(0,300))}
-    finally{setAppBusy(false)}
+    finally{appInFlight.current=false;setAppBusy(false)}
   }
+  useEffect(()=>{
+    if(!live)return;
+    const timer=window.setInterval(()=>{if(!document.hidden)void sampleApps();},15000);
+    return ()=>window.clearInterval(timer);
+  },[live]);
   function analyzeHeaders(){
     const next=auditHttpResponseHeaders(headers);
     setAudit(next);
@@ -41,7 +50,7 @@ export default function SecurityWorkbench(){
       <div className="security-tool-head"><div><span className="eyebrow">DEFENSIVE TOOLBOX · LOCAL DEVICE</span>
         <h3>应用级连接观察 · App Socket Observatory</h3>
         <p>只在点击后采样 macOS 网络套接字；按应用显示可见连接描述符的数量，不采集远端地址、通信内容或命令行参数。</p></div>
-        <button disabled={appBusy} onClick={()=>void sampleApps()}>{appBusy?"正在读取本机状态…":"采集一次应用连接快照"}</button>
+        <div className="security-actions"><button disabled={appBusy} onClick={()=>void sampleApps()}>{appBusy?"正在读取本机状态…":"采集一次快照"}</button><button onClick={()=>{if(live)setLive(false);else{setLive(true);void sampleApps();}}}>{live?"停止实时采样":"开启 15 秒间隔采样"}</button></div>
       </div>
       {appError&&<p className="security-warning" role="alert">{appError}</p>}
       {snapshot&&<><div className="security-summary"><span>应用：<b>{snapshot.processCount}</b></span><span>可见套接字：<b>{snapshot.observedSockets}</b></span><span>采样：<b>{new Date(snapshot.capturedAtMs).toLocaleString()}</b></span></div>
@@ -49,7 +58,8 @@ export default function SecurityWorkbench(){
           {appPreview?.map(p=><tr key={p.pid}><td>{p.process}</td><td>{p.pid}</td><td>{p.observedSockets}</td></tr>)}
         </tbody></table></div>
         {snapshot.processes.length>15&&<button onClick={()=>setShowAll(x=>!x)}>{showAll?"收起列表":"查看全部 "+snapshot.processes.length+" 个应用"}</button>}
-        <div className="security-actions"><button onClick={()=>secureDownload("app-sockets",{schema:"openguin-app-sockets-v1",...snapshot})}>导出本机连接摘要 JSON</button></div>
+        {history.length>1&&<div className="security-history"><b>当前会话趋势（最近 {history.length} 次）</b><div className="security-history-grid">{history.slice(-8).map(x=><span key={x.at}>{new Date(x.at).toLocaleTimeString()} · {x.sockets} sockets</span>)}</div></div>}
+        <div className="security-actions"><button onClick={()=>secureDownload("app-sockets",{schema:"openguin-app-sockets-v1",...snapshot,sampleHistory:history})}>导出本机连接摘要 JSON</button><button disabled={!history.length} onClick={()=>setHistory([])}>清空本次趋势</button></div>
         <small>{snapshot.caveats.join(" ")}</small></>}
     </section>
     <section className="v07-card security-tool-card">
