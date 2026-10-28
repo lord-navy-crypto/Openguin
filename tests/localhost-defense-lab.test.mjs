@@ -512,6 +512,11 @@ test("v15 localhost page exposes 16-slot defensive control model and fixed choic
  assert(html.includes('name="lockout"'));
  assert(html.includes('name="pattern"'));
  assert(html.includes('虚拟延迟单位不是毫秒'));
+ assert(html.includes("认证防护事件时间线"));
+ assert(html.includes("授权与输入防护检查矩阵"));
+ assert(html.includes("other-record"));
+ assert(html.includes("member-admin"));
+ assert(html.includes("unsigned-form"));
  assert(!html.includes('name="password"'));
  assert(!html.includes('name="target"'));
 });
