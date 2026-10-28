@@ -12,6 +12,7 @@ The new panel shows:
 - Human-observed browser median/P95 request timings; P95 requires at least three valid response samples. These numbers are **not measured server capacity or load-test results**.
 - Requests that have a recorded start but no recorded terminal event, distinguishing recently-started work from starts older than 15 seconds. Missing terminal events can simply reflect navigations, missed capture or buffer truncation; this is **not proof of a server hang**.
 - Local evidence-quality context: dropped events, deduplicated events, and warnings if the fixed 300-event cache may be truncated.
+- Capture scope defaults to **current active tab**. An explicit selector can show all previously captured (still opt-in) events. The same scope applies to the aggregate export; cache-wide truncation counts are identified as global.
 - A separate **Download privacy-limited health summary** button. This aggregate-only JSON contains no hostnames, URL paths, cookies, credentials, headers, payloads or exact per-event timestamps. It is for independent review/sharing; it is **not** the Desktop Browser incident report format.
 - For the desktop application's **Browser incident report**, continue using the original **Copy diagnostic report** or **Download JSON report** buttons. The v17 localhost-lab JSON is also supported, and the desktop app recalculates its local HTTP metrics.
 
@@ -23,6 +24,7 @@ This feature follows Chrome MV3 official guidance on [activeTab](https://develop
 
 1. Load the extension from the updated `browser-extension` directory and open any ordinary user-controlled website or local lab.
 2. Click **Start this tab**; perform ordinary interactions, and observe that new HTTP-response and timing figures appear after reopening the popup.
+   Keep **当前标签页记录** selected for this tab's data, or explicitly switch to **全部已手动采集记录** to compare multiple opted-in sessions.
 3. Perform a few single-click Fetch/XHR requests in the OpenPenguin localhost Workbench; compare the popup's 401/403/429/503 observations with the localhost report and server access.log.
 4. Use **Stop monitoring** and confirm that subsequent page interactions do not increase the page's captured events.
 5. Try reloading with and without individually granted optional loopback permission, and confirm the monitor does not follow unrelated navigation.
