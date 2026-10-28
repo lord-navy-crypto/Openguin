@@ -34,3 +34,8 @@
 .security-delta{padding:12px;border:1px solid #487b89;border-radius:10px;background:rgba(34,78,94,.24)}
 .security-delta b{font-size:12px}
 .security-delta p{font-size:12px;color:#c0d6e2}
+
+.security-history{border:1px solid rgba(110,171,203,.18);border-radius:10px;padding:10px;background:rgba(18,43,61,.35)}
+.security-history>b{font-size:12px}
+.security-history-grid{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.security-history-grid span{font-size:10px;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,.07)}
