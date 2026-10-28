@@ -1,4 +1,17 @@
 const MAX_EVENTS = 300;
+// Optional, user-initiated, bounded long-term journal.
+// Records coarse metadata only and never restarts monitoring on its own.
+const JOURNAL_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const JOURNAL_MAX_EVENTS = 2500;
+function journalRecord(record) {
+  return {
+    at: Number(record.at) || Date.now(),
+    host: /^[a-z0-9.-]{1,120}$/i.test(record.host || "") ? record.host : "",
+    kind: ALLOWED_KINDS.has(record.kind) ? record.kind : "unknown",
+    status: Number.isFinite(record.status) ? record.status : null,
+    durationMs: Number.isFinite(record.durationMs) ? Math.min(1e9, Math.max(0,record.durationMs)) : null
+  };
+}
 const CHATGPT_HOSTS = new Set(["chatgpt.com", "chat.openai.com"]);
 // Page events carry their own timestamp. A duplicate bridge listener forwards
 // the same timestamp and payload, which lets us suppress duplicates safely.
@@ -61,14 +74,28 @@ function sanitizeEvent(input) {
 let eventWriteQueue = Promise.resolve();
 function appendEvent(record) {
   eventWriteQueue = eventWriteQueue.catch(() => {}).then(async () => {
-    const state = await chrome.storage.local.get({ events: [], droppedEvents: 0 });
+    const state = await chrome.storage.local.get({
+      events: [], droppedEvents: 0, journalEnabled: false,
+      journalEvents: [], journalDropped: 0
+    });
     const events = Array.isArray(state.events) ? state.events : [];
     const droppedEvents = Number(state.droppedEvents) || 0;
     const nextDropped = events.length >= MAX_EVENTS ? Math.min(1e9, droppedEvents + 1) : droppedEvents;
-    await chrome.storage.local.set({
+    const updates = {
       events: [record, ...events].slice(0, MAX_EVENTS),
       droppedEvents: nextDropped
-    });
+    };
+    if (state.journalEnabled === true) {
+      const cutoff = Date.now() - JOURNAL_RETENTION_MS;
+      const older = Array.isArray(state.journalEvents) ? state.journalEvents : [];
+      const recent = older.filter(e => Number.isFinite(e.at) && e.at >= cutoff && e.at <= Date.now() + 60000);
+      const incoming = journalRecord(record);
+      const journal = [incoming, ...recent];
+      const capacityDropped = Math.max(0, journal.length - JOURNAL_MAX_EVENTS);
+      updates.journalEvents = journal.slice(0, JOURNAL_MAX_EVENTS);
+      updates.journalDropped = Math.min(1e9, (Number(state.journalDropped) || 0) + capacityDropped);
+    }
+    await chrome.storage.local.set(updates);
   });
   return eventWriteQueue;
 }
