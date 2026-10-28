@@ -50,6 +50,8 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
   const findings=useMemo(()=>report?analyzeBrowserReport(report):[],[report]);
   const securityReview=useMemo(()=>report?buildNetworkSecurityReview(report):null,[report]);
   const counts=useMemo(()=>report?eventCounts(report):[],[report]);
+  const restrictedResourceTiming=useMemo(()=>report?
+    report.events.filter(e=>e.kind==="resource-timing-limited").length:0,[report]);
   const telemetry=useMemo(()=>report?summarizeBrowserTelemetry(report):null,[report]);
   const endpoints=useMemo(()=>report?summarizeBrowserEndpoints(report):[],[report]);
   const requestLifecycles=useMemo(()=>report?summarizeBrowserRequests(report):[],[report]);
@@ -155,6 +157,16 @@ export default function BrowserReportPanel({networkSnapshot,speedTest,vpnSamples
           <p><b>建议：</b>{item.nextStep}</p>
         </article>)}
       </div>}
+      {restrictedResourceTiming>0&&<section className="browser-correlation"
+          aria-label="Resource Timing limited visibility">
+        <div className="browser-correlation-head">
+          <h4>跨源性能数据可见性</h4><span>需人工核对</span>
+        </div>
+        <p>扩展在本次监测中报告了跨源 Resource Timing 字段受限的情况。
+          观察提示数量：{restrictedResourceTiming}。状态码或详细计时缺失不能作为 HTTP 失败、服务器故障或遭受攻击的证据。</p>
+        <p className="muted">部分跨源指标需要服务端允许 Timing-Allow-Origin，
+          且浏览器支持范围不完全一致。此提示仅基于页面脚本提供的观察结果。</p>
+      </section>}
       {report.captureSession&&<section className="browser-correlation" aria-label="Browser capture session evidence">
         <div className="browser-correlation-head">
           <h4>采集完整性 · v19</h4>
