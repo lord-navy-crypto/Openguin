@@ -89,13 +89,31 @@ test("cap and out-of-range duration/time rules keep report bounded",()=>{
  assert.equal(x.capture.possibleTruncation,true);
  assert.equal(summarize({events:[{kind:"xhr-response",at:10,status:200}]},{now}).eventCount,0);
 });
+test("v18 defaults to the chosen tab and never mixes another tab into its summary",()=>{
+ const rows=[
+   {...mk("fetch-response",{status:200,durationMs:12}),tabId:7},
+   {...mk("fetch-response",{status:503,durationMs:2400}),tabId:11},
+   {...mk("fetch-response",{status:401,durationMs:8}),tabId:7}
+ ];
+ const selected=summarize({events:rows},{now,tabId:7});
+ const all=summarize({events:rows},{now});
+ assert.equal(selected.scope,"selected-active-tab");
+ assert.equal(selected.responseCount,2);
+ assert.equal(selected.statusFamilies["5xx"],0);
+ assert.equal(selected.statusFamilies["4xx"],1);
+ assert.equal(all.responseCount,3);
+ assert.equal(all.statusFamilies["5xx"],1);
+ assert.equal(summarize({events:rows},{now,tabId:-1}).responseCount,0);
+ assert(!JSON.stringify(selected).includes("tabId"));
+});
+
 test("v18 popup, manifest and CI package reference the exact local analyzer",()=>{
  const html=readFileSync(new URL("../browser-extension/popup.html",import.meta.url),"utf8");
  const popup=readFileSync(new URL("../browser-extension/popup.js",import.meta.url),"utf8");
  const manifest=JSON.parse(readFileSync(new URL("../browser-extension/manifest.json",import.meta.url),"utf8"));
  assert(html.includes('<script src="observability-v18.js"></script>'));
  for(const id of ["observedResponses","observedErrors","observedP95","observedPending",
-   "observabilityQuality","observabilityNotes","observabilityJson"]){
+   "observabilityQuality","observabilityNotes","observabilityJson","observabilityScope"]){
    assert(html.includes('id="'+id+'"'),id);
  }
  assert(popup.includes("OpenguinObservability.summarize"));
