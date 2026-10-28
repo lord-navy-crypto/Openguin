@@ -14,6 +14,7 @@ on:
       - feature/defensive-mini-tools-v5
       - feature/defensive-mini-tools-v6
       - feature/local-defense-simulator-v7
+      - feature/virtual-site-builder-v8
   pull_request:
     branches:
       - main
@@ -23,6 +24,7 @@ on:
       - feature/defensive-mini-tools-v4
       - feature/defensive-mini-tools-v5
       - feature/defensive-mini-tools-v6
+      - feature/local-defense-simulator-v7
   workflow_dispatch:
 
 jobs:
@@ -83,6 +85,8 @@ jobs:
           node --test tests/defensive-lints-v6.test.mjs
           ./node_modules/.bin/esbuild src/local-defense-simulator.ts --bundle --platform=node --format=esm --outfile=.network-test/local-defense-simulator.mjs
           node --test tests/local-defense-simulator.test.mjs
+          ./node_modules/.bin/esbuild src/virtual-site-builder-v8.ts --bundle --platform=node --format=esm --outfile=.network-test/virtual-site-builder-v8.mjs
+          node --test tests/virtual-site-builder-v8.test.mjs
           ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
           node --test tests/network-one-click.test.mjs
           ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
