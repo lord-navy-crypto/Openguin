@@ -7,6 +7,8 @@ const allowed={
   health:{path:"/health",method:"GET",hint:"服务健康检查正常时返回 200。"},
   member:{path:"/member",method:"GET",hint:"未登录通常 401；演练成员或管理员为 200。"},
   admin:{path:"/admin",method:"GET",hint:"成员通常 403；演练管理员为 200；访客为 401。"},
+  ownrecord:{path:"/record-own",method:"GET",hint:"虚构成员访问自己的演练记录，应返回 200。"},
+  otherrecord:{path:"/record-other",method:"GET",hint:"开启所有权检查时 403；仅在主动切换到教学缺陷模式时返回 200。"},
   form:{path:"/form",method:"GET",hint:"访问受保护表单：访客 401，演练成员或管理员 200。"},
   rate:{path:"/rate-check",method:"GET",hint:"人工触发限流：初始 200，阈值后 429。"},
   csrf:{path:"/form",method:"POST",hint:"省略 CSRF 校验：已登录身份会收到 403。"},
