@@ -7,8 +7,6 @@
 const RESPONSE=new Set(["fetch-response","xhr-response"]);
 const START=new Set(["fetch-start","xhr-start"]);
 const TERMINAL=new Set(["fetch-response","xhr-response","fetch-error","xhr-error"]);
-const ERROR=new Set(["fetch-error","xhr-error","resource-error","javascript-error",
-  "unhandled-rejection","stream-error","body-read-error","download-failed"]);
 const STALL=new Set(["fetch-stall","xhr-stall","stream-gap","download-stall"]);
 const MAX_EVENTS=300;
 function validEvent(e){
@@ -33,10 +31,7 @@ function summarize(raw,options={}){
   const times=[];
   const starts=new Map();
   const completed=new Set();
-  const hostCounts=new Map();
-  let lastEventAt=null;
   for(const e of events){
-    lastEventAt=lastEventAt===null?e.at:Math.max(lastEventAt,e.at);
     const kind=e.kind;
     if(RESPONSE.has(kind)){
       const status=Number(e.status);
@@ -48,10 +43,6 @@ function summarize(raw,options={}){
       }
       const ms=duration(e);
       if(ms!==null){times.push(ms);if(ms>=3000)slowResponses++;}
-      if(typeof e.host==="string"&&/^[a-z0-9.-]{1,120}$/i.test(e.host)){
-        const key=e.host.toLowerCase();
-        hostCounts.set(key,(hostCounts.get(key)||0)+1);
-      }
     }
     if(kind==="fetch-error"||kind==="xhr-error")transportErrors++;
     if(STALL.has(kind))stalls++;
@@ -70,8 +61,6 @@ function summarize(raw,options={}){
   const dropped=Math.max(0,Math.min(1e9,Math.floor(Number(raw?.quality?.droppedEvents)||0)));
   const duplicate=Math.max(0,Math.min(1e9,Math.floor(Number(raw?.quality?.duplicateEventsSuppressed)||0)));
   const limit=(raw?.quality?.eventCapReached===true)||dropped>0||events.length>=MAX_EVENTS;
-  const topHosts=[...hostCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,5)
-    .map(([host,responseCount])=>({host,responseCount}));
   const measuredTimes=times.length;
   const symptoms={
     authenticationDenials:unauthorized+forbidden,
@@ -90,7 +79,7 @@ function summarize(raw,options={}){
     statusFamilies:counts,symptoms,
     medianResponseMs:pctl(times,0.5),
     p95ResponseMs:measuredTimes>=3?pctl(times,0.95):null,
-    timingSamples:measuredTimes,topHosts,lastEventAt,
+    timingSamples:measuredTimes,
     capture:{droppedEvents:dropped,duplicateEventsSuppressed:duplicate,
       possibleTruncation:limit,notices:issues},
     limits:"Source events are page instrumentation, not independently authenticated packets. "+
