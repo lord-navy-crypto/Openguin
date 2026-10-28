@@ -63,10 +63,10 @@ jobs:
           node --test tests/server-access-log.test.mjs
           ./node_modules/.bin/esbuild src/security-evidence-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/security-evidence-correlation.mjs
           node --test tests/security-evidence-correlation.test.mjs
-          ./node_modules/.bin/esbuild src/defense-action-plan.ts --bundle --platform=node --format=esm --outfile=.network-test/defense-action-plan.mjs
-          node --test tests/defense-action-plan.test.mjs
           ./node_modules/.bin/esbuild src/defensive-header-audit.ts --bundle --platform=node --format=esm --outfile=.network-test/defensive-header-audit.mjs
           node --test tests/defensive-header-audit.test.mjs
+          ./node_modules/.bin/esbuild src/defense-action-plan.ts --bundle --platform=node --format=esm --outfile=.network-test/defense-action-plan.mjs
+          node --test tests/defense-action-plan.test.mjs
           ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
           node --test tests/network-one-click.test.mjs
           ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
