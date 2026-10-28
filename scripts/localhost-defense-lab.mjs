@@ -10,6 +10,7 @@ import {pathToFileURL} from "node:url";
 import {readFileSync} from "node:fs";
 import {createManualExerciseState} from "./manual-defense-exercises.mjs";
 import {createManualDrills,DRILL_TRACKS,DRILL_MODES,exportManualDrills} from "./manual-drills-v14.mjs";
+import {DEFENSE_PATTERNS,DEFENSE_CAPACITY_OPTIONS,DEFENSE_QUEUE_OPTIONS,DEFENSE_THROTTLE_OPTIONS,DEFENSE_LOCK_OPTIONS,DEFAULT_DEFENSE_CONFIG,validateDefenseV15,runDefenseV15,exportDefenseV15Csv,exportDefenseV15} from "./defense-engine-v15.mjs";
 import {DEFAULT_STUDIO_CONFIG,STUDIO_PROFILES,STUDIO_LEVELS,validateStudioConfig,evaluateDefenseStudio,compareStudioConfig,exportStudioCsv} from "./defense-studio-v13.mjs";
 
 export const LAB_HOST="127.0.0.1";
@@ -52,7 +53,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a> · <a href="/defense-studio">Defense Studio</a> · <a href="/drills">Hands-on Drills</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a> · <a href="/defense-studio">Defense Studio</a> · <a href="/drills">Hands-on Drills</a> · <a href="/defense-engine">v15 Defense Engine</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -83,7 +84,7 @@ export function createLocalDefenseLab(options={}){
   const drills=createManualDrills({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export","/drills","/drill-step","/drill-policy","/drill-reset","/drill-report"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export","/drills","/drill-step","/drill-policy","/drill-reset","/drill-report","/defense-engine","/defense-engine-export"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -453,6 +454,108 @@ export function createLocalDefenseLab(options={}){
         '<a href="/access-log">下载真实 localhost 脱敏 HTTP 日志</a></p>'+
         "<p>注意：报告中虚拟事件数不等于网络请求数；每次手动操作仅发送一个"+
         "本机 HTTP 请求。练习不评估任何真实网站的安全性。</p>"));
+      return;
+    }
+    if(["/defense-engine","/defense-engine-export"].includes(route)){
+      let config={...DEFAULT_DEFENSE_CONFIG};
+      if(req.method==="POST"){
+        let params;
+        try{params=await bodyParams(req)}
+        catch(e){send(e.status??400,"Invalid local form.","text/plain; charset=utf-8");return;}
+        if(!verifyCsrf(params)){
+          send(403,page("Defense engine form refused",
+            "<p>Use the server-issued localhost training form.</p>"));return;
+        }
+        try{
+          config=validateDefenseV15({
+            pattern:params.get("pattern"),
+            capacity:Number(params.get("capacity")),
+            queue:Number(params.get("queue")),
+            throttle:Number(params.get("throttle")),
+            lockout:Number(params.get("lockout"))
+          });
+        }catch{
+          send(422,page("Training parameter rejected",
+            "<p>Only the provided bounded model values are supported.</p>"));return;
+        }
+      }else if(req.method!=="GET"||route==="/defense-engine-export"){
+        send(405,page("Method not supported",
+          "<p>Use the visible local form controls.</p>"));return;
+      }
+      const model=runDefenseV15(config);
+      if(route==="/defense-engine-export"){
+        send(200,exportDefenseV15Csv(model),"text/csv; charset=utf-8",
+          {"Content-Disposition":'attachment; filename="openguin-v15-offline-defense.csv"'});
+        return;
+      }
+      const report=exportDefenseV15(model);
+      const select=(name,values,selected,title)=>
+        '<label>'+escapeHtml(title)+' <select name="'+name+'">'+
+        values.map(([key,label])=>
+          '<option value="'+key+'"'+(String(key)===String(selected)?" selected":"")+'>'+
+          escapeHtml(label)+'</option>').join("")+'</select></label>';
+      const numeric=(choices)=>choices.map(n=>[n,String(n)]);
+      const controls=
+        select("pattern",Object.entries(DEFENSE_PATTERNS).map(([id,p])=>[id,p.label]),
+          config.pattern,"预设业务场景")+
+        select("capacity",numeric(DEFENSE_CAPACITY_OPTIONS),config.capacity,"每时间片虚拟处理容量")+
+        select("queue",numeric(DEFENSE_QUEUE_OPTIONS),config.queue,"虚拟排队上限")+
+        select("throttle",numeric(DEFENSE_THROTTLE_OPTIONS),config.throttle,"虚拟限流阈值")+
+        select("lockout",numeric(DEFENSE_LOCK_OPTIONS),config.lockout,"虚构失败次数保护阈值");
+      const form=(action,label)=>
+        '<form method="post" action="'+action+'" style="padding:12px;display:flex;'+
+        'flex-wrap:wrap;align-items:center;gap:9px;border:1px solid #506f81;border-radius:10px">'+
+        field(csrf)+controls+'<button type="submit">'+escapeHtml(label)+'</button></form>';
+      const tableRows=report.slots.map(d=>{
+        const guardedWidth=Math.max(0,Math.min(100,Math.round(d.guardedProcessed/d.incoming*100)));
+        const blockedWidth=Math.max(0,Math.min(100,Math.round(d.guardedThrottled/d.incoming*100)));
+        const bar='<div style="height:10px;background:#274359;border-radius:5px;overflow:hidden;'+
+          'min-width:90px;display:flex">'+
+          '<span style="width:'+guardedWidth+'%;background:#71b6b7"></span>'+
+          '<span style="width:'+blockedWidth+'%;background:#c6a77e"></span></div>';
+        return '<tr><td>'+d.slot+'</td><td>'+d.incoming+'</td>'+
+          '<td>'+d.guardedProcessed+'</td><td>'+d.guardedThrottled+'</td>'+
+          '<td>'+d.guardedUnavailable+'</td><td>'+d.guardedQueued+'</td>'+
+          '<td>'+d.contrastUnavailable+'</td><td>'+bar+'</td></tr>';
+      }).join("");
+      const metric=[
+        ["进入事件数","arrivals"],["处理事件数","processed"],
+        ["限流事件数","throttled"],["容量拒绝事件数","unavailable"],
+        ["结束时仍排队","remainingQueued"],["峰值排队量","peakBacklog"],
+        ["第95百分位虚拟延迟单位","p95LatencyUnits"],
+        ["估算正常请求受限数","estimatedNormalThrottled"],
+        ["处理完成率（%）","processedPercent"]
+      ].map(([label,key])=>'<tr><td>'+escapeHtml(label)+'</td><td>'+
+        report.protected[key]+'</td><td>'+report.contrast[key]+'</td></tr>').join("");
+      const risk=(
+        '<tr><td>虚构登录保护次数</td><td>'+report.protected.identityPrevented+
+        '</td><td>'+report.contrast.identityPrevented+'</td></tr>'+
+        '<tr><td>固定权限/验证案例未通过数</td><td>'+report.protected.validationMisses+
+        '</td><td>'+report.contrast.validationMisses+'</td></tr>'
+      );
+      send(200,page("v15 Advanced Offline Defense Engine",
+        '<p>16 个虚拟时间片的排队模型。每次手动运行只发出一条 localhost 表单请求；'+
+        '模型事件不会成为真实网络请求，也不消耗模拟出来的服务器容量。</p>'+
+        form("/defense-engine","运行一次防护对照")+
+        form("/defense-engine-export","导出当前配置的脱敏 CSV")+
+        '<h3>防护与教学对照</h3><table><thead><tr><th>模型指标</th>'+
+        '<th>防护开启</th><th>教学对照</th></tr></thead><tbody>'+
+        metric+risk+'</tbody></table>'+
+        '<h3>时间线：'+escapeHtml(DEFENSE_PATTERNS[config.pattern].label)+'</h3>'+
+        '<p><span style="color:#71b6b7">■</span> 虚拟处理量 · '+
+        '<span style="color:#c6a77e">■</span> 虚拟限流量。'+
+        '这不是实际服务器性能曲线。</p>'+
+        '<table><thead><tr><th>时段</th><th>流入</th><th>处理</th>'+
+        '<th>429</th><th>503</th><th>排队</th><th>无保护503</th><th>示意</th>'+
+        '</tr></thead><tbody>'+tableRows+'</tbody></table>'+
+        '<h3>如何复测</h3><p>一次只更改一个变量（例如处理容量），重新运行。'+
+        '观察排队峰值、容量拒绝和正常请求被限流的估计值是否出现取舍。'+
+        '虚拟延迟单位不是毫秒；此模型不能测量真实网站抗压性能。</p>'+
+        '<p>授权场景来自固定的虚构记录、角色、CSRF 与字段规则；'+
+        '认证时间线仅用“失败/恢复”标签，不尝试任何密码，也不执行漏洞载荷。</p>'+
+        '<p><a href="/drills">手动单步三轨道练习</a> · '+
+        '<a href="/ownership-lab">真实 localhost 权限修复练习</a> · '+
+        '<a href="/access-log">脱敏访问日志</a></p>'));
       return;
     }
     if(req.method==="GET"&&route==="/workbench-client"){
