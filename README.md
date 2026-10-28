@@ -152,3 +152,9 @@ Openguin can index much more than the small set visible on a single home page, b
 - Hugging Face APIs are rate-limited and gated/private models need a future authenticated workflow.
 - GitHub metadata search is discovery-only and subject to public API rate limits.
 - Hardware recommendations are estimates; measured runtime data takes precedence.
+
+## Network & Security Lab v2 (feature preview)
+
+The existing AI model / Ollama / LabBridge controls remain unchanged. On `feature/network-security-lab-v2`, the **Browser incident report** now includes a passive Network & Security Lab for filtering captured website events, reviewing per-domain status and latency, plotting minute-level issue trends, comparing separately collected VPN/DNS/HTTPS evidence, and exporting privacy-reduced JSON/CSV analysis for ChatGPT. Monitoring must be explicitly started in the Chrome extension; it does not record all browser traffic or inspect packet bodies.
+
+See [Network & Security Lab v2](docs/NETWORK_SECURITY_LAB_V2.md) and [Browser extension](browser-extension/README.md). Use only on your own browser and networks, or systems you are authorized to assess.
