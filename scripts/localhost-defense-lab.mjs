@@ -7,6 +7,7 @@
 import http from "node:http";
 import {randomBytes,timingSafeEqual} from "node:crypto";
 import {pathToFileURL} from "node:url";
+import {createManualExerciseState} from "./manual-defense-exercises.mjs";
 
 export const LAB_HOST="127.0.0.1";
 export const LAB_PORT=19090;
@@ -47,7 +48,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -74,9 +75,10 @@ export function createLocalDefenseLab(options={}){
   const csrfTokens=new Map();
   const events=[];
   const limiter=new Map();
+  const exercises=createManualExerciseState({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -201,6 +203,51 @@ export function createLocalDefenseLab(options={}){
         send(422,page("Input rejected","<p>The fictional note label did not satisfy the server-side input rule.</p>"));return;
       }
       send(200,page("Validated","<p>The invented form passed origin and field checks. The submitted content was discarded.</p>"));return;
+    }
+    if(req.method==="GET"&&route==="/manual-console"){
+      const state=exercises.snapshot(csrf);
+      const one=(action,button,detail)=>
+        '<form action="'+action+'" method="post">'+field(csrf)+
+        '<button type="submit">'+escapeHtml(button)+'</button> '+
+        '<small>'+escapeHtml(detail)+'</small></form>';
+      send(200,page("Manual defense console",
+        "<p>Each button makes exactly one ordinary browser POST to this loopback server. "+
+        "No credentials, exploit payloads, requests to other websites or concurrent traffic are created.</p>"+
+        "<h3>Identity failure & lockout model</h3>"+
+        "<p>Invented failed sign-in events in the current 60-second window: "+
+        state.failedIdentityEvents+" / 3. There is no password field or checking algorithm.</p>"+
+        one("/manual-attempt","Record one fake identity failure",
+          "Expected 401 for the first three events, then 429 until the window expires.")+
+        "<h3>Capacity protection model (no actual load)</h3>"+
+        "<p>Virtual queue units: "+state.virtualQueueUnits+" / 5. "+
+        "These are numbers, not sockets, CPU tasks or live requests.</p>"+
+        one("/manual-capacity","Advance virtual queue one step",
+          "A single local request increments a counter; after three units the response is 503.")+
+        "<h3>Restore the training baseline</h3>"+
+        one("/manual-reset","Reset invented counters",
+          "Resets only this lab's fictional event state.")+
+        "<p>Open your browser's Network panel to inspect the single response, "+
+        "then use <a href='/events'>event summary</a> or "+
+        "<a href='/access-log'>sanitized access.log</a> to investigate.</p>"));return;
+    }
+    if(req.method==="POST"&&["/manual-attempt","/manual-capacity","/manual-reset"].includes(route)){
+      let params;
+      try{params=await bodyParams(req)}
+      catch(e){send(e.status??400,"Invalid local form.","text/plain; charset=utf-8");return;}
+      if(!verifyCsrf(params)){
+        send(403,page("Manual check refused","<p>Use the form on the local Manual Defense Console.</p>"));
+        return;
+      }
+      const result=route==="/manual-attempt"?exercises.failureCheck(csrf):
+        route==="/manual-capacity"?exercises.capacityCheck(csrf):
+          exercises.reset(csrf);
+      const body="<p>"+escapeHtml(result.message)+"</p>"+
+        "<p>Training decision: <code>HTTP "+result.status+"</code> · "+
+        "<code>"+escapeHtml(result.reason)+"</code>.</p>"+
+        "<p><a href='/manual-console'>Return to manual defense console</a></p>";
+      const extra=result.status===429?{"Retry-After":"60"}:{};
+      send(result.status,page("One-click defense result",body),"text/html; charset=utf-8",extra);
+      return;
     }
     if(req.method==="GET"&&route==="/rate-check"){
       const key=authenticated?cookies.get("lab_session"):"guest";
