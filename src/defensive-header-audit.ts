@@ -82,3 +82,17 @@ export function auditHttpResponseHeaders(raw:string):HeaderAudit{
 export function exportHeaderAudit(audit:HeaderAudit){
   return {schema:"openguin-offline-header-audit-v1",...audit,privacy:{inputHeadersIncluded:false,cookieNamesIncluded:false,cookieValuesIncluded:false,networkRequestsMade:false}};
 }
+
+
+/** Compare two explicit offline observations. A resolved finding is not a proof of security. */
+export function compareHeaderAudits(before:HeaderAudit,after:HeaderAudit){
+  const previous=new Map(before.findings.filter(f=>f.severity!=="pass").map(f=>[f.id,f]));
+  const current=new Map(after.findings.filter(f=>f.severity!=="pass").map(f=>[f.id,f]));
+  const resolved=[...previous.values()].filter(f=>!current.has(f.id)).map(f=>f.title);
+  const introduced=[...current.values()].filter(f=>!previous.has(f.id)).map(f=>f.title);
+  const remaining=[...current.values()].filter(f=>previous.has(f.id)).map(f=>f.title);
+  return {
+    resolved,introduced,remaining,
+    caution:"Only compares two user-pasted response-header samples; it does not verify the same URL, deployment, or exploitable weaknesses."
+  };
+}
