@@ -120,3 +120,17 @@ Independent data sources should not be linked to named persons or interpreted as
 ### Current tests and verification
 
 The CI workflow now includes deterministic tests for journal summary exports, private server access-log aggregation, and cross-source overlap. A previously failing test incorrectly prohibited the legitimate aggregate field `hosts[].events`; the assertion was corrected to prohibit a top-level raw event timeline instead. The latest revision still needs its own full CI run before distribution.
+
+
+## Added: evidence-driven defensive action plan
+
+The Security Lab now proposes a local remediation checklist from the three distinct sources already loaded into the page: HTTP response header review, authorized browser journal JSON, and owned-site server access-log aggregates.
+
+- Website configuration findings become concrete configuration-review tasks, not vulnerability claims.
+- Server 5xx, 429, unusually high observed minute activity, and unparsed log lines generate separate investigation or observability tasks.
+- Browser transport failures, stalls, render/download issues and truncated journal coverage generate diagnostic tasks.
+- Each item shows evidence, a safe suggested next step, uncertainty, and a per-session completion checkbox.
+- JSON export contains descriptions and aggregated metrics, not server request URLs, visitor IP addresses, browser request IDs, or raw events.
+- No source loaded means no invented findings; no matching findings does **not** certify site security.
+
+CI includes new tests for redaction, action priority, and absence of invented conclusions.
