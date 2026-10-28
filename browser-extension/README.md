@@ -2,6 +2,18 @@
 
 A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the active HTTP(S) tab.
 
+## v0.7.0 — Clean page listener lifecycle and honest Resource Timing visibility
+
+This release focuses on correctness rather than adding invasive monitoring permissions. **Stop** now unregisters the page's error, unhandled rejection and control-message listeners, preventing unused handlers from accumulating after repeated manual restarts. Original Fetch/XHR functions, observers and timers are still restored/disconnected.
+
+Cross-origin PerformanceResourceTiming can hide response status and detailed timing. v0.7 makes this limitation visible as a single `resource-timing-limited` observation per manual session, **not a failed HTTP response**. Its diagnostic event does not expose remote resource URLs. Cross-origin slow-resource paths are also replaced with a generic path label.
+
+The existing Browser Health panel, browser report JSON, desktop OpenPenguin Browser incident panel and optional local journal recognize the new evidence type. The old localhost practice, reports and v0.3–v0.6 features continue working.
+
+Read [v21 Resource Timing & Lifecycle](RESOURCE_TIMING_LIFECYCLE_V21.md) for Chrome/OWASP/MDN references, QA steps and interpretation limits.
+
+
+
 ## v0.6.0 — Isolated manual monitoring sessions and reliable rapid Stop/Start
 
 This version fixes an actual race condition in the v0.5 browser extension: if you manually Stop and immediately Start the **same tab**, a delayed event from the previous monitoring session must not be written into the new one. Every Start now increments a persisted session generation; event writes and duplicate suppression respect that generation. An event clearly timestamped before the current Start is also excluded, and the MAIN-world Stop command runs synchronously before another manual Start.

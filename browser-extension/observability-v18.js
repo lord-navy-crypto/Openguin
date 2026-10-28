@@ -29,7 +29,7 @@ function summarize(raw,options={}){
     .filter(e=>validEvent(e)&&(tabOnly===null||e.tabId===tabOnly));
   const counts={"2xx":0,"3xx":0,"4xx":0,"5xx":0};
   let unauthorized=0,forbidden=0,throttled=0,transportErrors=0,stalls=0,
-    scriptErrors=0,slowResponses=0;
+    scriptErrors=0,slowResponses=0,resourceTimingLimited=0;
   const times=[];
   const starts=new Map();
   const completed=new Set();
@@ -46,6 +46,7 @@ function summarize(raw,options={}){
       const ms=duration(e);
       if(ms!==null){times.push(ms);if(ms>=3000)slowResponses++;}
     }
+    if(kind==="resource-timing-limited")resourceTimingLimited++;
     if(kind==="fetch-error"||kind==="xhr-error")transportErrors++;
     if(STALL.has(kind))stalls++;
     if(kind==="javascript-error"||kind==="unhandled-rejection")scriptErrors++;
@@ -67,12 +68,13 @@ function summarize(raw,options={}){
   const symptoms={
     authenticationDenials:unauthorized+forbidden,
     unauthorized,forbidden,throttled,serverErrors:counts["5xx"],
-    transportErrors,stalls,scriptErrors,slowResponses,unfinished,youngInFlight
+    transportErrors,stalls,scriptErrors,slowResponses,resourceTimingLimited,unfinished,youngInFlight
   };
   const issues=[];
   if(limit)issues.push("事件缓存可能截断，统计只覆盖保留下来的事件");
   if(unfinished)issues.push("存在超过15秒仍未见终态的请求：也可能因为停止采集、跳转或缓存截断");
   if(!measuredTimes)issues.push("没有可用的 Fetch/XHR 响应计时");
+  if(resourceTimingLimited)issues.push("部分跨源资源的 Performance Timing 字段被浏览器限制；这不是 HTTP 失败");
   if(!events.length)issues.push("尚无手动启用监测后记录的事件");
   return {
     schema:"openguin-observability-summary-v18",

@@ -38,7 +38,7 @@ const ALLOWED_KINDS = new Set([
   "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
   "body-read-complete", "body-read-error",
-  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability",
+  "resource-error", "slow-resource", "resource-timing-limited", "javascript-error", "unhandled-rejection", "long-task", "render-summary", "render-stability",
   "download-start", "download-progress", "download-complete", "download-failed", "download-stall"
 ]);
 

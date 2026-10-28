@@ -174,6 +174,7 @@ function eventText(event) {
     case "stream-end": return "Response stream ended · " + location;
     case "resource-error": return "Resource failed (" + event.tag + ") · " + location;
     case "slow-resource": return "Slow resource · " + location + duration;
+    case "resource-timing-limited": return "Cross-origin resource timing limited · headers/status may be unavailable";
     case "javascript-error": return "JavaScript error (" + event.errorType + ") · " + location + ":" + (event.line || 0);
     case "unhandled-rejection": return "Unhandled promise rejection (" + event.errorType + ")";
     case "long-task": return "Main thread busy for " + event.durationMs + " ms";
@@ -203,6 +204,7 @@ function eventAdvice(event) {
   if (event.kind === "stream-error") return "The response stream ended with an error. Compare request timing with desktop connectivity checks; if DNS/HTTPS are healthy, suspect a page/session or upstream stream issue.";
   if (event.kind === "resource-error") return "A page resource failed. If repeatable, compare the resource host with DNS/VPN results and check browser content-blocking settings.";
   if (event.kind === "slow-resource") return "This resource was slow. Compare its host and timing across repeated runs; a single slow resource does not establish the cause.";
+  if (event.kind === "resource-timing-limited") return "The browser restricted some cross-origin Resource Timing fields. Missing values do not mean HTTP 0, a blocked request, or a server error.";
   if (event.kind === "javascript-error" || event.kind === "unhandled-rejection") return "This points to a page-script error, not necessarily a network problem. Reload once; if repeatable, test in a clean browser profile and inspect the browser console.";
   if (event.kind === "long-task") return "The page's main thread was busy. If requests completed but the UI froze, test with fewer heavy tabs and compare a clean profile.";
   if (event.kind === "navigation") {
@@ -303,6 +305,7 @@ async function render() {
   observabilityQuality.textContent="错误事件 "+diagnoses.transportErrors+
     " · 限流 429 "+diagnoses.throttled+
     " · 失败/卡顿信号 "+diagnoses.stalls+
+    " · 跨源计时可见性提示 "+diagnoses.resourceTimingLimited+
     " · 采集丢弃 "+dashboard.capture.droppedEvents+
     " · 去重 "+dashboard.capture.duplicateEventsSuppressed;
   observabilityNotes.textContent=(dashboard.scope==="selected-active-tab"?
@@ -381,7 +384,7 @@ async function buildDiagnosticReport() {
     "fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response",
     "xhr-error","xhr-stall","stream-gap","stream-gap-resolved","stream-error","stream-end",
     "body-read-complete","body-read-error",
-    "resource-error","slow-resource","javascript-error","unhandled-rejection","long-task",
+    "resource-error","slow-resource","resource-timing-limited","javascript-error","unhandled-rejection","long-task",
     "download-start","download-progress","download-complete","download-failed","download-stall"
   ]);
   const cleanEvents = (Array.isArray(stored.events) ? stored.events : []).slice(0, 300)
@@ -579,7 +582,7 @@ async function buildLongTermJournal() {
     "monitor-active","monitor-started","navigation","render-summary","render-stability",
     "fetch-start","fetch-response","fetch-error","fetch-stall","xhr-start","xhr-response","xhr-error","xhr-stall",
     "stream-gap","stream-gap-resolved","stream-error","stream-end","body-read-complete","body-read-error",
-    "resource-error","slow-resource","javascript-error","unhandled-rejection","long-task",
+    "resource-error","slow-resource","resource-timing-limited","javascript-error","unhandled-rejection","long-task",
     "download-start","download-progress","download-complete","download-failed","download-stall"
   ]);
   const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;

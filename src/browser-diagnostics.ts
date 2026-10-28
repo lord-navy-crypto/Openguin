@@ -82,7 +82,7 @@ const VALID_KINDS = new Set([
   "fetch-stall", "xhr-start", "xhr-response", "xhr-error", "xhr-stall",
   "stream-gap", "stream-gap-resolved", "stream-error", "stream-end",
   "body-read-complete", "body-read-error",
-  "resource-error", "slow-resource", "javascript-error", "unhandled-rejection",
+  "resource-error", "slow-resource", "resource-timing-limited", "javascript-error", "unhandled-rejection",
   "long-task", "download-start", "download-progress", "download-complete",
   "download-failed", "download-stall"
 ]);
