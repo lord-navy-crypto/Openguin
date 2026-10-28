@@ -27,6 +27,7 @@ const COMMON_HEADERS={
   "X-Lab-Notice":"LOCALHOST-TRAINING-ONLY"
 };
 const fixedWorkbenchClient=readFileSync(new URL("./localhost-http-workbench.js",import.meta.url),"utf8");
+const fixedAuditCore=readFileSync(new URL("./manual-audit-evidence-v16.mjs",import.meta.url),"utf8");
 const cleanToken=()=>randomBytes(24).toString("hex");
 const safeEqual=(a,b)=>{
   if(typeof a!=="string"||typeof b!=="string"||a.length!==b.length||a.length<32)return false;
@@ -84,7 +85,7 @@ export function createLocalDefenseLab(options={}){
   const drills=createManualDrills({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export","/drills","/drill-step","/drill-policy","/drill-reset","/drill-report","/defense-engine","/defense-engine-export"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other","/defense-studio","/defense-studio-export","/drills","/drill-step","/drill-policy","/drill-reset","/drill-report","/defense-engine","/defense-engine-export","/audit-core"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -580,6 +581,9 @@ export function createLocalDefenseLab(options={}){
     if(req.method==="GET"&&route==="/workbench-client"){
       send(200,fixedWorkbenchClient,"text/javascript; charset=utf-8");return;
     }
+    if(req.method==="GET"&&route==="/audit-core"){
+      send(200,fixedAuditCore,"text/javascript; charset=utf-8");return;
+    }
     if(req.method==="GET"&&route==="/workbench"){
       // Only this page may load the local, fixed-source inspector script.
       // It can connect only to its own same-origin localhost server.
@@ -614,11 +618,14 @@ export function createLocalDefenseLab(options={}){
         '<p id="wb-current">选择一项检查，浏览器会显示真实的本机 HTTP 响应状态与有限的安全响应头。</p></section>'+
         '<section><h3>手动检查记录</h3><p id="wb-summary">尚未开始。</p>'+
         '<ol id="wb-history" style="padding-left:24px;max-height:350px;overflow:auto"></ol>'+
+        '<h3>本机手动响应时间</h3><p id="wb-metrics">尚无人工观测数据。</p>'+
+        '<div id="wb-duration-bars" aria-label="最近十二次人工测量时间"></div>'+
+        '<h3>防御响应头观察</h3><div id="wb-header-evidence" aria-live="polite"></div>'+
         '<button type="button" id="wb-export">导出脱敏结果 JSON</button> '+
         '<button type="button" id="wb-clear">清空当前浏览器记录</button></section>'+
         '<p>每次最多保留 30 条本浏览器页面内的结果。不会导出 Cookie、CSRF 令牌、请求正文或响应正文。'+
         '完整服务器侧结果可通过 <a href="/access-log">脱敏 access.log</a> 分析。</p>'+
-        '<script src="/workbench-client" defer></script>';
+        '<script type="module" src="/workbench-client"></script>';
       send(200,page("Manual HTTP Workbench",body));return;
     }
     if(req.method==="GET"&&route==="/manual-console"){

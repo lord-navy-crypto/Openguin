@@ -22,6 +22,7 @@ on:
       - feature/offline-defense-studio-v13
       - feature/manual-three-track-drills-v14
       - feature/defense-capacity-lab-v15
+      - feature/manual-audit-evidence-v16
   pull_request:
     branches:
       - main
@@ -39,6 +40,7 @@ on:
       - feature/ownership-security-lab-v12
       - feature/offline-defense-studio-v13
       - feature/manual-three-track-drills-v14
+      - feature/defense-capacity-lab-v15
   workflow_dispatch:
 
 jobs:
@@ -113,9 +115,7 @@ jobs:
           node --test tests/diagnostic-export.test.mjs
 
       - name: Test isolated manual localhost HTTP lab
-        run: |
-          node --check scripts/localhost-http-workbench.js
-          node --test tests/manual-defense-exercises.test.mjs tests/manual-drills-v14.test.mjs tests/defense-engine-v15.test.mjs tests/defense-studio-v13.test.mjs tests/localhost-defense-lab.test.mjs
+        run: npm run security:lab:test
 
       - name: Build frontend
         run: npm run build
