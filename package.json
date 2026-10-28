@@ -11,7 +11,7 @@
     "desktop:dev": "npm run desktop:prepare && tauri dev",
     "desktop:build": "npm run desktop:prepare && tauri build",
     "security:lab": "node scripts/localhost-defense-lab.mjs",
-    "security:lab:test": "node --test tests/localhost-defense-lab.test.mjs"
+    "security:lab:test": "node -e \"require('node:fs').mkdirSync('.network-test',{recursive:true})\" && esbuild src/server-access-log.ts --bundle --platform=node --format=esm --outfile=.network-test/server-access-log.mjs && node --check scripts/localhost-http-workbench.js && node --test tests/manual-audit-evidence-v16.test.mjs tests/manual-defense-exercises.test.mjs tests/manual-drills-v14.test.mjs tests/defense-engine-v15.test.mjs tests/defense-studio-v13.test.mjs tests/localhost-defense-lab.test.mjs"
   },
   "dependencies": {
     "@vitejs/plugin-react": "latest",
