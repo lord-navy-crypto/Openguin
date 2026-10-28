@@ -27,6 +27,7 @@ The server binds to IPv4 **127.0.0.1 only**. It doesn't accept a configurable li
 | `/rate-check` | Refresh a few times manually; the dedicated demonstration allows four checks per 30 seconds | 429 after the threshold, then recovers |
 | `/member` | End the demo session and reopen Member | 401 |
 | `/events` | View status-code counts for the process | HTTP status counts only |
+| `/access-log` | Download anonymized manual localhost HTTP outcomes | Apache-compatible access.log for existing offline analyzer |
 
 The home page offers simulated member/admin roles **without passwords**. This is a role model, not a real authentication system. Session cookies expire after five minutes. The POST form requires a matching locally generated anti-CSRF marker, validates short text labels and discards all user input.
 
@@ -39,7 +40,7 @@ The UI also has a self-reported manual checklist and privacy-minimal JSON export
 - No attack payload library, brute-force, injection exercise strings, vulnerability exploitation, DDoS, request replay, or third-party login handling.
 - Request body is capped at 2 KiB; accepted form input is not persisted or reflected. Cookie and role identifiers are random, invented and held only in this process.
 - CSP, no-store, frame protection, no-sniff, strict same-site demo cookies and origin/host checks are applied. HTTP on 127.0.0.1 is **only for local education**, not a deployable production login implementation.
-- The local event summary contains only status-code totals; no source IP, full URL, token, user agent or request body is retained in the report. Stop the server to discard all in-memory data.
+- The local event summary shows status-code totals; the explicit access-log download contains only allowlisted route IDs, method, status and timestamp with a fixed loopback IP and training user agent; no source IP, full URL, token, user agent or request body is retained in the report. Stop the server to discard all in-memory data.
 - No claims about load capacity, exploit resistance or vulnerability status of a real website.
 
 ## Files and verification
