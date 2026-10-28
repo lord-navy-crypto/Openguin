@@ -37,6 +37,14 @@
       <div class="buttons" style="margin-top:10px"><button id="exportReport" class="primary">Copy diagnostic report</button><button id="clear">Clear events</button><button id="downloadJson">Download JSON report</button><button id="downloadCsv">Download CSV table</button></div>
     </section>
     <section class="panel">
+      <h2>OpenPenguin Localhost Lab · v17</h2>
+      <div id="labSummary" class="muted" aria-live="polite">Open your localhost training lab, then click Start this tab.</div>
+      <div class="buttons" style="margin-top:9px">
+        <button id="labJson" class="primary wide" disabled>Download lab-only JSON for OpenPenguin</button>
+      </div>
+      <div class="muted" style="margin-top:7px">Only preinstalled localhost lab paths and request-status events are included. Ordinary page navigations may not expose their HTTP status here. For those, use the lab's own access.log.</div>
+    </section>
+    <section class="panel">
       <h2>Opt-in 30-day event journal</h2>
       <div id="journalState" class="muted">Journal is off. Recording requires explicit tab/download monitoring.</div>
       <div id="journalPreview" class="events" style="max-height:90px;margin:9px 0"></div>
@@ -49,6 +57,7 @@
     </section>
     <div class="privacy">Privacy: page monitoring captures timing, status codes, sanitized host/path metadata, and error categories. Optional file-download monitoring requires separate downloads/alarms permissions and records download host, coarse progress, byte counts, duration, 60-second stalls, and failure category—not filenames or full URLs. Nothing is uploaded.</div>
   </main>
+  <script src="lab-compat.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
