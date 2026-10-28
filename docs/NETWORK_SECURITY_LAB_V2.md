@@ -8,7 +8,7 @@ This is a defensive, consent-driven observability project, not a packet-capture 
 - **AI Model Lab:** Keep all pre-existing model discovery, private Ollama runtime, inference, task center, device discovery, and LabBridge endpoints untouched.
 - **Network Doctor:** Reuse pre-existing DNS resolution, HTTPS availability/response, HTTP latency and jitter probes, explicit speed test, VPN-on/off labeled samples, and history.
 - **Browser Network Watch:** Install the browser extension and explicitly start monitoring a normal HTTP(S) tab. Existing Fetch/XHR instrumentation records coarse request timings, stalls, stream gaps, resource failures, JavaScript failures, and rendering activity. Downloads are monitored only after a separate optional permission.
-- **Network & Security Lab:** Import the sanitized browser JSON into the desktop Browser incident report. The newly added review appears below the existing cross-layer evidence and browser timeline.
+- **Network & Security Lab:** Open the new top-level **Security Lab · 安全监测** sidebar tab. Import sanitized browser JSON into its Browser incident report; the new review appears below the existing cross-layer evidence and browser timeline. The original network doctor stays available in **网络体检 · 一键检测**.
 
 ## Implemented in v2
 
@@ -53,7 +53,7 @@ There is **no direct transfer to ChatGPT or a cloud server**. Import/export is u
 2. Reproduce the delay and export the browser JSON.
 3. Run the desktop Network Doctor, then (optionally) the explicitly requested speed test.
 4. For VPN comparisons, manually record a VPN-on sample and a VPN-off sample using otherwise comparable conditions. The app never changes the VPN.
-5. Paste browser JSON into the Browser incident report. Inspect the Network & Security Lab host table, time buckets, error category filters, and browser/network correlation.
+5. Open **Security Lab · 安全监测** and paste browser JSON into the Browser incident report. Inspect the host table, time buckets, error category filters, and browser/network correlation.
 6. Export the reduced security JSON or fuller diagnostic bundle to study with ChatGPT. Review domains/timestamps first.
 
 ## Not yet implemented / explicit limits
