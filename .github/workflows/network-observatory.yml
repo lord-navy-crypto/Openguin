@@ -9,10 +9,12 @@ on:
     branches:
       - feature/browser-network-diagnostics
       - feature/network-security-lab-v2
+      - feature/security-toolbox-journal-app-monitor-v3
   pull_request:
     branches:
       - main
       - feature/browser-network-diagnostics
+      - feature/network-security-lab-v2
   workflow_dispatch:
 
 jobs:
@@ -55,6 +57,16 @@ jobs:
           node --test tests/network-observatory.test.mjs
           ./node_modules/.bin/esbuild src/network-security-analysis.ts --bundle --platform=node --format=esm --outfile=.network-test/network-security-analysis.mjs
           node --test tests/network-security-analysis.test.mjs
+          ./node_modules/.bin/esbuild src/network-journal.ts --bundle --platform=node --format=esm --outfile=.network-test/network-journal.mjs
+          node --test tests/network-journal.test.mjs
+          ./node_modules/.bin/esbuild src/server-access-log.ts --bundle --platform=node --format=esm --outfile=.network-test/server-access-log.mjs
+          node --test tests/server-access-log.test.mjs
+          ./node_modules/.bin/esbuild src/security-evidence-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/security-evidence-correlation.mjs
+          node --test tests/security-evidence-correlation.test.mjs
+          ./node_modules/.bin/esbuild src/defensive-header-audit.ts --bundle --platform=node --format=esm --outfile=.network-test/defensive-header-audit.mjs
+          node --test tests/defensive-header-audit.test.mjs
+          ./node_modules/.bin/esbuild src/defense-action-plan.ts --bundle --platform=node --format=esm --outfile=.network-test/defense-action-plan.mjs
+          node --test tests/defense-action-plan.test.mjs
           ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
           node --test tests/network-one-click.test.mjs
           ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
@@ -82,7 +94,7 @@ jobs:
           node --check browser-extension/monitor-bridge.js
           node --check browser-extension/monitor-main.js
           node --check browser-extension/popup.js
-          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs tests/extension-monitor.test.mjs
+          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs tests/extension-monitor.test.mjs tests/extension-journal.test.mjs
           python3 -m json.tool browser-extension/manifest.json > /dev/null
 
       - name: Package browser extension

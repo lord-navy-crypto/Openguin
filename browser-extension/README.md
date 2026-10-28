@@ -47,3 +47,17 @@ Only metadata is recorded: event kind, page-event and capture timestamps, a rand
 - Cross-origin browser security and page instrumentation limits mean some resource status codes may be unavailable.
 - A long response-stream gap is a symptom, not proof of the cause. Compare the event with the desktop DNS/HTTPS checks and a manual VPN-on/VPN-off run.
 - It does not alter VPN, proxy, DNS, firewall, or routing configuration.
+
+
+## Optional 30-day local event journal (v3 feature branch)
+
+Openguin Network Watch now includes a separate **default-off** activity journal. It does not grant additional site access, reactivate monitoring automatically, or observe every site in the browser. It receives events only from an explicitly monitored tab, plus browser-wide download metadata if separately authorized.
+
+1. Click **Enable 30-day local journal** in the extension popup.
+2. Start the HTTP(S) tab using **Start this tab**. The original 300-event diagnostic buffer is unchanged.
+3. The journal stores time, host, category, optional status and approximate duration. It excludes URL paths, query strings, request IDs, tab IDs, cookies, bodies, prompts, download filenames, and authentication data.
+4. Use **Pause journal** to stop logging without deleting data, **Export journal JSON/CSV** to save local data, or **Stop and clear journal** to delete the journal.
+5. Capacity: **2,500 events** and at most **30 days** of retained events when new writes occur or when exported; old data may remain in browser local storage when the extension is idle until the next write or cleanup. The quota may be exhausted much sooner under load. The export reports dropped entries; it is not a complete browser history.
+6. The long-term journal and original 300-event diagnostic JSON use **different schemas**. The desktop Browser Incident Report still imports the original diagnostic JSON. Journal JSON/CSV is for direct local inspection or sharing with ChatGPT after review.
+
+The journal is stored in local browser extension storage, not automatically uploaded or synced. Deleting the extension also clears extension-local records. Domain names and timestamps can still be sensitive.

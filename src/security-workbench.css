@@ -1,0 +1,41 @@
+.security-workbench{display:grid;gap:16px}
+.security-tool-card{display:grid;gap:12px}
+.security-tool-head{display:flex;justify-content:space-between;align-items:start;gap:16px}
+.security-tool-head h3{margin:5px 0 6px}
+.security-tool-head p,.security-tool-card>p{color:#aabfd1;font-size:12px;line-height:1.6;max-width:760px}
+.security-tool-card button{background:#1d465c;border:1px solid #49788f;color:#def6ff;padding:9px 13px;border-radius:9px;font-size:12px;cursor:pointer}
+.security-tool-card button:disabled{opacity:.4;cursor:not-allowed}
+.security-tool-card button:hover:not(:disabled){background:#30647c}
+.security-summary{display:flex;flex-wrap:wrap;gap:10px}
+.security-summary span{background:rgba(65,121,151,.16);padding:9px 12px;border-radius:9px;font-size:12px;border:1px solid rgba(105,172,200,.2)}
+.security-tablewrap{overflow:auto;max-height:360px}
+.security-tablewrap table{border-collapse:collapse;min-width:440px;width:100%;font-size:12px}
+.security-tablewrap th,.security-tablewrap td{text-align:left;padding:9px;border-bottom:1px solid rgba(255,255,255,.09)}
+.security-tablewrap th{color:#9ab5cc}
+.security-tool-card small{font-size:11px;line-height:1.6;color:#94a9bb}
+.security-field{display:grid;gap:8px;font-size:12px;color:#acc8d6}
+.security-field textarea{min-height:110px;max-width:100%;width:100%;padding:12px;border-radius:10px;background:#0b1926;border:1px solid #355369;color:#dceef9;font:12px/1.6 ui-monospace,monospace;resize:vertical}
+.security-actions{display:flex;flex-wrap:wrap;gap:8px}
+.security-findings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}
+.security-findings article{padding:12px;border:1px solid rgba(255,255,255,.1);border-left:3px solid #5facc0;border-radius:9px;background:rgba(8,29,44,.5)}
+.security-findings article.review{border-left-color:#dfaa72}
+.security-findings article.recommendation{border-left-color:#d4c174}
+.security-findings article.pass{border-left-color:#7ebcb0}
+.security-findings article strong{font-size:12px}
+.security-findings article p{margin:6px 0;font-size:11px;line-height:1.6;color:#b4c5d2}
+.security-message{font-size:12px;color:#8dcde0}
+.security-warning{font-size:12px;color:#efbc86}
+.security-checklist{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.security-checklist>div{padding:12px;border-radius:10px;background:rgba(15,44,64,.55);border:1px solid rgba(255,255,255,.09);display:grid;gap:6px}
+.security-checklist b{font-size:12px}
+.security-checklist span{font-size:11px;color:#9db5c6;line-height:1.5}
+@media(max-width:750px){.security-tool-head{flex-direction:column}.security-findings,.security-checklist{grid-template-columns:1fr}}
+
+.security-delta{padding:12px;border:1px solid #487b89;border-radius:10px;background:rgba(34,78,94,.24)}
+.security-delta b{font-size:12px}
+.security-delta p{font-size:12px;color:#c0d6e2}
+
+.security-history{border:1px solid rgba(110,171,203,.18);border-radius:10px;padding:10px;background:rgba(18,43,61,.35)}
+.security-history>b{font-size:12px}
+.security-history-grid{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.security-history-grid span{font-size:10px;padding:5px 8px;border-radius:6px;background:rgba(255,255,255,.07)}
