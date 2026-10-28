@@ -63,6 +63,7 @@ export function createManualDrills({now=Date.now}={}){
         status=401;reason="fictional-auth-rejected";
         explanation="拒绝一次虚构身份事件；该事件不包含账户或密码。";
         s.authTimes.push(now());
+        if(s.authTimes.length>MAX_COUNTER)s.authTimes.shift();
       }
       s.count.identity=s.authTimes.length;
     }else if(track==="ownership"){
