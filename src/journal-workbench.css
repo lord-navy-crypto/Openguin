@@ -1,0 +1,44 @@
+.journal-workbench{display:grid;gap:14px}
+.journal-intro{display:flex;justify-content:space-between;gap:14px;align-items:flex-start}
+.journal-intro h3{font-size:18px;margin:5px 0 7px}
+.journal-intro h4{font-size:14px;margin:0}
+.journal-intro p,.journal-note{color:#a9c0d1;font-size:12px;line-height:1.6;margin:5px 0}
+.journal-local{white-space:nowrap;color:#b1e2dd;border:1px solid #477f82;border-radius:20px;padding:6px 10px;font-size:11px}
+.journal-file-label,.journal-paste-label{font-size:12px;color:#9ebacc;display:grid;gap:7px}
+.journal-file-label input,.journal-paste-label textarea,.journal-filters input,.journal-filters select{
+  background:#10283b;border:1px solid #39566d;color:#e1eff7;border-radius:8px;font-size:12px;padding:9px;max-width:100%;min-width:0
+}
+.journal-paste-label textarea{font-family:ui-monospace,monospace;resize:vertical;line-height:1.5}
+.journal-buttons{display:flex;gap:8px;flex-wrap:wrap}
+.journal-workbench button{background:#1d465c;color:#e8f5ff;border:1px solid #4a748c;padding:9px 12px;font-size:12px;border-radius:9px;cursor:pointer}
+.journal-workbench button:hover:not(:disabled){background:#30667d}
+.journal-workbench button:disabled{opacity:.4;cursor:not-allowed}
+.journal-error,.journal-warning{color:#f0bc88;background:rgba(110,70,35,.16);border:1px solid rgba(240,175,118,.25);border-radius:9px;padding:10px;font-size:12px}
+.journal-status{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px}
+.journal-status>div{background:rgba(25,60,84,.6);border:1px solid rgba(115,161,190,.15);padding:11px;border-radius:10px;display:grid;gap:6px}
+.journal-status span{font-size:11px;color:#abc2ce}
+.journal-status b{font-size:19px;font-variant-numeric:tabular-nums}
+.journal-meta{display:flex;gap:7px;flex-wrap:wrap;color:#93adbc;font-size:11px}
+.journal-meta span{border:1px solid rgba(255,255,255,.1);border-radius:7px;padding:6px 9px}
+.journal-panels{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.journal-panel{padding:13px;border:1px solid rgba(153,199,223,.12);border-radius:12px;background:rgba(11,30,43,.62);min-width:0}
+.journal-panel h4{font-size:14px;margin:0 0 12px}
+.journal-panel p,.journal-panel small{font-size:11px;color:#a8bbc9;line-height:1.65}
+.journal-day-list{display:grid;gap:8px;overflow:auto;max-height:230px}
+.journal-day{display:grid;grid-template-columns:75px minmax(0,1fr) 28px 86px;gap:8px;align-items:center;font-size:11px}
+.journal-day time{color:#a5bfd0}
+.journal-day small{font-size:10px}
+.journal-bar{height:8px;border-radius:7px;background:#1a384d;overflow:hidden}
+.journal-bar i{display:block;height:100%;border-radius:7px;background:#6dadca}
+.journal-tablewrap{max-height:320px;overflow:auto}
+.journal-tablewrap table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+.journal-tablewrap th{text-align:left;color:#9cb9cb;border-bottom:1px solid #3a5265;padding:9px}
+.journal-tablewrap td{padding:9px;border-bottom:1px solid rgba(255,255,255,.08);font-variant-numeric:tabular-nums}
+.journal-filters{display:grid;grid-template-columns:1.3fr 1fr 1.3fr;gap:10px;margin:12px 0}
+.journal-filters label{display:grid;gap:6px;font-size:11px;color:#afc4d3}
+.journal-event-list{display:grid;margin-top:12px;max-height:350px;overflow:auto;border:1px solid rgba(255,255,255,.10);border-radius:10px}
+.journal-event-list article{display:grid;grid-template-columns:145px minmax(90px,1fr) minmax(130px,1fr) auto;gap:10px;padding:10px;border-bottom:1px solid rgba(255,255,255,.08);font-size:11px;align-items:center}
+.journal-event-list time,.journal-event-list small{color:#98b0c0}
+.journal-event-list span{overflow-wrap:anywhere}
+@media(max-width:840px){.journal-panels{grid-template-columns:1fr}.journal-filters{grid-template-columns:1fr}.journal-status{grid-template-columns:repeat(2,minmax(0,1fr))}.journal-event-list article{grid-template-columns:1fr 1fr}.journal-event-list span{grid-column:1/-1}}
+@media(max-width:500px){.journal-intro{flex-direction:column}.journal-day{grid-template-columns:70px minmax(0,1fr) 25px}.journal-day small{display:none}.journal-status{grid-template-columns:1fr 1fr}}
