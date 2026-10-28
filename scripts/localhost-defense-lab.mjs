@@ -47,7 +47,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -76,8 +76,9 @@ export function createLocalDefenseLab(options={}){
   const limiter=new Map();
   let activePort=port;
   const record=(route,status)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events"]);
-    events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",status});
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log"]);
+    events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
+      method:["GET","POST","HEAD"].includes(req.method)?req.method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
   };
   const server=http.createServer(async(req,res)=>{
@@ -214,6 +215,21 @@ export function createLocalDefenseLab(options={}){
       if(limiter.size>128)limiter.delete(limiter.keys().next().value);
       send(200,page("Rate limit demo","<p>Allowed check "+current.length+" of 4 in the current 30-second window.</p>"+
         "<p>Refresh this page manually to observe how 429 differs from a normal response.</p>"));return;
+    }
+    if(req.method==="GET"&&route==="/access-log"){
+      const timestamp=(iso)=>{
+        const d=new Date(iso),z=n=>String(n).padStart(2,"0");
+        const months=["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+        return z(d.getUTCDate())+"/"+months[d.getUTCMonth()]+"/"+d.getUTCFullYear()+
+          ":"+z(d.getUTCHours())+":"+z(d.getUTCMinutes())+":"+z(d.getUTCSeconds())+" +0000";
+      };
+      const body=events.map(e=>
+        '127.0.0.1 - - ['+timestamp(e.at)+'] "'+e.method+" "+
+        (e.route==="other"?"/other":e.route)+' HTTP/1.1" '+e.status+
+        ' 0 "-" "OpenPenguin-ManualLab"').join("\n")+"\n";
+      send(200,body,"text/plain; charset=utf-8",
+        {"Content-Disposition":'attachment; filename="openguin-localhost-access.log"'});
+      return;
     }
     if(req.method==="GET"&&route==="/events"){
       const counts={};
