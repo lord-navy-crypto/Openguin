@@ -20,6 +20,7 @@ on:
       - feature/manual-http-workbench-v11
       - feature/ownership-security-lab-v12
       - feature/offline-defense-studio-v13
+      - feature/manual-three-track-drills-v14
   pull_request:
     branches:
       - main
@@ -35,6 +36,7 @@ on:
       - feature/manual-defense-console-v10
       - feature/manual-http-workbench-v11
       - feature/ownership-security-lab-v12
+      - feature/offline-defense-studio-v13
   workflow_dispatch:
 
 jobs:
@@ -111,7 +113,7 @@ jobs:
       - name: Test isolated manual localhost HTTP lab
         run: |
           node --check scripts/localhost-http-workbench.js
-          node --test tests/manual-defense-exercises.test.mjs tests/defense-studio-v13.test.mjs tests/localhost-defense-lab.test.mjs
+          node --test tests/manual-defense-exercises.test.mjs tests/manual-drills-v14.test.mjs tests/defense-studio-v13.test.mjs tests/localhost-defense-lab.test.mjs
 
       - name: Build frontend
         run: npm run build
