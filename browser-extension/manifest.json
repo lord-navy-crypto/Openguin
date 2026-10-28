@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Openguin Network Watch",
-  "version": "0.5.0",
-  "description": "Opt-in active-tab diagnostics with capture receipt verification, strict sender checks, and desktop evidence reports.",
+  "version": "0.6.0",
+  "description": "Opt-in active-tab diagnostics with strict monitoring-session isolation, reliable stop, and local browser evidence.",
   "permissions": [
     "activeTab",
     "scripting",
