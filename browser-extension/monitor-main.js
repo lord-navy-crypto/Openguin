@@ -15,6 +15,7 @@
   };
   window[STATE_KEY] = state;
   const requestSession = Math.random().toString(36).slice(2, 10);
+  let resourceTimingNoticeEmitted = false;
   let requestSequence = 0;
 
   function nextRequestId() {
@@ -203,7 +204,7 @@
   state.xhrSendWrapper = wrappedXhrSend;
   XMLHttpRequest.prototype.send = wrappedXhrSend;
 
-  window.addEventListener("error", (event) => {
+  const onWindowError = (event) => {
     if (event.target && event.target !== window) {
       const target = event.target;
       const url = target.currentSrc || target.src || target.href || "";
@@ -212,15 +213,31 @@
     }
     const source = safeUrl(event.filename || location.href);
     emit(Object.assign({ kind: "javascript-error", errorType: typeOfError(event.error), line: Number(event.lineno) || 0 }, source));
-  }, true);
+  };
+  window.addEventListener("error",onWindowError,true);
 
-  window.addEventListener("unhandledrejection", (event) => {
+  const onUnhandledRejection = (event) => {
     emit(Object.assign({ kind: "unhandled-rejection", errorType: typeOfError(event.reason) }, safeUrl(location.href)));
-  });
+  };
+  window.addEventListener("unhandledrejection",onUnhandledRejection);
 
   try {
     const observer = new PerformanceObserver((list) => {
       for (const entry of list.getEntries()) {
+        // PerformanceResourceTiming can hide cross-origin status/timing.
+        // One aggregate limitation notice per manual session, no destination
+        // or response data; a missing status is NOT an HTTP failure.
+        if(!resourceTimingNoticeEmitted){
+          let crossOrigin=false;
+          try{crossOrigin=new URL(entry.name,location.href).origin!==location.origin;}
+          catch{}
+          if(crossOrigin&&(!Number.isFinite(entry.responseStatus)||
+              entry.responseStatus===0)){
+            resourceTimingNoticeEmitted=true;
+            emit({kind:"resource-timing-limited",host:location.hostname,
+              path:"/",tag:"cross-origin"});
+          }
+        }
         if (entry.duration < 1500) continue;
         const meta = safeUrl(entry.name);
         const initiatorType = String(entry.initiatorType || "resource").toLowerCase().slice(0, 20);
@@ -296,7 +313,7 @@
     }, 5000);
   }
 
-  window.addEventListener("message", (event) => {
+  const onControlMessage = (event) => {
     if (event.source !== window || !event.data || event.data.source !== "openguin-netwatch-control" || event.data.action !== "stop") return;
     state.active = false;
     if (window.fetch === state.fetchWrapper) window.fetch = state.originalFetch;
@@ -306,7 +323,12 @@
     if (state.longTaskObserver) state.longTaskObserver.disconnect();
     if (state.renderObserver) state.renderObserver.disconnect();
     if (state.renderTimer) clearTimeout(state.renderTimer);
-  });
+    // These listeners otherwise accumulate across Stop/Start on one document.
+    window.removeEventListener("error",onWindowError,true);
+    window.removeEventListener("unhandledrejection",onUnhandledRejection);
+    window.removeEventListener("message",onControlMessage);
+  };
+  window.addEventListener("message",onControlMessage);
 
   emit({ kind: "monitor-started", host: location.hostname, path: location.pathname.slice(0, 100) });
 })();
