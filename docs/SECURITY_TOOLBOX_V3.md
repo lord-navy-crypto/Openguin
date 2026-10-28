@@ -75,3 +75,34 @@ No request replay, password guessing, vulnerability exploitation, rate-limit eva
 - Apple Network Framework path-monitoring overview: https://developer.apple.com/documentation/network/nwpathmonitor
 
 Future research: user-selected periodic health checks with clear cancellation, limited storage budgets, explicit permissions, and better local-only report import. Those future capabilities are NOT implemented in v3.
+
+
+## Added: Browser Journal Analyzer (desktop)
+
+- Under the Security Lab tab, users can import JSON created by the extension's optional long-term journal.
+- Accepts local JSON files or pasted JSON only; max 1 MiB and at most 2,500 events.
+- Safely rebuilds each event from a small allowlist (timestamp, domain, kind, status, duration). Discards unknown fields, including any accidental URLs, request IDs, response content, or tokens.
+- Shows per-domain counts and HTTP responses, 4xx / 5xx, transport failures, stream stalls, rendering and download issues, response duration median/P95, and daily UTC activity trend.
+- Search and filter by domain, event category, or text within the *already-sanitized* domain and kind fields. Local pagination prevents 2,500 records rendering at once.
+- Produces a **summary-only** JSON report for ChatGPT that omits every raw event row while retaining aggregates and documented limits. Domains, summary activity times, and counts remain sensitive.
+- Does not silently read browser extension storage. Browser report v1 and journal v1 are different schemas and remain different import paths.
+
+## Added: Server Access Log Investigator (desktop)
+
+- For web servers you administer, the Security Lab now accepts up to 1 MiB of Apache/Nginx Common or Combined access-log text, from a selected local file or manual paste.
+- The fixed offline parser extracts only timestamp, HTTP status and reported response bytes. Remote IPs, requested URLs, query parameters, cookies, referrers, user agents and file paths are **never kept in the audit model or export**.
+- Aggregates status distribution, HTTP 429, 4xx / 5xx, minute-level request counts and UTC daily counts.
+- Flags unusually high **observed** minute-level event counts relative to other minutes in the supplied sample; these are preliminary observations, never proof of an attack or total server load.
+- Clears pasted raw log from the UI after successful parsing. The completed report is aggregate-only JSON for later ChatGPT analysis.
+- Limitations: does not support every custom log format, exclude error logs and CDN logs not in Common/Combined format, cannot verify completeness, and does not classify individual visitors as attackers.
+
+## Recommended self-hosted website workflow
+
+1. Capture normal website performance with the browser Network Watch and existing DNS/HTTPS diagnostics.
+2. Enable the optional browser journal explicitly; collect a small sample during the issue and export JSON manually.
+3. In Security Lab import that journal, inspect domain/timing aggregates and save a summary report.
+4. If you administer a web server and have its access.log, analyze a bounded sample locally using Server Access Log Investigator.
+5. Compare browser-side events, server 5xx/429 counts and configuration audit results for a time window you know is comparable.
+6. Fix known configuration or application issues on your own system, then repeat the observation. Do not infer attackers, VPN routing or security effectiveness from these logs alone.
+
+Independent data sources should not be linked to named persons or interpreted as proof of wrongdoing; this tool does not collect visitor identities or implement active penetration testing.
