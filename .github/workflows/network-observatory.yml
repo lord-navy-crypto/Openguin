@@ -26,6 +26,7 @@ on:
       - feature/browser-extension-local-lab-v17
       - feature/browser-observability-v18
       - feature/browser-capture-integrity-v19
+      - feature/browser-session-isolation-v20
   pull_request:
     branches:
       - main
@@ -47,6 +48,7 @@ on:
       - feature/manual-audit-evidence-v16
       - feature/browser-extension-local-lab-v17
       - feature/browser-observability-v18
+      - feature/browser-capture-integrity-v19
   workflow_dispatch:
 
 jobs:
@@ -141,14 +143,14 @@ jobs:
           node --check browser-extension/lab-compat.js
           node --check browser-extension/observability-v18.js
           node --check browser-extension/popup.js
-          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs tests/extension-monitor.test.mjs tests/extension-journal.test.mjs tests/extension-local-lab-v17.test.mjs tests/extension-observability-v18.test.mjs tests/extension-capture-integrity-v19.test.mjs
+          node --test tests/extension-bridge.test.mjs tests/extension-background.test.mjs tests/extension-monitor.test.mjs tests/extension-journal.test.mjs tests/extension-local-lab-v17.test.mjs tests/extension-observability-v18.test.mjs tests/extension-capture-integrity-v19.test.mjs tests/extension-session-isolation-v20.test.mjs
           python3 -m json.tool browser-extension/manifest.json > /dev/null
 
       - name: Package browser extension
         run: |
           mkdir -p release-artifacts
           cd browser-extension
-          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js lab-compat.js observability-v18.js background.js monitor-bridge.js monitor-main.js README.md CAPTURE_INTEGRITY_V19.md
+          zip -qr ../release-artifacts/Openguin-Network-Watch.zip manifest.json popup.html popup.js lab-compat.js observability-v18.js background.js monitor-bridge.js monitor-main.js README.md CAPTURE_INTEGRITY_V19.md SESSION_ISOLATION_V20.md
 
       - name: Upload browser extension package
         uses: actions/upload-artifact@v4

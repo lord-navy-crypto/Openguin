@@ -65,7 +65,10 @@ async function startMonitoring() {
   const approved = supportedPersistentOrigin(tab.url);
   const persistent = Boolean(approved) && await chrome.permissions.contains({ origins: [approved] });
   try {
+    const prior=await chrome.storage.local.get({captureGeneration:0});
+    const generation=(Math.max(0,Number(prior.captureGeneration)||0)%1000000000)+1;
     await chrome.storage.local.set({
+      captureGeneration:generation,
       monitoring: true,
       activeTabId: tab.id,
       activeHost: host,
@@ -129,7 +132,12 @@ async function stopMonitoring() {
       await chrome.scripting.executeScript({
         target: { tabId: stored.activeTabId },
         world: "MAIN",
-        func: () => window.postMessage({ source: "openguin-netwatch-control", action: "stop" }, "*")
+        // Dispatch synchronously in MAIN world so Stop has completed before
+        // another Start can inject the next session on the same document.
+        func: () => window.dispatchEvent(new MessageEvent("message", {
+          source: window,
+          data: { source: "openguin-netwatch-control", action: "stop" }
+        }))
       });
     } catch { /* The tab may have navigated or closed. */ }
   }

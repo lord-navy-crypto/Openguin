@@ -2,6 +2,16 @@
 
 A minimal Chrome/Chromium Manifest V3 extension for opt-in diagnostics of the active HTTP(S) tab.
 
+## v0.6.0 — Isolated manual monitoring sessions and reliable rapid Stop/Start
+
+This version fixes an actual race condition in the v0.5 browser extension: if you manually Stop and immediately Start the **same tab**, a delayed event from the previous monitoring session must not be written into the new one. Every Start now increments a persisted session generation; event writes and duplicate suppression respect that generation. An event clearly timestamped before the current Start is also excluded, and the MAIN-world Stop command runs synchronously before another manual Start.
+
+The existing v0.5 capture receipt dashboard, v0.4 passive observability panel, v0.3 localhost lab integration, original diagnostic reports, privacy constraints and optional journal/download monitoring remain unchanged. No additional permissions were requested.
+
+See [v20 Session Isolation](SESSION_ISOLATION_V20.md) for Chrome and OWASP references, exact test procedures, known limitations and rollback considerations.
+
+
+
 ## v0.5.0 — Capture Integrity & desktop evidence verification
 
 This version upgrades the **reliability and trustworthiness** of the monitoring workflow, not its collection scope or permissions. It displays session receipts, most recent accepted event time, explicit stop reasons and warnings when no events arrive. Session counters are persisted through Manifest V3 worker suspension, and delayed page events after Stop are rejected. The background service validates event sender extension identity (when available), main-frame origin and the currently approved tab/host. **Page-generated events are still untrusted observations** and may be spoofed or incomplete.

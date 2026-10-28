@@ -87,16 +87,26 @@ function sanitizeEvent(input) {
 }
 
 let eventWriteQueue = Promise.resolve();
-function appendEvent(record) {
+function appendEvent(record, expectedGeneration=null) {
   eventWriteQueue = eventWriteQueue.catch(() => {}).then(async () => {
     const state = await chrome.storage.local.get({
       events: [], droppedEvents: 0, journalEnabled: false,
       journalEvents: [], journalDropped: 0,
-      monitoring:false, activeTabId:null, captureObservedCount:0
+      monitoring:false, activeTabId:null, captureObservedCount:0,
+      captureGeneration:0
     });
     // Drop delayed page records once explicit monitoring has ended.
-    if(Number.isInteger(record.tabId) &&
-      (state.monitoring!==true||state.activeTabId!==record.tabId))return;
+    if(Number.isInteger(record.tabId) && (
+      state.monitoring!==true||
+      state.activeTabId!==record.tabId||
+      (expectedGeneration!==null&&
+        (Number(state.captureGeneration)||0)!==expectedGeneration)||
+      // Page-originated event timestamps can be spoofed. This guard only
+      // excludes clearly old observations; it is not source authentication.
+      (Number.isFinite(record.sourceAt)&&
+        Number.isFinite(state.captureStartedAt)&&state.captureStartedAt>0&&
+        record.sourceAt < state.captureStartedAt-500)
+    ))return;
     const events = Array.isArray(state.events) ? state.events : [];
     const droppedEvents = Number(state.droppedEvents) || 0;
     const nextDropped = events.length >= MAX_EVENTS ? Math.min(1e9, droppedEvents + 1) : droppedEvents;
@@ -156,8 +166,9 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   if (Number.isInteger(sender.frameId) && sender.frameId!==0) return;
   // Events must originate from the tab the user explicitly activated.
   // Do not accept unrelated tabs/frames or events after monitoring was stopped.
-  void chrome.storage.local.get({ monitoring: false, activeTabId: null, activeHost: "" }).then(state => {
+  void chrome.storage.local.get({ monitoring: false, activeTabId: null, activeHost: "",captureGeneration:0 }).then(state => {
     if (!state.monitoring || state.activeTabId !== tabId) return;
+    const generation=Number(state.captureGeneration)||0;
     let senderHost = "";
     try { senderHost = new URL(sender.url || sender.tab.url).hostname; } catch { return; }
     if (senderHost !== state.activeHost) return;
@@ -170,7 +181,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       for (const [key, expiry] of recentPageEvents) {
         if (expiry <= at) recentPageEvents.delete(key);
       }
-      const key = fingerprintPageEvent(safe, safe.sourceAt);
+      const key = generation+":"+fingerprintPageEvent(safe, safe.sourceAt);
       if (recentPageEvents.has(key)) {
         return noteDuplicateSuppressed();
       }
@@ -182,7 +193,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     return appendEvent({
       id: at.toString(36) + Math.random().toString(36).slice(2, 8),
       at, tabId, ...safe
-    });
+    },generation);
   }).catch(() => {});
 });
 
