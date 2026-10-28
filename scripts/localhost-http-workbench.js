@@ -1,3 +1,5 @@
+import {inspectDefensiveHeaders,summarizeManualEvidence,exportManualEvidence} from "/audit-core";
+
 /**
  * Manual localhost HTTP workbench.
  * One user click => one request to a fixed relative route.
@@ -17,6 +19,9 @@ const allowed={
 };
 const list=document.querySelector("#wb-history");
 const summary=document.querySelector("#wb-summary");
+const metrics=document.querySelector("#wb-metrics");
+const audit=document.querySelector("#wb-header-evidence");
+const bars=document.querySelector("#wb-duration-bars");
 const result=document.querySelector("#wb-current");
 const token=document.querySelector("#wb-csrf")?.value??"";
 const history=[];
@@ -37,6 +42,32 @@ function render(){
   }
   setText(summary,"已执行 "+history.length+" 次手动请求。"+
     "最近一次结果："+(history.length?history.at(-1).status:"尚未开始")+"。");
+  const stats=summarizeManualEvidence(history);
+  setText(metrics,stats.observations+
+    " 次本机人工测量；中位数："+(stats.medianMs??"—")+
+    " ms；P95："+(stats.p95Ms??"至少 3 次测量后显示")+
+    "；注意这不是负载/压测结果。");
+  bars?.replaceChildren();
+  const last=history.slice(-12);
+  const max=Math.max(1,...last.map(x=>x.durationMs));
+  for(const entry of last){
+    const wrapper=document.createElement("div");
+    wrapper.style.display="flex";wrapper.style.alignItems="center";
+    wrapper.style.gap="8px";wrapper.style.margin="4px 0";
+    const name=document.createElement("span");
+    name.style.flex="0 0 110px";name.textContent=entry.check+" · "+entry.status;
+    const track=document.createElement("div");
+    track.style.flex="1";track.style.background="#25445b";
+    track.style.height="11px";track.style.borderRadius="6px";
+    const fill=document.createElement("div");
+    fill.style.width=Math.max(2,Math.min(100,entry.durationMs/max*100))+"%";
+    fill.style.height="11px";fill.style.borderRadius="6px";
+    fill.style.background="#75b8bc";
+    track.append(fill);
+    const value=document.createElement("span");value.style.flex="0 0 68px";
+    value.textContent=entry.durationMs+" ms";
+    wrapper.append(name,track,value);bars?.append(wrapper);
+  }
 }
 async function inspect(id){
   if(busy||!Object.hasOwn(allowed,id))return;
@@ -68,12 +99,28 @@ async function inspect(id){
       ["Referrer-Policy",response.headers.get("Referrer-Policy")],
       ["Retry-After",response.headers.get("Retry-After")]
     ].filter(([,value])=>value);
+    const evidence=inspectDefensiveHeaders(response.headers,status);
     const row={check:id,path:spec.path,method:spec.method,
-      status,durationMs,explanation:explained};
+      status,durationMs,explanation:explained,evidence};
     history.push(row);if(history.length>30)history.shift();
     setText(result, spec.method+" "+spec.path+" → HTTP "+status+
       "（"+explained+"）。"+spec.hint+" "+
       (headers.length?"观察到的安全响应头："+headers.map(([key,value])=>key+"="+value).join("；"):""));
+    if(audit){
+      audit.replaceChildren();
+      const heading=document.createElement("p");
+      heading.textContent="响应头观察："+evidence.observed+"/"+evidence.total+
+        " 项被识别。此结果不能证明网站安全。";
+      audit.append(heading);
+      const ul=document.createElement("ul");
+      for(const check of evidence.checks){
+        const li=document.createElement("li");
+        li.textContent=(check.observed?"已观察到 · ":"待人工复核 · ")+check.label+
+          " — "+check.note;
+        ul.append(li);
+      }
+      audit.append(ul);
+    }
     render();
   }catch{
     setText(result,"无法连接本机练习服务器，或浏览器阻止了这次请求。请检查页面和服务器是否来自相同的 localhost 地址。");
@@ -88,16 +135,15 @@ document.querySelectorAll("[data-lab-action]").forEach(el=>{
 document.querySelector("#wb-clear")?.addEventListener("click",()=>{
   history.length=0;
   setText(result,"已清空当前浏览器的本次记录，未修改服务器日志。");
+  audit?.replaceChildren();
   render();
 });
 document.querySelector("#wb-export")?.addEventListener("click",()=>{
-  const report={schema:"openguin-local-manual-http-v11",
-    source:"manual-single-click-requests",loopbackOnly:true,
-    noCredentials:true,noResponseBodies:true,results:history.slice()};
+  const report=exportManualEvidence(history);
   const blob=new Blob([JSON.stringify(report,null,2)],{type:"application/json"});
   const uri=URL.createObjectURL(blob);
   const link=document.createElement("a");link.href=uri;
-  link.download="openguin-local-manual-http.json";
+  link.download="openguin-local-manual-audit-v16.json";
   document.body.append(link);link.click();link.remove();
   URL.revokeObjectURL(uri);
 });
