@@ -205,7 +205,8 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   if (navigatedAway ||
       (state.monitorMode === "active-tab" && changeInfo.status === "loading")) {
     await chrome.storage.local.set({
-      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+      monitoring: false,activeTabId:null,activeHost:"",monitorMode:"active-tab",
+      captureStopReason:navigatedAway?"Monitored tab navigated to another host.":"Temporary tab permission ended on navigation."
     });
     return;
   }
@@ -215,13 +216,15 @@ chrome.tabs.onUpdated.addListener(async (tabId, changeInfo, tab) => {
   const origin = approvedPersistentOrigin(tab && tab.url, state.activeHost);
   if (!origin || !(await chrome.permissions.contains({ origins: [origin] }))) {
     await chrome.storage.local.set({monitoring:false,activeTabId:null,
-      activeHost:"",monitorMode:"active-tab"});
+      activeHost:"",monitorMode:"active-tab",
+      captureStopReason:"Optional site permission was removed or is unavailable."});
     return;
   }
   try { await injectMonitor(tabId); } catch {
     // The user should not see a misleading active state if reattachment failed.
     await chrome.storage.local.set({
-      monitoring:false,activeTabId:null,activeHost:"",monitorMode:"active-tab"
+      monitoring:false,activeTabId:null,activeHost:"",monitorMode:"active-tab",
+      captureStopReason:"Monitor injection could not be restored."
     });
   }
 });
@@ -388,6 +391,7 @@ if (chrome.permissions) {
 chrome.tabs.onRemoved.addListener(async (tabId) => {
   const state = await chrome.storage.local.get({ activeTabId: null });
   if (state.activeTabId === tabId) {
-    await chrome.storage.local.set({ monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab" });
+    await chrome.storage.local.set({ monitoring: false, activeTabId: null, activeHost: "", monitorMode: "active-tab",
+      captureStopReason:"Monitored tab closed." });
   }
 });
