@@ -4,6 +4,9 @@ import {auditHttpResponseHeaders,compareHeaderAudits,exportHeaderAudit,type Head
 import {downloadDiagnosticText} from "./diagnostic-export";
 import JournalWorkbench from "./JournalWorkbench";
 import ServerAccessLogWorkbench from "./ServerAccessLogWorkbench";
+import EvidenceCorrelationWorkbench from "./EvidenceCorrelationWorkbench";
+import type {BrowserJournal} from "./network-journal";
+import type {AccessAudit} from "./server-access-log";
 import "./security-workbench.css";
 
 type AppRow={pid:number;process:string;observedSockets:number};
@@ -16,6 +19,8 @@ function secureDownload(name:string,content:unknown){
   downloadDiagnosticText(JSON.stringify(content,null,2),"openguin-"+name+"-"+date+".json","application/json;charset=utf-8");
 }
 export default function SecurityWorkbench(){
+  const [browserJournal,setBrowserJournal]=useState<BrowserJournal|null>(null);
+  const [serverAudit,setServerAudit]=useState<AccessAudit|null>(null);
   const [snapshot,setSnapshot]=useState<AppSnapshot|null>(null);
   const [appBusy,setAppBusy]=useState(false);
   const appInFlight=useRef(false);
@@ -48,8 +53,9 @@ export default function SecurityWorkbench(){
   const appPreview=showAll?snapshot?.processes:snapshot?.processes.slice(0,15);
   const delta=baseline&&audit?compareHeaderAudits(baseline,audit):null;
   return <div className="security-workbench">
-    <JournalWorkbench/>
-    <ServerAccessLogWorkbench/>
+    <JournalWorkbench onJournalChange={setBrowserJournal}/>
+    <ServerAccessLogWorkbench onAuditChange={setServerAudit}/>
+    <EvidenceCorrelationWorkbench browser={browserJournal} server={serverAudit}/>
     <section className="v07-card security-tool-card">
       <div className="security-tool-head"><div><span className="eyebrow">DEFENSIVE TOOLBOX · LOCAL DEVICE</span>
         <h3>应用级连接观察 · App Socket Observatory</h3>
