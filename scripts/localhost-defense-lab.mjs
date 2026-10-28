@@ -533,6 +533,17 @@ export function createLocalDefenseLab(options={}){
         '<tr><td>固定权限/验证案例未通过数</td><td>'+report.protected.validationMisses+
         '</td><td>'+report.contrast.validationMisses+'</td></tr>'
       );
+      const identityRows=model.protected.identity.events.map((e,i)=>{
+        const other=model.contrast.identity.events[i];
+        const label=e.event==="invented-recovery"?"虚拟恢复事件":"虚拟身份失败";
+        return '<tr><td>'+e.step+'</td><td>'+escapeHtml(label)+
+          '</td><td>'+e.status+'</td><td>'+other.status+'</td></tr>';
+      }).join("");
+      const guardRows=model.protected.validation.cases.map((e,i)=>{
+        const other=model.contrast.validation.cases[i];
+        return '<tr><td>'+escapeHtml(e.id)+'</td><td>'+e.status+
+          '</td><td>'+other.status+'</td><td>'+escapeHtml(e.repair)+'</td></tr>';
+      }).join("");
       send(200,page("v15 Advanced Offline Defense Engine",
         '<p>16 个虚拟时间片的排队模型。每次手动运行只发出一条 localhost 表单请求；'+
         '模型事件不会成为真实网络请求，也不消耗模拟出来的服务器容量。</p>'+
@@ -548,6 +559,14 @@ export function createLocalDefenseLab(options={}){
         '<table><thead><tr><th>时段</th><th>流入</th><th>处理</th>'+
         '<th>429</th><th>503</th><th>排队</th><th>无保护503</th><th>示意</th>'+
         '</tr></thead><tbody>'+tableRows+'</tbody></table>'+
+        '<h3>认证防护事件时间线（固定虚构事件）</h3>'+
+        '<table><thead><tr><th>步骤</th><th>虚构事件</th>'+
+        '<th>防护开启</th><th>教学对照</th></tr></thead><tbody>'+
+        identityRows+'</tbody></table>'+
+        '<h3>授权与输入防护检查矩阵（不执行漏洞利用）</h3>'+
+        '<table><thead><tr><th>固定案例</th><th>防护开启</th>'+
+        '<th>教学对照</th><th>修复概念</th></tr></thead><tbody>'+
+        guardRows+'</tbody></table>'+
         '<h3>如何复测</h3><p>一次只更改一个变量（例如处理容量），重新运行。'+
         '观察排队峰值、容量拒绝和正常请求被限流的估计值是否出现取舍。'+
         '虚拟延迟单位不是毫秒；此模型不能测量真实网站抗压性能。</p>'+
