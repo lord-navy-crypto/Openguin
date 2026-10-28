@@ -5,6 +5,7 @@ import {downloadDiagnosticText} from "./diagnostic-export";
 import JournalWorkbench from "./JournalWorkbench";
 import ServerAccessLogWorkbench from "./ServerAccessLogWorkbench";
 import EvidenceCorrelationWorkbench from "./EvidenceCorrelationWorkbench";
+import DefenseActionPlan from "./DefenseActionPlan";
 import type {BrowserJournal} from "./network-journal";
 import type {AccessAudit} from "./server-access-log";
 import "./security-workbench.css";
@@ -56,6 +57,7 @@ export default function SecurityWorkbench(){
     <JournalWorkbench onJournalChange={setBrowserJournal}/>
     <ServerAccessLogWorkbench onAuditChange={setServerAudit}/>
     <EvidenceCorrelationWorkbench browser={browserJournal} server={serverAudit}/>
+    <DefenseActionPlan headers={audit} browser={browserJournal} server={serverAudit}/>
     <section className="v07-card security-tool-card">
       <div className="security-tool-head"><div><span className="eyebrow">DEFENSIVE TOOLBOX · LOCAL DEVICE</span>
         <h3>应用级连接观察 · App Socket Observatory</h3>
