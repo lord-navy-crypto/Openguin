@@ -54,7 +54,7 @@ fn parse_lsof(text:&str) -> Vec<AppSocketSummary> {
     }
     let mut out: Vec<_> = rows.into_values().filter(|x|x.observed_sockets>0).collect();
     out.sort_by(|a,b|b.observed_sockets.cmp(&a.observed_sockets).then(a.process.cmp(&b.process)));
-    out.truncate(60);
+    // Preserve every visible process so totals are not silently undercounted.
     out
 }
 #[tauri::command]
