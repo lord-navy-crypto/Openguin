@@ -1,0 +1,47 @@
+.network-security-lab{margin:22px 0;padding:20px;border:1px solid rgba(92,173,210,.30);border-radius:18px;background:linear-gradient(125deg,rgba(20,44,69,.55),rgba(10,21,34,.68));display:grid;gap:16px;color:inherit}
+.nsl-heading{display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.nsl-heading h4,.nsl-heading h5{font-size:18px;margin:5px 0}
+.nsl-heading p{margin:5px 0;color:#a9bed0;font-size:12px;line-height:1.6}
+.nsl-eyebrow{font-size:10px;letter-spacing:1.5px;color:#79c6de;font-weight:750}
+.nsl-local{flex-shrink:0;border:1px solid #44718a;border-radius:50px;padding:5px 10px;color:#b7dfe9;font-size:11px}
+.nsl-metrics{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.nsl-metrics>div{border:1px solid rgba(255,255,255,.10);border-radius:11px;padding:12px;background:rgba(9,25,41,.70);display:grid;gap:5px}
+.nsl-metrics span{font-size:11px;color:#a8bccd}
+.nsl-metrics strong{font-size:21px;font-variant-numeric:tabular-nums}
+.nsl-metrics small,.nsl-caution{font-size:11px;color:#9cabbc;line-height:1.6}
+.nsl-meta{display:flex;flex-wrap:wrap;gap:8px;color:#8da9ba;font-size:11px}
+.nsl-meta span{border:1px solid rgba(255,255,255,.08);border-radius:7px;padding:5px 8px}
+.nsl-columns{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px}
+.nsl-subpanel{min-width:0;background:rgba(9,22,36,.72);border:1px solid rgba(255,255,255,.09);border-radius:12px;padding:14px}
+.nsl-subpanel h5{font-size:14px;margin:0 0 12px}
+.nsl-bars{max-height:270px;overflow:auto;display:grid;gap:8px}
+.nsl-barrow{display:grid;grid-template-columns:46px minmax(0,1fr) 24px 44px;gap:8px;align-items:center;font-size:11px}
+.nsl-barrow time{color:#adc5d2}
+.nsl-barrow small{font-size:10px;color:#8196a8}
+.nsl-track{height:8px;background:#1a3447;border-radius:5px;overflow:hidden}
+.nsl-track i{display:block;height:100%;background:#72aee5;border-radius:5px}
+.nsl-netgrid{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;font-size:12px}
+.nsl-netgrid span{color:#a9bdc9}
+.nsl-netgrid b{text-align:right;font-variant-numeric:tabular-nums}
+.nsl-tablewrap{overflow:auto;max-width:100%}
+.nsl-tablewrap table{width:100%;border-collapse:collapse;font-size:11px;white-space:nowrap}
+.nsl-tablewrap th{text-align:left;color:#9cb9ca;font-weight:600;border-bottom:1px solid #32475a;padding:9px}
+.nsl-tablewrap td{padding:9px;border-bottom:1px solid rgba(255,255,255,.06);font-variant-numeric:tabular-nums}
+.nsl-tablewrap tbody tr:hover{background:rgba(144,191,225,.07)}
+.nsl-eventhead{align-items:center}.nsl-eventhead h5{margin:0}
+.nsl-eventhead b{font-size:12px;white-space:nowrap}
+.nsl-filters{display:grid;grid-template-columns:2fr 1fr 1fr;gap:10px;margin:12px 0}
+.nsl-filters label{display:grid;gap:5px;color:#9ebace;font-size:11px}
+.nsl-filters select{background:#13283d;color:#d9e8f5;border:1px solid #34506a;border-radius:8px;padding:8px;max-width:100%;min-width:0}
+.nsl-events{display:grid;max-height:415px;overflow:auto;border:1px solid rgba(255,255,255,.07);border-radius:10px}
+.nsl-event{padding:9px 12px;border-left:3px solid #627e99;border-bottom:1px solid rgba(255,255,255,.06);display:grid;grid-template-columns:145px minmax(110px,.8fr) minmax(120px,1.1fr);gap:7px 12px;font-size:11px}
+.nsl-event.warning{border-left-color:#efad6a}.nsl-event.notice{border-left-color:#e1d077}
+.nsl-event time,.nsl-event small{color:#9ab1c4}
+.nsl-event span{overflow-wrap:anywhere}
+.nsl-event small{grid-column:1/-1}
+.nsl-actions{display:flex;gap:9px;flex-wrap:wrap}
+.nsl-actions button,.network-security-lab button{border:1px solid #44718a;border-radius:8px;background:#183850;color:#e6f5ff;font-size:12px;padding:9px 12px;cursor:pointer}
+.nsl-actions button:hover,.network-security-lab button:hover{background:#245073}
+.nsl-status{font-size:12px;color:#a9daed}
+@media(max-width:950px){.nsl-columns{grid-template-columns:1fr}.nsl-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}.nsl-event{grid-template-columns:1fr 1fr}.nsl-event span{grid-column:1/-1}}
+@media(max-width:560px){.network-security-lab{padding:12px}.nsl-heading{flex-direction:column}.nsl-metrics,.nsl-filters{grid-template-columns:1fr}.nsl-event{grid-template-columns:1fr}.nsl-event small,.nsl-event span{grid-column:auto}}
