@@ -65,7 +65,10 @@ async function startMonitoring() {
   const approved = supportedPersistentOrigin(tab.url);
   const persistent = Boolean(approved) && await chrome.permissions.contains({ origins: [approved] });
   try {
+    const prior=await chrome.storage.local.get({captureGeneration:0});
+    const generation=(Math.max(0,Number(prior.captureGeneration)||0)%1000000000)+1;
     await chrome.storage.local.set({
+      captureGeneration:generation,
       monitoring: true,
       activeTabId: tab.id,
       activeHost: host,
