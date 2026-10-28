@@ -227,10 +227,10 @@
         // PerformanceResourceTiming can hide cross-origin status/timing.
         // One aggregate limitation notice per manual session, no destination
         // or response data; a missing status is NOT an HTTP failure.
+        let crossOrigin=false;
+        try{crossOrigin=new URL(entry.name,location.href).origin!==location.origin;}
+        catch{}
         if(!resourceTimingNoticeEmitted){
-          let crossOrigin=false;
-          try{crossOrigin=new URL(entry.name,location.href).origin!==location.origin;}
-          catch{}
           if(crossOrigin&&(!Number.isFinite(entry.responseStatus)||
               entry.responseStatus===0)){
             resourceTimingNoticeEmitted=true;
