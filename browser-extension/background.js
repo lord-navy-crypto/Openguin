@@ -94,6 +94,9 @@ function appendEvent(record) {
       journalEvents: [], journalDropped: 0,
       monitoring:false, activeTabId:null, captureObservedCount:0
     });
+    // Drop delayed page records once explicit monitoring has ended.
+    if(Number.isInteger(record.tabId) &&
+      (state.monitoring!==true||state.activeTabId!==record.tabId))return;
     const events = Array.isArray(state.events) ? state.events : [];
     const droppedEvents = Number(state.droppedEvents) || 0;
     const nextDropped = events.length >= MAX_EVENTS ? Math.min(1e9, droppedEvents + 1) : droppedEvents;
