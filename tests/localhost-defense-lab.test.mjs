@@ -570,3 +570,39 @@ test("v15 offline CSV contains sixteen numeric rows but no personal/network data
  assert(log.includes('POST /defense-engine-export HTTP/1.1" 200'));
  assert.equal(analyzeAccessLog(log).ignoredLines,0);
 });
+
+
+test("v16 manual workbench serves same-origin audit core, module and evidence controls",async t=>{
+ const {url}=await setup(t);
+ const page=await get(url+"/workbench");
+ assert.equal(page.status,200);
+ const html=await page.text();
+ assert(html.includes('id="wb-metrics"'));
+ assert(html.includes('id="wb-duration-bars"'));
+ assert(html.includes('id="wb-header-evidence"'));
+ assert(html.includes('<script type="module" src="/workbench-client"></script>'));
+ assert((page.headers.get("content-security-policy")??"").includes("script-src 'self'"));
+ assert((page.headers.get("content-security-policy")??"").includes("connect-src 'self'"));
+ const script=await get(url+"/workbench-client");
+ assert.equal(script.status,200);
+ assert((script.headers.get("content-type")??"").includes("javascript"));
+ const js=await script.text();
+ assert(js.includes('from "/audit-core"'));
+ assert(js.includes("exportManualEvidence(history)"));
+ assert(js.includes("inspectDefensiveHeaders(response.headers,status)"));
+ const module=await get(url+"/audit-core");
+ assert.equal(module.status,200);
+ assert((module.headers.get("content-type")??"").includes("javascript"));
+ assert((await module.text()).includes("export function inspectDefensiveHeaders"));
+});
+test("v16 same-origin audit asset never accepts target URLs, foreign origins or request posts",async t=>{
+ const {url}=await setup(t);
+ assert.equal((await get(url+"/audit-core?target=https://example.net")).status,400);
+ assert.equal((await get(url+"/audit-core",{headers:{Origin:"https://outside.example"}})).status,403);
+ assert.equal((await get(url+"/audit-core",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:"x=y"})).status,404);
+ const home=await get(url+"/");
+ assert(!(home.headers.get("content-security-policy")??"").includes("script-src 'self'"));
+ const log=await (await get(url+"/access-log")).text();
+ assert.equal(analyzeAccessLog(log).ignoredLines,0);
+ assert(log.includes('GET /audit-core HTTP/1.1" 200'));
+});
