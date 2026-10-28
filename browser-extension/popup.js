@@ -243,6 +243,19 @@ async function render() {
     row.textContent = new Date(event.at).toLocaleString() + " · " + String(event.host || "") + " · " + String(event.kind || "");
     journalPreview.appendChild(row);
   }
+  const labEvidence=globalThis.OpenguinLabCompat.toLabEvidence({
+    events:Array.isArray(stored.events)?stored.events:[],
+    quality:{droppedEvents:stored.droppedEvents,
+      duplicateEventsSuppressed:stored.duplicateEventsSuppressed}
+  });
+  const lab=labEvidence.summary;
+  const statuses=Object.entries(lab.statusCounts).map(([code,count])=>
+    "HTTP "+code+": "+count).join(" · ");
+  labSummaryNode.textContent=lab.observedResponses+
+    " observed localhost Fetch/XHR responses"+
+    (statuses?" · "+statuses:" · No matching localhost responses yet.")+
+    ". Only fixed training endpoints appear in the export.";
+  labJsonButton.disabled=labEvidence.report.events.length===0;
   const hasEvents = Array.isArray(stored.events) && stored.events.length > 0;
   exportButton.disabled = !hasEvents;
   downloadJsonButton.disabled = !hasEvents;
@@ -423,6 +436,22 @@ async function downloadDiagnosticReport(format) {
   }
 }
 
+labJsonButton.addEventListener("click",async()=>{
+  try {
+    const report=await buildDiagnosticReport();
+    const adapted=globalThis.OpenguinLabCompat.toLabEvidence(report);
+    if(!adapted.report.events.length){
+      status.textContent="No compatible localhost lab events captured; open the lab workbench and monitor its Fetch/XHR checks.";
+      return;
+    }
+    const stamp=new Date().toISOString().replace(/[:.]/g,"-");
+    downloadReport("openguin-localhost-lab-v17-"+stamp+".json",
+      JSON.stringify(adapted.report,null,2),"application/json;charset=utf-8");
+    status.textContent="Downloaded a redacted localhost-only Browser incident report for OpenPenguin.";
+  }catch(error){
+    status.textContent="Lab-only export failed: "+String(error).slice(0,130);
+  }
+});
 exportButton.addEventListener("click", () => { void copyDiagnosticReport(); });
 downloadJsonButton.addEventListener("click", () => { void downloadDiagnosticReport("json"); });
 downloadCsvButton.addEventListener("click", () => { void downloadDiagnosticReport("csv"); });
