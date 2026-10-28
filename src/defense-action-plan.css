@@ -1,0 +1,21 @@
+.defense-action-plan{display:grid;gap:13px}
+.defense-action-plan h3{font-size:18px;margin:0}
+.defense-action-plan>p,.defense-plan-note{color:#a7bece;line-height:1.6;font-size:12px}
+.defense-plan-summary{display:flex;flex-wrap:wrap;gap:9px}
+.defense-plan-summary span{padding:9px 12px;background:rgba(21,62,79,.5);border:1px solid rgba(160,198,215,.15);border-radius:9px;font-size:12px}
+.defense-plan-summary b{font-size:15px;padding-left:5px}
+.defense-plan-actions{display:flex;flex-wrap:wrap;align-items:end;gap:8px}
+.defense-plan-actions label{display:grid;gap:6px;color:#a9c0cd;font-size:11px}
+.defense-plan-actions select{padding:9px;border-radius:8px;background:#102c3f;color:#e5f3f9;border:1px solid #406579}
+.defense-action-plan button{font-size:12px;background:#1c4a63;color:#e8f8ff;border-radius:9px;border:1px solid #4b7891;padding:9px 12px;cursor:pointer}
+.defense-action-plan button:disabled{opacity:.4;cursor:not-allowed}
+.defense-plan-items{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.defense-plan-items article{padding:13px;background:rgba(14,41,60,.45);border:1px solid rgba(162,199,217,.15);border-radius:10px}
+.defense-plan-items article>label{display:flex;align-items:flex-start;gap:9px}
+.defense-plan-items input{margin-top:8px;accent-color:#78b4c7}
+.defense-plan-items label span{display:grid;gap:6px}
+.defense-plan-items label small{font-size:10px;color:#8fb9cb}
+.defense-plan-items label strong{font-size:12px;line-height:1.55}
+.defense-plan-items p{font-size:11px;color:#c2d2dc;line-height:1.6}
+.defense-plan-items>article>small,.defense-action-plan>small{font-size:11px;color:#93adbf;line-height:1.6}
+@media(max-width:740px){.defense-plan-items{grid-template-columns:1fr}}
