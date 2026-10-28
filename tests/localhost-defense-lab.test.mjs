@@ -1,5 +1,6 @@
 import test from "node:test";
 import http from "node:http";
+import {analyzeAccessLog} from "../.network-test/server-access-log.mjs";
 import assert from "node:assert/strict";
 import {createLocalDefenseLab,LAB_HOST} from "../scripts/localhost-defense-lab.mjs";
 
@@ -150,4 +151,21 @@ test("invented client-side CSRF cookie does not bypass server-issued verificatio
     headers:{"Cookie":"lab_csrf="+forged,"Content-Type":"application/x-www-form-urlencoded"},
     body:new URLSearchParams({csrf:forged,role:"admin"}).toString()});
   assert.equal(r.status,403);
+});
+
+test("real localhost outcomes export an anonymized Apache-compatible access.log",async t=>{
+  const {url}=await setup(t);
+  assert.equal((await get(url+"/member")).status,401);
+  assert.equal((await get(url+"/health")).status,200);
+  const download=await get(url+"/access-log");
+  assert.equal(download.status,200);
+  assert(download.headers.get("content-disposition")?.includes("attachment"));
+  const text=await download.text();
+  const parsed=analyzeAccessLog(text);
+  assert.equal(parsed.parsedLines,2);
+  assert.equal(parsed.clientResponses,1);
+  assert(!text.includes("lab_session="));
+  assert(!text.includes("lab_csrf="));
+  assert(!text.includes("attacker.example"));
+  assert(text.includes("127.0.0.1"));
 });
