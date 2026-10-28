@@ -8,9 +8,11 @@ on:
   push:
     branches:
       - feature/browser-network-diagnostics
+      - feature/network-security-lab-v2
   pull_request:
     branches:
       - main
+      - feature/browser-network-diagnostics
   workflow_dispatch:
 
 jobs:
@@ -51,6 +53,8 @@ jobs:
           mkdir -p .network-test
           ./node_modules/.bin/esbuild src/browser-diagnostics.ts --bundle --platform=node --format=esm --outfile=.network-test/browser-diagnostics.mjs
           node --test tests/network-observatory.test.mjs
+          ./node_modules/.bin/esbuild src/network-security-analysis.ts --bundle --platform=node --format=esm --outfile=.network-test/network-security-analysis.mjs
+          node --test tests/network-security-analysis.test.mjs
           ./node_modules/.bin/esbuild src/network-one-click.ts --bundle --platform=node --format=esm --outfile=.network-test/network-one-click.mjs
           node --test tests/network-one-click.test.mjs
           ./node_modules/.bin/esbuild src/network-correlation.ts --bundle --platform=node --format=esm --outfile=.network-test/network-correlation.mjs
