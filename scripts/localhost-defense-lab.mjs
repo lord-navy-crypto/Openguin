@@ -50,7 +50,7 @@ function page(title,inner){
     'code{background:#244257;padding:3px 6px;border-radius:5px}small{color:#b2c9d5}</style></head><body>'+
     '<header><h1>OpenPenguin · Local Defense Lab</h1><p>Real HTTP responses, invented roles. No attack payloads or real account credentials.</p>'+
     '<nav><a href="/">Home</a> · <a href="/member">Member</a> · <a href="/admin">Admin</a> · '+
-    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a></nav></header>'+
+    '<a href="/form">Form</a> · <a href="/rate-check">Rate check</a> · <a href="/events">Local event summary</a> · <a href="/access-log">Download log</a> · <a href="/manual-console">Manual defense console</a> · <a href="/workbench">HTTP Workbench</a> · <a href="/ownership-lab">Ownership Lab</a></nav></header>'+
     '<main><section><h2>'+escapeHtml(title)+'</h2>'+inner+'</section></main>'+
     '<footer><small>Bound to 127.0.0.1 only. Stop the process with Ctrl+C. Training only.</small></footer></body></html>';
 }
@@ -80,7 +80,7 @@ export function createLocalDefenseLab(options={}){
   const exercises=createManualExerciseState({now});
   let activePort=port;
   const record=(route,status,method)=>{
-    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client"]);
+    const safeRoute=new Set(["/","/health","/session","/logout","/member","/admin","/form","/rate-check","/events","/access-log","/manual-console","/manual-attempt","/manual-capacity","/manual-reset","/workbench","/workbench-client","/ownership-lab","/ownership-mode","/record-own","/record-other"]);
     events.push({at:new Date(now()).toISOString(),route:safeRoute.has(route)?route:"other",
       method:["GET","POST","HEAD"].includes(method)?method:"OTHER",status});
     if(events.length>MAX_LOGS)events.shift();
@@ -165,7 +165,7 @@ export function createLocalDefenseLab(options={}){
         send(422,page("Invalid demo role","<p>Choose one of the two invented demo roles.</p>"));return;
       }
       const token=cleanToken();
-      sessions.set(token,{role:nextRole,expiresAt:now()+sessionTtlMs});
+      sessions.set(token,{role:nextRole,expiresAt:now()+sessionTtlMs,ownershipTrainingMode:false});
       if(sessions.size>128)sessions.delete(sessions.keys().next().value);
       send(303,"","text/plain; charset=utf-8",{"Location":"/",
         "Set-Cookie":"lab_session="+token+"; HttpOnly; SameSite=Strict; Path=/"});
@@ -206,6 +206,73 @@ export function createLocalDefenseLab(options={}){
       }
       send(200,page("Validated","<p>The invented form passed origin and field checks. The submitted content was discarded.</p>"));return;
     }
+    // Deliberately limited, fictional ownership teaching case:
+    // one server-side member session, two fixed mock records, no external data.
+    if(["/ownership-lab","/ownership-mode","/record-own","/record-other"].includes(route)){
+      if(role!=="member"){
+        send(role==="guest"?401:403,page("Member-only sandbox",
+          "<p>Use the home page to create the invented Demo member session. "+
+          "This experiment never operates on real user records.</p>"));
+        return;
+      }
+      if(req.method==="POST"&&route==="/ownership-mode"){
+        let params;
+        try{params=await bodyParams(req)}
+        catch(e){send(e.status??400,"Invalid training form.","text/plain; charset=utf-8");return;}
+        if(!verifyCsrf(params)){
+          send(403,page("Form validation","<p>Use the local training panel and its CSRF-protected buttons.</p>"));return;
+        }
+        const mode=params.get("mode");
+        if(!["protected","training"].includes(mode)){
+          send(422,page("Unknown mode","<p>Only the two preinstalled sandbox modes are available.</p>"));return;
+        }
+        // Switch is isolated to this invented session, expires with it,
+        // and can change only a single route serving constant mock data.
+        session.ownershipTrainingMode=mode==="training";
+        send(303,"","text/plain; charset=utf-8",{"Location":"/ownership-lab"});
+        return;
+      }
+      if(req.method==="GET"&&route==="/ownership-lab"){
+        const training=session.ownershipTrainingMode===true;
+        const controls=[
+          ["protected","Enable verified owner check"],
+          ["training","Enable intentionally missing owner check"]
+        ].map(([mode,label])=>'<form action="/ownership-mode" method="post">'+field(csrf)+
+          '<input type="hidden" name="mode" value="'+mode+'">'+
+          '<button type="submit">'+escapeHtml(label)+'</button></form>').join("");
+        send(200,page("Resource Ownership Lab",
+          "<p>Member session contains two invented records: <strong>your mock record</strong>"+
+          " and <strong>another imaginary member's mock record</strong>. "+
+          "The records contain no personal data.</p>"+
+          "<p>Current access policy: <strong>"+(training?
+            "INTENTIONALLY INSECURE TRAINING MODE":"OWNER CHECK ENABLED")+
+          "</strong>. This toggle affects only your fictional session and the fixed /record-other endpoint.</p>"+
+          controls+
+          '<p><a href="/record-own">Read own fictional record</a> · '+
+          '<a href="/record-other">Try other fictional member record</a></p>'+
+          "<p>With owner checks enabled, reading /record-other returns 403. "+
+          "After deliberately turning the check off, the same single manual request returns 200. "+
+          "Turn the check back on and repeat to verify the repair.</p>"+
+          '<p><a href="/access-log">Download sanitized log</a> to compare recorded statuses.</p>'));
+        return;
+      }
+      if(req.method==="GET"&&route==="/record-own"){
+        send(200,page("Your fictional record",
+          "<p>DEMO RECORD A: an invented, non-sensitive practice item. "+
+          "The server has confirmed your fictional session.</p>"));return;
+      }
+      if(req.method==="GET"&&route==="/record-other"){
+        if(session.ownershipTrainingMode!==true){
+          send(403,page("Resource owner denied",
+            "<p>The server checked the mock record owner and rejected access.</p>"));return;
+        }
+        headers["X-Openguin-Lab-Mode"]="deliberately-unprotected-fake-record";
+        send(200,page("Intentionally unprotected MOCK data",
+          "<p>DEMO RECORD B: invented public training text, not an actual person's record.</p>"+
+          "<p>This response demonstrates a missing object-ownership check "+
+          "in an isolated lesson. Restore the owner check in the Ownership Lab.</p>"));return;
+      }
+    }
     if(req.method==="GET"&&route==="/workbench-client"){
       send(200,fixedWorkbenchClient,"text/javascript; charset=utf-8");return;
     }
@@ -219,6 +286,8 @@ export function createLocalDefenseLab(options={}){
         ["health","Health 检查","单次 GET，确认本机服务"],
         ["member","会员权限","检查 401 或 200"],
         ["admin","管理权限","检查 401、403 或 200"],
+        ["ownrecord","本人虚拟记录","检查正常的 200 响应"],
+        ["otherrecord","他人虚拟记录","对照缺陷模式下 200 和修复后的 403"],
         ["form","表单页面","验证会话允许访问"],
         ["rate","手动限流检查","每次点击只请求一次"],
         ["csrf","缺失表单校验","需要演练成员身份"],
