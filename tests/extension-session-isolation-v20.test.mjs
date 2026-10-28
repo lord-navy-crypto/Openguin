@@ -82,6 +82,17 @@ test("v20 duplicate suppression is separate across monitoring generations",async
  assert.equal(h.state.events.length,2);
  assert.equal(h.state.captureObservedCount,1);
 });
+test("v20 rejects events clearly timestamped before the current session",async()=>{
+ const started=Date.now();
+ const h=harness({captureStartedAt:started});
+ h.send(started-2000);
+ await delay();
+ assert.equal(h.state.events.length,0);
+ assert.equal(h.state.captureObservedCount,0);
+ h.send(started);
+ await delay();
+ assert.equal(h.state.events.length,1);
+});
 test("v20 stop prevents queued records even if generation remains the same",async()=>{
  const h=harness();
  const paused=h.holdWrites();h.send();await paused.arrived;
